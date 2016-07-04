@@ -88,7 +88,7 @@ try:
 
     if args.outfile is None:
         args.outfile = args.infile.rsplit('.',1)[0] + '.norm'
-    normdb = create_engine('sqlite:///' + args.outfile)
+    normdb = create_engine(args.outfile)
     normmd = MetaData(bind=normdb)
     normmd.reflect(normdb)
 
@@ -287,7 +287,8 @@ try:
             normdb.execute(normNode.delete(normNode.c.Id == bindparam('Id')),
                            nodes)
 
-        normdb.execute(normNode.insert(), nodes)
+        if len(nodes) > 0:
+            normdb.execute(normNode.insert(), nodes)
 
 # Node attribute values
     if args.node_attributes != 'skip':
@@ -332,7 +333,8 @@ try:
                                 normNodeAttribute.c.Name == bindparam('Name'))),
                            nodeattrs)
 
-        normdb.execute(normNodeAttribute.insert(), nodeattrs)
+        if len(nodeattrs) > 0:
+            normdb.execute(normNodeAttribute.insert(), nodeattrs)
 
 # Source categories
     if args.source_categories != 'skip':
@@ -369,7 +371,8 @@ try:
             normdb.execute(normSourceCategory.delete(normSourceCategory.c.Id == bindparam('Id')),
                            sourcecategories)
 
-        normdb.execute(normSourceCategory.insert(), sourcecats)
+        if len(sourcecats) > 0:
+            normdb.execute(normSourceCategory.insert(), sourcecats)
 
 # Sources
     if args.sources != 'skip':
@@ -406,7 +409,8 @@ try:
             normdb.execute(normSource.delete(normSource.c.Id == bindparam('Id')),
                            sources)
 
-        normdb.execute(normSource.insert(), sources)
+        if len(sources) > 0:
+            normdb.execute(normSource.insert(), sources)
 
 # Source attribute values
     if args.source_attributes != 'skip':
@@ -450,7 +454,8 @@ try:
                                 normSourceAttribute.c.Name == bindparam('Name'))),
                            sourceattrs)
 
-        normdb.execute(normSourceAttribute.insert(), sourceattrs)
+        if len(sourceattrs) > 0:
+            normdb.execute(normSourceAttribute.insert(), sourceattrs)
 
 # Tagging
     if args.taggings != 'skip':
@@ -482,7 +487,8 @@ try:
                                 normSource.c.LengthX == bindparam('LengthX'))),
                            sources)
 
-        normdb.execute(normTagging.insert(), taggings)
+        if len(taggings) > 0:
+            normdb.execute(normTagging.insert(), taggings)
 
 # Annotations
     if args.annotations != 'skip':
@@ -511,7 +517,8 @@ try:
                                 normSource.c.LengthX == bindparam('LengthX'))),
                            sources)
 
-        normdb.execute(normTagging.insert(), annotations)
+        if len(annotations) > 0:
+            normdb.execute(normTagging.insert(), annotations)
 
 # Users
 
@@ -529,7 +536,8 @@ try:
             normdb.execute(normUser.delete(normSource.c.Id == bindparam('Id')),
                            users)
 
-        normdb.execute(normUser.insert(), users)
+        if len(users) > 0:
+            normdb.execute(normUser.insert(), users)
 
 except exc.SQLAlchemyError:
     raise

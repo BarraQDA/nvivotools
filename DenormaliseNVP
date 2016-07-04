@@ -4,6 +4,7 @@
 from builtins import chr
 from sqlalchemy import *
 from sqlalchemy import exc
+import warnings
 import sys
 import os
 import argparse
@@ -78,13 +79,16 @@ parser.add_argument('outfile', type=str, nargs='?',
 args = parser.parse_args()
 
 try:
-    normdb = create_engine('sqlite:///' + args.infile)
+    # Hide warning message over unrecognised xml columns
+    warnings.filterwarnings("ignore", category=exc.SAWarning, message='Did not recognize type \'xml\'.*', module='sqlalchemy')
+
+    normdb = create_engine(args.infile)
     normmd = MetaData(bind=normdb)
     normmd.reflect(normdb)
 
     if args.outfile is None:
         args.outfile = args.infile.rsplit('.',1)[0] + '.nvivo'
-    nvivodb = create_engine('sqlite:///' + args.outfile)
+    nvivodb = create_engine(args.outfile)
     nvivomd = MetaData(bind=nvivodb)
     nvivomd.reflect(nvivodb)
 
@@ -124,6 +128,18 @@ try:
             Column('ModifiedBy',    GUID(),         nullable=False),
             Column('System',        Boolean,        nullable=False),
             Column('ReadOnly',      Boolean,        nullable=False))
+
+    nvivoExtendedItem = nvivomd.tables.get('ExtendedItem')
+    if nvivoExtendedItem == None:
+        nvivoExtendedItem = Table('Item', nvivomd,
+            Column('Item_Id',       GUID(),         nullable=False),
+            Column('Properties',    blob,           nullable=False))
+
+    nvivoCategory = nvivomd.tables.get('Category')
+    if nvivoCategory == None:
+        nvivoCategory = Table('Item', nvivomd,
+            Column('Item_Id',       GUID(),         nullable=False),
+            Column('Layout',        blob,           nullable=False))
 
     nvivoSource = nvivomd.tables.get('Source')
     if nvivoSource == None:
@@ -208,8 +224,8 @@ try:
         # Look up head node category, fudge it if it doesn't exist.
         sel = select([nvivoItem.c.Id])
         sel = sel.where(and_(
-            nvivoItem.c.TypeId == column('0'),
-            nvivoItem.c.Name == column('\'Node Classifications\'')))
+            nvivoItem.c.TypeId == literal_column('0'),
+            nvivoItem.c.Name == literal_column('\'Node Classifications\'')))
         headnodecategory = nvivodb.execute(sel).fetchone()
         if headnodecategory == None:
             #  Create the magic node category from NVivo's empty project
@@ -226,10 +242,11 @@ try:
                       normNodeCategory.c.ModifiedDate])
         nodecategories = [dict(row) for row in normdb.execute(sel)]
         for nodecategory in nodecategories:
+            if nodecategory['Id'] == None:
+                nodecategory['Id'] = uuid.uuid4()
             if args.windows:
                 nodecategory['Name']        = ''.join(map(lambda ch: chr(ord(ch) + 0x377), nodecategory['Name']))
                 nodecategory['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), nodecategory['Description']))
-
             if nodecategory['Parent'] == None:
                 nodecategory['Parent'] = headnodecategory['Id']
 
@@ -238,8 +255,8 @@ try:
                       nvivoRole.c.Item2_Id,
                       nvivoRole.c.TypeId])
         sel = sel.where(and_(
-                      nvivoItem.c.TypeId   == column('52'),
-                      nvivoRole.c.TypeId   == column('0'),
+                      nvivoItem.c.TypeId   == literal_column('52'),
+                      nvivoRole.c.TypeId   == literal_column('0'),
                       nvivoRole.c.Item2_Id == nvivoItem.c.Id))
         if args.node_categories == 'merge':
             sel = sel.where(
@@ -251,20 +268,28 @@ try:
             nvivodb.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Id')), itemsandroles)
             nvivodb.execute(nvivoRole.delete(and_(
                 nvivoRole.c.Item1_Id == bindparam('Item1_Id'),
-                nvivoRole.c.TypeId   == column('0'),
+                nvivoRole.c.TypeId   == literal_column('0'),
                 nvivoRole.c.Item2_Id == bindparam('Item2_Id'))), itemsandroles)
 
         if len(nodecategories) > 0:
             nvivodb.execute(nvivoItem.insert().values({
-                        'TypeId':   column('52'),
-                        'System':   column('0'),
-                        'ReadOnly': column('0')
+                        'TypeId':   literal_column('52'),
+                        'System':   literal_column('0'),
+                        'ReadOnly': literal_column('0')
                 }), nodecategories)
 
             nvivodb.execute(nvivoRole.insert().values({
                         'Item1_Id': bindparam('Parent'),
                         'Item2_Id': bindparam('Id'),
-                        'TypeId':   column('0')
+                        'TypeId':   literal_column('0')
+                }), nodecategories)
+            nvivodb.execute(nvivoExtendedItem.insert().values({
+                        'Item_Id': bindparam('Id'),
+                        'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="EndNoteReferenceType" Value="-1" /></Properties>\'')
+                }), nodecategories)
+            nvivodb.execute(nvivoCategory.insert().values({
+                        'Item_Id': bindparam('Id'),
+                        'Layout' : literal_column('\'<CategoryLayout xmlns="http://qsr.com.au/XMLSchema.xsd"><SortedColumn Ascending="true">-1</SortedColumn><RecordHeaderWidth>100</RecordHeaderWidth><ShowRowIDs>true</ShowRowIDs><ShowColumnIDs>true</ShowColumnIDs><Transposed>false</Transposed><NameSource>1</NameSource><RowsUserOrdered>false</RowsUserOrdered><ColumnsUserOrdered>true</ColumnsUserOrdered></CategoryLayout>\'')
                 }), nodecategories)
 
 #Nodes
@@ -280,9 +305,11 @@ try:
                       normNode.c.ModifiedDate])
         nodes = [dict(row) for row in normdb.execute(sel)]
 
-        if args.windows:
-            nodes = [dict(row) for row in nodes]
-            for node in nodes:
+        nodes = [dict(row) for row in nodes]
+        for node in nodes:
+            if nodecategory['Id'] == None:
+                nodecategory['Id'] = uuid.uuid4()
+            if args.windows:
                 node['Name']        = ''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Name']))
                 node['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Description']))
 
@@ -292,14 +319,14 @@ try:
                       nvivoRole.c.TypeId])
         if args.node_categories == 'replace':
             sel = sel.where(and_(
-                          or_(nvivoItem.c.TypeId == column('16'), nvivoItem.c.TypeId == column('62')),
-                          nvivoRole.c.TypeId == column('14'),
+                          or_(nvivoItem.c.TypeId == literal_column('16'), nvivoItem.c.TypeId == literal_column('62')),
+                          nvivoRole.c.TypeId == literal_column('14'),
                           nvivoRole.c.Item1_Id == nvivoItem.c.Id))
             itemsandroles = [dict(row) for row in nvivodb.execute(sel)]
         elif args.node_categories == 'merge':
             sel = sel.where(and_(
                           nvivoItem.c.Id       == bindparam('Id'),
-                          nvivoRole.c.TypeId   == column('14'),
+                          nvivoRole.c.TypeId   == literal_column('14'),
                           nvivoRole.c.Item1_Id == nvivoItem.c.Id))
             itemsandroles = [dict(row) for row in nvivodb.execute(sel, nodecategories)]
 
@@ -307,21 +334,23 @@ try:
             nvivodb.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Id')), itemsandroles)
             nvivodb.execute(nvivoRole.delete(and_(
                 nvivoRole.c.Item1_Id == bindparam('Item1_Id'),
-                nvivoRole.c.TypeId   == column('0'),
+                nvivoRole.c.TypeId   == literal_column('0'),
                 nvivoRole.c.Item2_Id == bindparam('Item2_Id'))), itemsandroles)
 
         if len(nodes) > 0:
             nvivodb.execute(nvivoItem.insert().values({
-                    'TypeId':   column('16'),
-                    'System':   column('0'),
-                    'ReadOnly': column('0')
+                    'TypeId':   literal_column('16'),
+                    'System':   literal_column('0'),
+                    'ReadOnly': literal_column('0')
                 }), nodes)
 
             nvivodb.execute(nvivoRole.insert().values({
                     'Item1_Id': bindparam('Id'),
                     'Item2_Id': bindparam('Category'),
-                    'TypeId':   column('0')
+                    'TypeId':   literal_column('0')
                 }), nodes)
+
+    sys.exit()
 
 # Node attribute values
     if args.node_attributes != 'skip':
@@ -349,7 +378,7 @@ try:
                 nvivoNodeCategoryRole.c.Item2_Id.label('Category'),
                 nvivoNodeCategoryItem.c.Name.label('CategoryName')
             ]).where(and_(
-                nvivoNodeCategoryRole.c.TypeId   == column('14'),
+                nvivoNodeCategoryRole.c.TypeId   == literal_column('14'),
                 nvivoNodeCategoryRole.c.Item1_Id == bindparam('Node'),
                 nvivoNodeCategoryItem.c.Id == nvivoNodeCategoryRole.c.Item2_Id
             ))
@@ -365,7 +394,7 @@ try:
         categoryjoin = categorysel.outerjoin(
                 attributenamejoin,
                 and_(
-                    attributeselect.c.TypeId1   == column('13'),
+                    attributeselect.c.TypeId1   == literal_column('13'),
                     attributeselect.c.Category1 == categorysel.c.Category,
                     nvivoCategoryAttributeItem.c.Id == attributeselect.c.AttributeId,
                     nvivoCategoryAttributeItem.c.Name == bindparam('Name')
@@ -379,7 +408,7 @@ try:
         nodevaluejoin = valueselect.join(
                 nvivoNodeValueRole,
                 and_(
-                    nvivoNodeValueRole.c.TypeId == column('7'),
+                    nvivoNodeValueRole.c.TypeId == literal_column('7'),
                     nvivoNodeValueRole.c.Item2_Id == valueselect.c.ValueId,
                     # I can't figure out why using
                     # 'nvivoNodeValueRole.c.Item1_Id == categorysel.c.Node' instead
@@ -394,7 +423,7 @@ try:
         valuejoin = categoryjoin.outerjoin(
                 valuenamejoin,
                 and_(
-                    valueselect.c.TypeId2 == column('6'),
+                    valueselect.c.TypeId2 == literal_column('6'),
                     valueselect.c.Attribute1 == attributeselect.c.AttributeId,
                     nvivoAttributeValueItem.c.Id == valueselect.c.ValueId
             ))
