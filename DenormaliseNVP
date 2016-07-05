@@ -11,8 +11,8 @@ import argparse
 import uuid
 import re
 
-class GUID(TypeDecorator):
-    """Platform-independent GUID type.
+class UUID(TypeDecorator):
+    """Platform-independent UUID type.
 
     Uses Postgresql's UUID type, otherwise uses
     CHAR(36), storing as stringified hex values.
@@ -33,9 +33,9 @@ class GUID(TypeDecorator):
             return str(value)
         else:
             if not isinstance(value, uuid.UUID):
-                return str(uuid.UUID(value))
+                return str(uuid.UUID(value)).upper()
             else:
-                return str(value)
+                return str(value).upper()
 
     def process_result_value(self, value, dialect):
         if value is None:
@@ -102,49 +102,49 @@ try:
         nvivoProject = Table('Project', nvivomd,
             Column('Title',         String(256),    nullable=False),
             Column('Description',   String(512),    nullable=False),
-            Column('CreatedBy',     GUID(),         nullable=False),
+            Column('CreatedBy',     UUID(),         nullable=False),
             Column('CreatedDate',   DateTime,       nullable=False),
-            Column('ModifiedBy',    GUID(),         nullable=False),
+            Column('ModifiedBy',    UUID(),         nullable=False),
             Column('ModifiedDate',  DateTime,       nullable=False))
 
     nvivoRole = nvivomd.tables.get('Role')
     if nvivoRole == None:
         nvivoRole = Table('Role', nvivomd,
-            Column('Item1_Id',      GUID(),         nullable=False),
+            Column('Item1_Id',      UUID(),         nullable=False),
             Column('TypeId',        Integer,        nullable=False),
-            Column('Item2_Id',      GUID(),         nullable=False),
+            Column('Item2_Id',      UUID(),         nullable=False),
             Column('Tag',           Integer))
 
     nvivoItem = nvivomd.tables.get('Item')
     if nvivoItem == None:
         nvivoItem = Table('Item', nvivomd,
-            Column('Id',            GUID(),         nullable=False),
+            Column('Id',            UUID(),         nullable=False),
             Column('TypeId',        Integer,        nullable=False),
             Column('Name',          String(256),    nullable=False),
             Column('Description',   String(512),    nullable=False),
             Column('CreatedDate',   DateTime,       nullable=False),
             Column('ModifiedDate',  DateTime,       nullable=False),
-            Column('CreatedBy',     GUID(),         nullable=False),
-            Column('ModifiedBy',    GUID(),         nullable=False),
+            Column('CreatedBy',     UUID(),         nullable=False),
+            Column('ModifiedBy',    UUID(),         nullable=False),
             Column('System',        Boolean,        nullable=False),
             Column('ReadOnly',      Boolean,        nullable=False))
 
     nvivoExtendedItem = nvivomd.tables.get('ExtendedItem')
     if nvivoExtendedItem == None:
         nvivoExtendedItem = Table('Item', nvivomd,
-            Column('Item_Id',       GUID(),         nullable=False),
-            Column('Properties',    blob,           nullable=False))
+            Column('Item_Id',       UUID(),         nullable=False),
+            Column('Properties',    LargeBinary,    nullable=False))
 
     nvivoCategory = nvivomd.tables.get('Category')
     if nvivoCategory == None:
         nvivoCategory = Table('Item', nvivomd,
-            Column('Item_Id',       GUID(),         nullable=False),
-            Column('Layout',        blob,           nullable=False))
+            Column('Item_Id',       UUID(),         nullable=False),
+            Column('Layout',        LargeBinary,    nullable=False))
 
     nvivoSource = nvivomd.tables.get('Source')
     if nvivoSource == None:
         nvivoSource = Table('Source', nvivomd,
-            Column('Item_Id',       GUID(),         nullable=False),
+            Column('Item_Id',       UUID(),         nullable=False),
             Column('TypeId',        Integer,        nullable=False),
 #            Column('Object', blob, nullable=False),
             Column('PlainText',     String),
@@ -154,10 +154,10 @@ try:
     nvivoNodeReference = nvivomd.tables.get('NodeReference')
     if nvivoNodeReference == None:
         nvivoNodeReference = Table('NodeReference', nvivomd,
-            Column('Id',            GUID(),         nullable=False),
-            Column('Node_Item_Id',  GUID(),         nullable=False),
-            Column('Source_Item_Id', GUID(),        nullable=False),
-            Column('CompoundSourceRegion_Id', GUID()),
+            Column('Id',            UUID(),         nullable=False),
+            Column('Node_Item_Id',  UUID(),         nullable=False),
+            Column('Source_Item_Id', UUID(),        nullable=False),
+            Column('CompoundSourceRegion_Id', UUID()),
             Column('ReferenceTypeId', Integer,      nullable=False),
             Column('StartX',        Integer,        nullable=False),
             Column('LengthX',       Integer,        nullable=False),
@@ -165,15 +165,15 @@ try:
             Column('LengthY',       Integer),
             Column('CreatedDate',   DateTime,       nullable=False),
             Column('ModifiedDate',  DateTime,       nullable=False),
-            Column('CreatedBy',     GUID(),         nullable=False),
-            Column('ModifiedBy',    GUID(),         nullable=False))
+            Column('CreatedBy',     UUID(),         nullable=False),
+            Column('ModifiedBy',    UUID(),         nullable=False))
 
     nvivoAnnotation = nvivomd.tables.get('Annotation')
     if nvivoAnnotation == None:
         nvivoAnnotation = Table('Annotation', nvivomd,
-            Column('Id',            GUID(),         nullable=False),
-            Column('Item_Id',       GUID(),         nullable=False),
-            Column('CompoundSourceRegion_Id', GUID()),
+            Column('Id',            UUID(),         nullable=False),
+            Column('Item_Id',       UUID(),         nullable=False),
+            Column('CompoundSourceRegion_Id', UUID()),
             Column('Text',          String(1024), nullable=False),
             Column('ReferenceTypeId', Integer,      nullable=False),
             Column('StartX',        Integer,        nullable=False),
@@ -182,13 +182,13 @@ try:
             Column('LengthY',       Integer),
             Column('CreatedDate',   DateTime,       nullable=False),
             Column('ModifiedDate',  DateTime,       nullable=False),
-            Column('CreatedBy',     GUID(),         nullable=False),
-            Column('ModifiedBy',    GUID(),         nullable=False))
+            Column('CreatedBy',     UUID(),         nullable=False),
+            Column('ModifiedBy',    UUID(),         nullable=False))
 
     nvivoUserProfile = nvivomd.tables.get('UserProfile')
     if nvivoUserProfile == None:
         nvivoUserProfile = Table('UserProfile', nvivomd,
-            Column('Id',            GUID(),         nullable=False),
+            Column('Id',            UUID(),         nullable=False),
             Column('Initials',      String(16),   nullable=False),
             Column('AccountName',   String(256)),
             Column('ColorArgb',     Integer))
