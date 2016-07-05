@@ -71,9 +71,9 @@ parser.add_argument('-u', '--users', choices=table_choices, default="replace",
                     help='User action.')
 
 parser.add_argument('infile', type=str,
-                    help='Path of NVivo file offloaded to SQLite.')
+                    help='SQLAlchemy path of input NVivo database.')
 parser.add_argument('outfile', type=str, nargs='?',
-                    help='Path of normalised file to be created.')
+                    help='SQLAlchemy path of output normalised database.')
 
 args = parser.parse_args()
 
