@@ -132,7 +132,6 @@ try:
     if normSourceCategory == None:
         normSourceCategory = Table('SourceCategory', normmd,
             Column('Id',            UUID(),         primary_key=True),
-            Column('Parent',        UUID(),         ForeignKey("SourceCategory.Id")),
             Column('Name',          String(256)),
             Column('Description',   String(512)),
             Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
@@ -156,6 +155,7 @@ try:
     if normNode == None:
         normNode = Table('Node', normmd,
             Column('Id',            UUID(),         primary_key=True),
+            Column('Parent',        UUID(),         ForeignKey("Node.Id"))
             Column('Category',      UUID(),         ForeignKey("NodeCategory.Id")),
             Column('Name',          String(256)),
             Column('Description',   String(512)),
@@ -168,7 +168,6 @@ try:
     if normNodeCategory == None:
         normNodeCategory = Table('NodeCategory', normmd,
             Column('Id',            UUID(),         primary_key=True),
-            Column('Parent',        UUID(),         ForeignKey("NodeCategory.Id")),
             Column('Name',          String(256)),
             Column('Description',   String(512)),
             Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
@@ -223,7 +222,6 @@ try:
     if args.node_categories != 'skip':
         nvivoItem       = nvivomd.tables['Item']
         nvivoRole       = nvivomd.tables['Role']
-        nvivoParentItem = nvivoItem.alias(name='ParentItem')
 
         sel = select([nvivoItem.c.Id,
                       nvivoItem.c.Name,
@@ -231,22 +229,13 @@ try:
                       nvivoItem.c.CreatedBy,
                       nvivoItem.c.CreatedDate,
                       nvivoItem.c.ModifiedBy,
-                      nvivoItem.c.ModifiedDate,
-                      nvivoParentItem.c.TypeId.label('ParentTypeId'),
-                      nvivoParentItem.c.Id.label('Parent'),
-                      nvivoRole.c.TypeId.label('RoleTypeId')])
-        sel = sel.where(and_(
-                      nvivoItem.c.TypeId == literal_column('52'),
-                      nvivoRole.c.TypeId == literal_column('0'),
-                      nvivoRole.c.Item2_Id == nvivoItem.c.Id,
-                      nvivoParentItem.c.Id == nvivoRole.c.Item1_Id))
+                      nvivoItem.c.ModifiedDate])
+        sel = sel.where(nvivoItem.c.TypeId == literal_column('52'))
         nodecategories = [dict(row) for row in nvivodb.execute(sel)]
         for nodecategory in nodecategories:
             if args.windows:
                 nodecategory['Name']        = ''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Name']))
                 nodecategory['Description'] = ''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Description']))
-
-            nodecategory['Parent'] = nodecategory['Parent'] if nodecategory['ParentTypeId'] != 0 else None
 
         if args.node_categories == 'replace':
             normdb.execute(normNodeCategory.delete())
@@ -340,7 +329,6 @@ try:
     if args.source_categories != 'skip':
         nvivoItem       = nvivomd.tables['Item']
         nvivoRole       = nvivomd.tables['Role']
-        nvivoParentItem = nvivoItem.alias(name='ParentItem')
 
         sel = select([nvivoItem.c.Id,
                       nvivoItem.c.Name,
@@ -348,22 +336,13 @@ try:
                       nvivoItem.c.CreatedBy,
                       nvivoItem.c.CreatedDate,
                       nvivoItem.c.ModifiedBy,
-                      nvivoItem.c.ModifiedDate,
-                      nvivoParentItem.c.TypeId.label('ParentTypeId'),
-                      nvivoParentItem.c.Id.label('Parent'),
-                      nvivoRole.c.TypeId.label('RoleTypeId')])
-        sel = sel.where(and_(
-                      nvivoItem.c.TypeId == literal_column('51'),
-                      nvivoRole.c.TypeId == literal_column('0'),
-                      nvivoRole.c.Item2_Id == nvivoItem.c.Id,
-                      nvivoParentItem.c.Id == nvivoRole.c.Item1_Id))
+                      nvivoItem.c.ModifiedDate])
+        sel = sel.where(nvivoItem.c.TypeId == literal_column('51'))
         sourcecats  = [dict(row) for row in nvivodb.execute(sel)]
         for sourcecat in sourcecats:
             if args.windows:
                 sourcecat['Name']        = ''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Name']))
                 sourcecat['Description'] = ''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Description']))
-
-            sourcecat['Parent'] = nodecategory['Parent'] if sourcecat['ParentTypeId'] != 0 else None
 
         if args.source_categories == 'replace':
             normdb.execute(normSourceCategory.delete())
