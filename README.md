@@ -13,16 +13,21 @@ They should both work equally well with python2.x or python3.x, but do require t
 - Firewall: Allow C:\Program Files\Microsoft SQL Server\MSSQL10_50.QSRNVIVO10\MSSQL\Binn\sqlservr.exe
 
 
-Start sql server with appended ';-T7806'? Don't think this was necessary
+			  
+FROM SCRATCH with NVivo10
 
-C:\Users\jschultz>sqlcmd -S windows7-ts\qsrnvivo10
-1> create login nvivotools with password='password'
-2> go
-1> create user nvivotools from login nvivotools
-2> go
-1> grant control to nvivotools
-2> go
+- Install python 2.7.11 from MSI
+   - select 'Add to Path' to make life easier
 
-EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE',
-			  N'Software\Microsoft\MSSQLServer\MSSQLServer',
-			  N'LoginMode', REG_DWORD, [1 for Windows only, 2 for SQL Server + Windows]
+- python -m pip install --upgrade pip
+- python -m pip install future sqlalchemy pymssql
+
+Using SQL Server Configuration Manager:
+    Enable TCP/IP for QSRNVIVO10
+    Set port to 1433
+    Restart server
+
+sqlcmd -S <machinename/localhost>\QSRNVIVO10 -q "EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'LoginMode', REG_DWORD, 2"
+    - [1 for Windows only, 2 for SQL Server + Windows]
+    
+Network must be operating.

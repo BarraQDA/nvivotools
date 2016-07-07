@@ -47,6 +47,8 @@ parser.add_argument('minuend', type=str,
                     help='Path of database from which to subtract contents.')
 parser.add_argument('subtrahend', type=str,
                     help='Path of database whose contents are to be subracted from the first database.')
+parser.add_argument('difference', type=str, nargs='?',
+                    help='Path of database to be populated with the difference.')
 
 args = parser.parse_args()
 
@@ -62,10 +64,12 @@ try:
     subtrahendmd = MetaData(bind=subtrahenddb)
     subtrahendmd.reflect(subtrahenddb)
 
+    if args.difference != None:
+        differencedb = create_engine(args.difference)
+
     for minuendtable in minuendmd.tables.values():
         subtrahendtable = minuendmd.tables[minuendtable.name]
         if subtrahendtable != None:
-#            print subtrahendtable.select()
             subtrahendrows = subtrahenddb.execute(subtrahendtable.select())
             subtrahendrows = [dict(row) for row in subtrahendrows]
 
@@ -73,10 +77,15 @@ try:
             minuendrows = [dict(row) for row in minuendrows]
 
             differencerows = [ x for x in minuendrows if not x in subtrahendrows ]
-            if len(differencerows) > 0:
-                print "-------------- " + minuendtable.name + "-------------- " 
-            for row in differencerows:
-                print row
+            
+            if args.difference != None:
+                minuendtable.create(differencedb)
+                differencedb.execute(minuendtable.insert(), differencerows)
+            else:
+                if len(differencerows) > 0:
+                    print "-------------- " + minuendtable.name + "-------------- " 
+                for row in differencerows:
+                    print row
 
 # All done.
 
