@@ -131,13 +131,13 @@ try:
 
     nvivoExtendedItem = nvivomd.tables.get('ExtendedItem')
     if nvivoExtendedItem == None:
-        nvivoExtendedItem = Table('Item', nvivomd,
+        nvivoExtendedItem = Table('ExtendedItem', nvivomd,
             Column('Item_Id',       UUID(),         nullable=False),
             Column('Properties',    LargeBinary,    nullable=False))
 
     nvivoCategory = nvivomd.tables.get('Category')
     if nvivoCategory == None:
-        nvivoCategory = Table('Item', nvivomd,
+        nvivoCategory = Table('Category', nvivomd,
             Column('Item_Id',       UUID(),         nullable=False),
             Column('Layout',        LargeBinary,    nullable=False))
 
