@@ -100,7 +100,7 @@ try:
                 minuendtable.create(differencedb)
 
     for minuendtable in minuendmd.sorted_tables:
-        subtrahendtable = minuendmd.tables[minuendtable.name]
+        subtrahendtable = subtrahendmd.tables[minuendtable.name]
         if subtrahendtable != None:
             subtrahendrows = subtrahenddb.execute(subtrahendtable.select())
             subtrahendrows = [dict(row) for row in subtrahendrows]
