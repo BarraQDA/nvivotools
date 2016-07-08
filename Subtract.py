@@ -4,10 +4,14 @@
 import sqlalchemy
 from sqlalchemy import *
 from sqlalchemy import exc
+from sqlalchemy.databases import mssql, sqlite
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
 import warnings
 import sys
 import os
 import argparse
+import uuid
 
 class UUID(TypeDecorator):
     """Platform-independent UUID type.
@@ -41,6 +45,25 @@ class UUID(TypeDecorator):
         else:
             return uuid.UUID(value)
 
+
+@compiles(UNIQUEIDENTIFIER, 'sqlite')
+def compile_UNIQUEIDENTIFIER_mssql_sqlite(element, compiler, **kw):
+    """ Handles mssql UNIQUEIDENTIFIER datatype as UUID in SQLite """
+    try:
+        length = element.length
+    except:
+        length = None
+    element.length = 64 # @note: 36 should be enough, but see the link below
+
+    # @note: since SA-0.9 all string types have collation, which are not
+    # really compatible between databases, so use default one
+    element.collation = None
+
+    res = "UUID"
+    if length:
+        element.length = length
+    return res
+
 parser = argparse.ArgumentParser(description='Subtract the contents of one database from another.')
 
 parser.add_argument('minuend', type=str,
@@ -53,21 +76,30 @@ parser.add_argument('difference', type=str, nargs='?',
 args = parser.parse_args()
 
 try:
-    # Hide warning message over unrecognised xml columns
-    warnings.filterwarnings("ignore", category=exc.SAWarning, message='Did not recognize type \'xml\'.*', module='sqlalchemy')
+    mssql.ischema_names['xml'] = String
+    
+    sqlite.ischema_names['UNIQUEIDENTIFIER'] = UUID
 
     minuenddb = create_engine(args.minuend)
-    minuendmd = MetaData(bind=minuenddb)
+    minuendmd = MetaData()
     minuendmd.reflect(minuenddb)
 
     subtrahenddb = create_engine(args.subtrahend)
-    subtrahendmd = MetaData(bind=subtrahenddb)
+    subtrahendmd = MetaData()
     subtrahendmd.reflect(subtrahenddb)
 
     if args.difference != None:
         differencedb = create_engine(args.difference)
+        differencemd = MetaData()
+        differencemd.reflect(differencedb)
 
-    for minuendtable in minuendmd.tables.values():
+    for minuendtable in minuendmd.sorted_tables:
+        if args.difference != None:
+            if minuendtable.name not in differencemd.tables.keys():
+                print "Creating table: " + minuendtable.name
+                minuendtable.create(differencedb)
+
+    for minuendtable in minuendmd.sorted_tables:
         subtrahendtable = minuendmd.tables[minuendtable.name]
         if subtrahendtable != None:
             subtrahendrows = subtrahenddb.execute(subtrahendtable.select())
@@ -78,14 +110,13 @@ try:
 
             differencerows = [ x for x in minuendrows if not x in subtrahendrows ]
             
-            if args.difference != None:
-                minuendtable.create(differencedb)
-                differencedb.execute(minuendtable.insert(), differencerows)
-            else:
-                if len(differencerows) > 0:
+            if len(differencerows) > 0:
+                if args.difference != None:
+                    differencedb.execute(minuendtable.insert(), differencerows)
+                else:
                     print "-------------- " + minuendtable.name + "-------------- " 
-                for row in differencerows:
-                    print row
+                    for row in differencerows:
+                        print row
 
 # All done.
 
