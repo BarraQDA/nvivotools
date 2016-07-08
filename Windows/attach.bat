@@ -11,6 +11,7 @@ set INSTANCE=%3
 IF "%INSTANCE%"=="" (
     set INSTANCE=QSRNVIVO10
     )
+set server=%COMPUTERNAME%\%INSTANCE%
 
 del "%TEMPDIR%\%~n1*"
 copy "%~1" %TEMPDIR%

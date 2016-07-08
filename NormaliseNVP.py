@@ -10,78 +10,44 @@ import os
 import argparse
 import uuid
 
-class UUID(TypeDecorator):
-    """Platform-independent UUID type.
-
-    Uses Postgresql's UUID type, otherwise uses
-    CHAR(36), storing as stringified hex values.
-
-    """
-    impl = CHAR
-
-    def load_dialect_impl(self, dialect):
-        if dialect.name == 'postgresql':
-            return dialect.type_descriptor(UUID())
-        else:
-            return dialect.type_descriptor(CHAR(36))
-
-    def process_bind_param(self, value, dialect):
-        if value is None:
-            return value
-        elif dialect.name == 'postgresql':
-            return str(value)
-        else:
-            if not isinstance(value, uuid.UUID):
-                return str(uuid.UUID(value)).upper()
-            else:
-                return str(value).upper()
-
-    def process_result_value(self, value, dialect):
-        if value is None:
-            return value
-        else:
-            return uuid.UUID(value)
-
-parser = argparse.ArgumentParser(description='Normalise an offloaded NVivo project.')
-parser.add_argument('-w', '--windows', action='store_true',
-                    help='Correct NVivo for Windows string coding. Use if names and descriptions appear wierd.')
-parser.add_argument('-s', '--structure', action='store_true',
-                    help='Replace existing table structures.')
-
-table_choices = ["", "skip", "replace", "merge"]
-parser.add_argument('-p', '--project', choices=table_choices, default="replace",
-                    help='Project action.')
-parser.add_argument('-nc', '--node-categories', choices=table_choices, default="replace",
-                    help='Node category action.')
-parser.add_argument('-n', '--nodes', choices=table_choices, default="replace",
-                    help='Node action.')
-parser.add_argument('-na', '--node-attributes', choices=table_choices, default="replace",
-                    help='Node attribute table action.')
-parser.add_argument('-sc', '--source-categories', choices=table_choices, default="replace",
-                    help='Source category action.')
-parser.add_argument('--sources', choices=table_choices, default="replace",
-                    help='Source action.')
-parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="replace",
-                    help='Source attribute action.')
-parser.add_argument('-t', '--taggings', choices=table_choices, default="replace",
-                    help='Tagging action.')
-parser.add_argument('-a', '--annotations', choices=table_choices, default="replace",
-                    help='Annotation action.')
-parser.add_argument('-u', '--users', choices=table_choices, default="replace",
-                    help='User action.')
-
-parser.add_argument('infile', type=str,
-                    help='SQLAlchemy path of input NVivo database.')
-parser.add_argument('outfile', type=str, nargs='?',
-                    help='SQLAlchemy path of output normalised database.')
-
-args = parser.parse_args()
+execfile(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py')
 
 try:
-    # Hide warning message over unrecognised xml columns
-    warnings.filterwarnings("ignore", category=exc.SAWarning, message='Did not recognize type \'xml\'.*', module='sqlalchemy')
+    parser = argparse.ArgumentParser(description='Normalise an offloaded NVivo project.')
+    parser.add_argument('-w', '--windows', action='store_true',
+                        help='Correct NVivo for Windows string coding. Use if names and descriptions appear wierd.')
+    parser.add_argument('-s', '--structure', action='store_true',
+                        help='Replace existing table structures.')
 
-    #nvivodb = create_engine('sqlite:///' + args.infile)
+    table_choices = ["", "skip", "replace", "merge"]
+    parser.add_argument('-p', '--project', choices=table_choices, default="replace",
+                        help='Project action.')
+    parser.add_argument('-nc', '--node-categories', choices=table_choices, default="replace",
+                        help='Node category action.')
+    parser.add_argument('-n', '--nodes', choices=table_choices, default="replace",
+                        help='Node action.')
+    parser.add_argument('-na', '--node-attributes', choices=table_choices, default="replace",
+                        help='Node attribute table action.')
+    parser.add_argument('-sc', '--source-categories', choices=table_choices, default="replace",
+                        help='Source category action.')
+    parser.add_argument('--sources', choices=table_choices, default="replace",
+                        help='Source action.')
+    parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="replace",
+                        help='Source attribute action.')
+    parser.add_argument('-t', '--taggings', choices=table_choices, default="replace",
+                        help='Tagging action.')
+    parser.add_argument('-a', '--annotations', choices=table_choices, default="replace",
+                        help='Annotation action.')
+    parser.add_argument('-u', '--users', choices=table_choices, default="replace",
+                        help='User action.')
+
+    parser.add_argument('infile', type=str,
+                        help='SQLAlchemy path of input NVivo database.')
+    parser.add_argument('outfile', type=str, nargs='?',
+                        help='SQLAlchemy path of output normalised database.')
+
+    args = parser.parse_args()
+
     nvivodb = create_engine(args.infile)
     nvivomd = MetaData(bind=nvivodb)
     nvivomd.reflect(nvivodb)
@@ -155,10 +121,11 @@ try:
     if normNode == None:
         normNode = Table('Node', normmd,
             Column('Id',            UUID(),         primary_key=True),
-            Column('Parent',        UUID(),         ForeignKey("Node.Id"))
+            Column('Parent',        UUID(),         ForeignKey("Node.Id")),
             Column('Category',      UUID(),         ForeignKey("NodeCategory.Id")),
             Column('Name',          String(256)),
             Column('Description',   String(512)),
+            Column('Aggregate',     Boolean),
             Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
             Column('CreatedDate',   DateTime),
             Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
@@ -248,23 +215,32 @@ try:
 
 # Nodes
     if args.nodes != 'skip':
-        nvivoItem = nvivomd.tables['Item']
-        nvivoRole = nvivomd.tables['Role']
+        nvivoItem         = nvivomd.tables['Item'].alias(name='NodeItem')
+        nvivoCategoryRole = nvivomd.tables['Role'].alias(name='CategoryRole')
+        nvivoParentRole   = nvivomd.tables['Role'].alias(name='ParentRole')
+        nvivoParentItem   = nvivomd.tables['Item'].alias(name='ParentItem')
 
-        sel = select([nvivoItem.c.Id,
-                      nvivoRole.c.Item2_Id.label('Category'),
-                      nvivoItem.c.Name,
-                      nvivoItem.c.Description,
-                      nvivoItem.c.CreatedBy,
-                      nvivoItem.c.CreatedDate,
-                      nvivoItem.c.ModifiedBy,
-                      nvivoItem.c.ModifiedDate])
-        sel = sel.where(and_(
-                      or_(nvivoItem.c.TypeId == literal_column('16'), nvivoItem.c.TypeId == literal_column('62')),
-                      nvivoRole.c.TypeId == literal_column('14'),
-                      nvivoRole.c.Item1_Id == nvivoItem.c.Id))
+        sel = select([
+                    nvivoItem.c.Id,
+                    nvivoCategoryRole.c.Item2_Id.label('Category'),
+                    nvivoItem.c.Name,
+                    nvivoItem.c.Description,
+                    nvivoItem.c.Aggregate,
+                    nvivoItem.c.CreatedBy,
+                    nvivoItem.c.CreatedDate,
+                    nvivoItem.c.ModifiedBy,
+                    nvivoItem.c.ModifiedDate,
+                    nvivoParentRole.c.Item1_Id.label('Parent')]
+              ).select_from(nvivoItem.join(
+                    nvivoCategoryRole, and_(
+                    nvivoCategoryRole.c.TypeId == literal_column('14'),
+                    nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id)
+              ).outerjoin(
+                    nvivoParentRole, and_(
+                    nvivoParentRole.c.TypeId == literal_column('1'),
+                    nvivoParentRole.c.Item2_Id == nvivoItem.c.Id)))
+
         nodes = [dict(row) for row in nvivodb.execute(sel)]
-
         if args.windows:
             for node in nodes:
                 node['Name']        = ''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Name']))

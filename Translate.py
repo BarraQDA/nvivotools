@@ -1,16 +1,15 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-import sqlite3
-import sys
-
-import sqlalchemy
-from sqlalchemy import *
-from sqlalchemy import exc
+from sqlalchemy import exc, TypeDecorator, CHAR, String, create_engine, MetaData, select, update, bindparam
+from sqlalchemy.engine import reflection
 import warnings
 import sys
 import os
 import argparse
+import uuid
+
+execfile(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py')
 
 try:
     parser = argparse.ArgumentParser(description='Translate NVivo encoded strings.')
