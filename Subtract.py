@@ -7,11 +7,13 @@ from sqlalchemy import exc
 from sqlalchemy.databases import mssql, sqlite
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
+from sqlalchemy.engine import reflection
 import warnings
 import sys
 import os
 import argparse
 import uuid
+from sqlalchemy_utils import dependent_objects
 
 class UUID(TypeDecorator):
     """Platform-independent UUID type.
@@ -77,7 +79,7 @@ args = parser.parse_args()
 
 try:
     mssql.ischema_names['xml'] = String
-    
+
     sqlite.ischema_names['UNIQUEIDENTIFIER'] = UUID
 
     minuenddb = create_engine(args.minuend)
@@ -92,12 +94,15 @@ try:
         differencedb = create_engine(args.difference)
         differencemd = MetaData()
         differencemd.reflect(differencedb)
+        differenceconn = differencedb.connect()
+        differencetrans = differenceconn.begin()
+        inspector = reflection.Inspector.from_engine(differencedb)
 
     for minuendtable in minuendmd.sorted_tables:
         if args.difference != None:
             if minuendtable.name not in differencemd.tables.keys():
                 print "Creating table: " + minuendtable.name
-                minuendtable.create(differencedb)
+                minuendtable.create(differenceconn)
 
     for minuendtable in minuendmd.sorted_tables:
         subtrahendtable = subtrahendmd.tables[minuendtable.name]
@@ -109,16 +114,46 @@ try:
             minuendrows = [dict(row) for row in minuendrows]
 
             differencerows = [ x for x in minuendrows if not x in subtrahendrows ]
-            
+
             if len(differencerows) > 0:
                 if args.difference != None:
-                    differencedb.execute(minuendtable.insert(), differencerows)
+                    print("Finding foreign key references for table " + minuendtable.name)
+                    for fk in inspector.get_foreign_keys(minuendtable.name):
+                        if not fk['name']:
+                            continue
+
+                        #print "   " + fk['name']
+                        fkreferredtable = minuendmd.tables[fk['referred_table']]
+                        fkselect = fkreferredtable.select()
+                        for referred_column, constrained_column in zip(fk['referred_columns'], fk['constrained_columns']):
+                            fkselect = fkselect.where(fkreferredtable.c[referred_column]  == bindparam(constrained_column))
+
+                        #print fkselect
+
+                        fkrows = []
+                        fkexists = []
+                        for differencerow in differencerows:
+                            fkrow = minuenddb.execute(fkselect, differencerow)
+                            fkrows += [dict(row) for row in fkrow if not dict(row) in fkrows]
+
+                            fkexist = differenceconn.execute(fkselect, differencerow)
+                            fkexists += [dict(row) for row in fkexist if not dict(row) in fkexists]
+
+                        fkinsert = [ x for x in fkrows if not x in fkexists ]
+                        if len(fkinsert) > 0:
+                            differencereferredtable = differencemd.tables[fk['referred_table']]
+                            #print "fkinsert: " + str(fkinsert)
+                            differenceconn.execute(differencereferredtable.insert(), fkinsert)
+
+                    differenceconn.execute(minuendtable.insert(), differencerows)
                 else:
-                    print "-------------- " + minuendtable.name + "-------------- " 
+                    print "-------------- " + minuendtable.name + "-------------- "
                     for row in differencerows:
                         print row
 
 # All done.
+
+    differencetrans.commit()
 
 except exc.SQLAlchemyError:
     raise
