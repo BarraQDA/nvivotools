@@ -218,7 +218,6 @@ try:
         nvivoItem         = nvivomd.tables['Item'].alias(name='NodeItem')
         nvivoCategoryRole = nvivomd.tables['Role'].alias(name='CategoryRole')
         nvivoParentRole   = nvivomd.tables['Role'].alias(name='ParentRole')
-        nvivoParentItem   = nvivomd.tables['Item'].alias(name='ParentItem')
 
         sel = select([
                     nvivoItem.c.Id,
@@ -231,7 +230,10 @@ try:
                     nvivoItem.c.ModifiedBy,
                     nvivoItem.c.ModifiedDate,
                     nvivoParentRole.c.Item1_Id.label('Parent')]
-              ).select_from(nvivoItem.join(
+              ).where(or_(
+                    nvivoItem.c.TypeId == literal_column('16'),
+                    nvivoItem.c.TypeId == literal_column('62'))
+              ).select_from(nvivoItem.outerjoin(
                     nvivoCategoryRole, and_(
                     nvivoCategoryRole.c.TypeId == literal_column('14'),
                     nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id)

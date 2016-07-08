@@ -299,6 +299,7 @@ try:
                       normNode.c.Category,
                       normNode.c.Name,
                       normNode.c.Description,
+                      normNode.c.Aggregate,
                       normNode.c.CreatedBy,
                       normNode.c.CreatedDate,
                       normNode.c.ModifiedBy,
