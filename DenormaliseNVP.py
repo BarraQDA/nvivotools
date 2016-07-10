@@ -11,76 +11,43 @@ import argparse
 import uuid
 import re
 
-class UUID(TypeDecorator):
-    """Platform-independent UUID type.
-
-    Uses Postgresql's UUID type, otherwise uses
-    CHAR(36), storing as stringified hex values.
-
-    """
-    impl = CHAR
-
-    def load_dialect_impl(self, dialect):
-        if dialect.name == 'postgresql':
-            return dialect.type_descriptor(UUID())
-        else:
-            return dialect.type_descriptor(CHAR(36))
-
-    def process_bind_param(self, value, dialect):
-        if value is None:
-            return value
-        elif dialect.name == 'postgresql':
-            return str(value)
-        else:
-            if not isinstance(value, uuid.UUID):
-                return str(uuid.UUID(value)).upper()
-            else:
-                return str(value).upper()
-
-    def process_result_value(self, value, dialect):
-        if value is None:
-            return value
-        else:
-            return uuid.UUID(value)
-
-parser = argparse.ArgumentParser(description='Denormalise a normalised NVivo project.')
-parser.add_argument('-w', '--windows', action='store_true',
-                    help='Correct NVivo for Windows string coding. Use if offloaded file will be used with Windows version of NVivo.')
-parser.add_argument('-s', '--structure', action='store_true',
-                    help='Replace existing table structures.')
-
-table_choices = ["", "skip", "replace", "merge"]
-parser.add_argument('-p', '--project', choices=table_choices, default="replace",
-                    help='Project action.')
-parser.add_argument('-nc', '--node-categories', choices=table_choices, default="replace",
-                    help='Node category action.')
-parser.add_argument('-n', '--nodes', choices=table_choices, default="replace",
-                    help='Node action.')
-parser.add_argument('-na', '--node-attributes', choices=table_choices, default="replace",
-                    help='Node attribute table action.')
-parser.add_argument('-sc', '--source-categories', choices=table_choices, default="replace",
-                    help='Source category action.')
-parser.add_argument('--sources', choices=table_choices, default="replace",
-                    help='Source action.')
-parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="replace",
-                    help='Source attribute action.')
-parser.add_argument('-t', '--taggings', choices=table_choices, default="replace",
-                    help='Tagging action.')
-parser.add_argument('-a', '--annotations', choices=table_choices, default="replace",
-                    help='Annotation action.')
-parser.add_argument('-u', '--users', choices=table_choices, default="replace",
-                    help='User action.')
-
-parser.add_argument('infile', type=str,
-                    help='SQLAlchemy path of input normalised database.')
-parser.add_argument('outfile', type=str, nargs='?',
-                    help='SQLAlchemy path of input output NVivo database.')
-
-args = parser.parse_args()
+execfile(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py')
 
 try:
-    # Hide warning message over unrecognised xml columns
-    warnings.filterwarnings("ignore", category=exc.SAWarning, message='Did not recognize type \'xml\'.*', module='sqlalchemy')
+    parser = argparse.ArgumentParser(description='Denormalise a normalised NVivo project.')
+    parser.add_argument('-w', '--windows', action='store_true',
+                        help='Correct NVivo for Windows string coding. Use if offloaded file will be used with Windows version of NVivo.')
+    parser.add_argument('-s', '--structure', action='store_true',
+                        help='Replace existing table structures.')
+
+    table_choices = ["", "skip", "replace", "merge"]
+    parser.add_argument('-p', '--project', choices=table_choices, default="replace",
+                        help='Project action.')
+    parser.add_argument('-nc', '--node-categories', choices=table_choices, default="replace",
+                        help='Node category action.')
+    parser.add_argument('-n', '--nodes', choices=table_choices, default="replace",
+                        help='Node action.')
+    parser.add_argument('-na', '--node-attributes', choices=table_choices, default="replace",
+                        help='Node attribute table action.')
+    parser.add_argument('-sc', '--source-categories', choices=table_choices, default="replace",
+                        help='Source category action.')
+    parser.add_argument('--sources', choices=table_choices, default="replace",
+                        help='Source action.')
+    parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="replace",
+                        help='Source attribute action.')
+    parser.add_argument('-t', '--taggings', choices=table_choices, default="replace",
+                        help='Tagging action.')
+    parser.add_argument('-a', '--annotations', choices=table_choices, default="replace",
+                        help='Annotation action.')
+    parser.add_argument('-u', '--users', choices=table_choices, default="replace",
+                        help='User action.')
+
+    parser.add_argument('infile', type=str,
+                        help='SQLAlchemy path of input normalised database.')
+    parser.add_argument('outfile', type=str, nargs='?',
+                        help='SQLAlchemy path of input output NVivo database.')
+
+    args = parser.parse_args()
 
     normdb = create_engine(args.infile)
     normmd = MetaData(bind=normdb)
@@ -306,7 +273,6 @@ try:
                       normNode.c.ModifiedDate])
         nodes = [dict(row) for row in normdb.execute(sel)]
 
-        nodes = [dict(row) for row in nodes]
         for node in nodes:
             if nodecategory['Id'] == None:
                 nodecategory['Id'] = uuid.uuid4()
