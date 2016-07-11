@@ -192,7 +192,8 @@ try:
         sel = select([nvivoItem.c.Id])
         sel = sel.where(and_(
             nvivoItem.c.TypeId == literal_column('0'),
-            nvivoItem.c.Name == literal_column('\'Node Classifications\'')))
+            nvivoItem.c.Name   == literal_column('\'Node Classifications\''),  # Translate?
+            nvivoItem.c.System == true))
         headnodecategory = nvivodb.execute(sel).fetchone()
         if headnodecategory == None:
             #  Create the magic node category from NVivo's empty project
@@ -232,11 +233,16 @@ try:
         itemsandroles = [dict(row) for row in nvivodb.execute(sel)]
 
         if len(itemsandroles) > 0:
-            nvivodb.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Id')), itemsandroles)
+            nvivodb.execute(nvivoItem.delete(
+                nvivoItem.c.Id == bindparam('Id')), itemsandroles)
             nvivodb.execute(nvivoRole.delete(and_(
                 nvivoRole.c.Item1_Id == bindparam('Item1_Id'),
                 nvivoRole.c.TypeId   == literal_column('0'),
                 nvivoRole.c.Item2_Id == bindparam('Item2_Id'))), itemsandroles)
+            nvivodb.execute(nvivoExtendedItem.delete(
+                nvivoExtendedItem.c.Item_Id == bindparam('Id')), itemsandroles)
+            nvivodb.execute(nvivoCategory.delete(
+                nvivoCategory.c.Item_Id == bindparam('Id')), itemsandroles)
 
         if len(nodecategories) > 0:
             nvivodb.execute(nvivoItem.insert().values({
@@ -261,6 +267,18 @@ try:
 
 #Nodes
     if args.nodes != 'skip':
+
+        # Look up head node, fudge it if it doesn't exist.
+        sel = select([nvivoItem.c.Id])
+        sel = sel.where(and_(
+            nvivoItem.c.TypeId == literal_column('0'),
+            nvivoItem.c.Name == literal_column('\'Nodes\''),
+            nvivoItem.c.System == true))
+        headnode = nvivodb.execute(sel).fetchone()
+        if headnode == None:
+            #  Create the magic node from NVivo's empty project
+            headnode = {'Id':'F1450EED-D162-4CC9-B45D-6724156F7220'}
+
         normNode = normmd.tables['Node']
         sel = select([normNode.c.Id,
                       normNode.c.Category,
