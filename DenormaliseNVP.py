@@ -193,7 +193,7 @@ try:
         sel = sel.where(and_(
             nvivoItem.c.TypeId == literal_column('0'),
             nvivoItem.c.Name   == literal_column('\'Node Classifications\''),  # Translate?
-            nvivoItem.c.System == true))
+            nvivoItem.c.System == True))
         headnodecategory = nvivodb.execute(sel).fetchone()
         if headnodecategory == None:
             #  Create the magic node category from NVivo's empty project
@@ -201,7 +201,6 @@ try:
 
         normNodeCategory = normmd.tables['NodeCategory']
         sel = select([normNodeCategory.c.Id,
-                      normNodeCategory.c.Parent,
                       normNodeCategory.c.Name,
                       normNodeCategory.c.Description,
                       normNodeCategory.c.CreatedBy,
@@ -215,8 +214,6 @@ try:
             if args.windows:
                 nodecategory['Name']        = ''.join(map(lambda ch: chr(ord(ch) + 0x377), nodecategory['Name']))
                 nodecategory['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), nodecategory['Description']))
-            if nodecategory['Parent'] == None:
-                nodecategory['Parent'] = headnodecategory['Id']
 
         sel = select([nvivoItem.c.Id,
                       nvivoRole.c.Item1_Id,
@@ -252,7 +249,7 @@ try:
                 }), nodecategories)
 
             nvivodb.execute(nvivoRole.insert().values({
-                        'Item1_Id': bindparam('Parent'),
+                        'Item1_Id': literal_column('\'' + headnodecategory['Id'] + '\''),
                         'Item2_Id': bindparam('Id'),
                         'TypeId':   literal_column('0')
                 }), nodecategories)
@@ -273,7 +270,7 @@ try:
         sel = sel.where(and_(
             nvivoItem.c.TypeId == literal_column('0'),
             nvivoItem.c.Name == literal_column('\'Nodes\''),
-            nvivoItem.c.System == true))
+            nvivoItem.c.System == True))
         headnode = nvivodb.execute(sel).fetchone()
         if headnode == None:
             #  Create the magic node from NVivo's empty project
@@ -281,6 +278,7 @@ try:
 
         normNode = normmd.tables['Node']
         sel = select([normNode.c.Id,
+                      normNode.c.Parent,
                       normNode.c.Category,
                       normNode.c.Name,
                       normNode.c.Description,
@@ -291,12 +289,24 @@ try:
                       normNode.c.ModifiedDate])
         nodes = [dict(row) for row in normdb.execute(sel)]
 
+        tag = 0
         for node in nodes:
             if nodecategory['Id'] == None:
                 nodecategory['Id'] = uuid.uuid4()
             if args.windows:
                 node['Name']        = ''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Name']))
                 node['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Description']))
+            if node['Parent'] == None:
+                node['Tag'] = tag
+                tag += 1
+                childtag = 65536
+                for childnode in nodes:
+                    if childnode['Parent'] == node['Id']:
+                        childnode['Tag'] = childtag
+                        childtag += 1
+
+        nodeswithparent    = [dict(row) for row in nodes if row['Parent'] != None]
+        nodeswithoutparent = [dict(row) for row in nodes if row['Parent'] == None]
 
         sel = select([nvivoItem.c.Id,
                       nvivoRole.c.Item1_Id,
@@ -331,9 +341,34 @@ try:
 
             nvivodb.execute(nvivoRole.insert().values({
                     'Item1_Id': bindparam('Id'),
-                    'Item2_Id': bindparam('Category'),
-                    'TypeId':   literal_column('0')
+                    'Item2_Id': literal_column('\'' + headnode['Id'] + '\''),
+                    'TypeId':   literal_column('0'),
+                    'Tag':      literal_column(None)
                 }), nodes)
+            nvivodb.execute(nvivoRole.insert().values({
+                    'Item1_Id': bindparam('Id'),
+                    'Item2_Id': bindparam('Id'),
+                    'TypeId':   literal_column('15')
+                }), nodes)
+        if len(nodeswithparent) > 0:
+            nvivodb.execute(nvivoRole.insert().values({
+                    'Item1_Id': bindparam('Id'),
+                    'Item2_Id': bindparam('Parent'),
+                    'TypeId':   literal_column('1')
+                }), nodeswithparent)
+            nvivodb.execute(nvivoRole.insert().values({
+                    'Item1_Id': literal_column(row['Parent']),
+                    'Item2_Id': bindparam('Id'),
+                    'TypeId':   literal_column('2'),
+                    'Tag':      bindparam('Tag')
+                }), nodeswithparent)
+        if len(nodeswithoutparent) > 0:
+            nvivodb.execute(nvivoRole.insert().values({
+                    'Item1_Id': bindparam('Id'),
+                    'Item2_Id': bindparam('Id'),
+                    'TypeId':   literal_column('2'),
+                    'Tag':      bindparam('Tag')
+                }), nodeswithoutparent)
 
     sys.exit()
 
