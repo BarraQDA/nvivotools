@@ -41,7 +41,6 @@ try:
                 .where(nvivoProject.c.Id == bindparam('b_Id')) \
                 .values(Title = bindparam('Title')) \
                 .values(Description = bindparam('Description'))
-    print updateSql
     for project in projectRows:
         project['Title']       = ''.join(map(lambda ch: unichr(ord(ch) + charoffset), project['Title']))
         project['Description'] = ''.join(map(lambda ch: unichr(ord(ch) + charoffset), project['Description']))
@@ -58,7 +57,6 @@ try:
                 .where(nvivoItem.c.Id == bindparam('b_Id')) \
                 .values(Name = bindparam('Name')) \
                 .values(Description = bindparam('Description'))
-    print updateSql
     for item in itemRows:
         item['Name']       = ''.join(map(lambda ch: unichr(ord(ch) + charoffset), item['Name']))
         item['Description'] = ''.join(map(lambda ch: unichr(ord(ch) + charoffset), item['Description']))

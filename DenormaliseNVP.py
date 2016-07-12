@@ -69,17 +69,17 @@ try:
         nvivoProject = Table('Project', nvivomd,
             Column('Title',         String(256),    nullable=False),
             Column('Description',   String(512),    nullable=False),
-            Column('CreatedBy',     UUID(),         nullable=False),
+            Column('CreatedBy',     UUID(),         ForeignKey("UserProfile.Id"),  nullable=False),
             Column('CreatedDate',   DateTime,       nullable=False),
-            Column('ModifiedBy',    UUID(),         nullable=False),
+            Column('ModifiedBy',    UUID(),         ForeignKey("UserProfile.Id"),  nullable=False),
             Column('ModifiedDate',  DateTime,       nullable=False))
 
     nvivoRole = nvivomd.tables.get('Role')
     if nvivoRole == None:
         nvivoRole = Table('Role', nvivomd,
-            Column('Item1_Id',      UUID(),         nullable=False),
-            Column('TypeId',        Integer,        nullable=False),
-            Column('Item2_Id',      UUID(),         nullable=False),
+            Column('Item1_Id',      UUID(),         ForeignKey("Item.Id"), primary_key=True, nullable=False),
+            Column('TypeId',        Integer,                               primary_key=True, nullable=False),
+            Column('Item2_Id',      UUID(),         ForeignKey("Item.Id"), primary_key=True, nullable=False),
             Column('Tag',           Integer))
 
     nvivoItem = nvivomd.tables.get('Item')
@@ -91,8 +91,8 @@ try:
             Column('Description',   String(512),    nullable=False),
             Column('CreatedDate',   DateTime,       nullable=False),
             Column('ModifiedDate',  DateTime,       nullable=False),
-            Column('CreatedBy',     UUID(),         nullable=False),
-            Column('ModifiedBy',    UUID(),         nullable=False),
+            Column('CreatedBy',     UUID(),         ForeignKey("UserProfile.Id"),  nullable=False),
+            Column('ModifiedBy',    UUID(),         ForeignKey("UserProfile.Id"),  nullable=False),
             Column('System',        Boolean,        nullable=False),
             Column('ReadOnly',      Boolean,        nullable=False))
 
@@ -132,8 +132,8 @@ try:
             Column('LengthY',       Integer),
             Column('CreatedDate',   DateTime,       nullable=False),
             Column('ModifiedDate',  DateTime,       nullable=False),
-            Column('CreatedBy',     UUID(),         nullable=False),
-            Column('ModifiedBy',    UUID(),         nullable=False))
+            Column('CreatedBy',     UUID(),         ForeignKey("UserProfile.Id"),  nullable=False),
+            Column('ModifiedBy',    UUID(),         ForeignKey("UserProfile.Id"),  nullable=False))
 
     nvivoAnnotation = nvivomd.tables.get('Annotation')
     if nvivoAnnotation == None:
@@ -149,8 +149,8 @@ try:
             Column('LengthY',       Integer),
             Column('CreatedDate',   DateTime,       nullable=False),
             Column('ModifiedDate',  DateTime,       nullable=False),
-            Column('CreatedBy',     UUID(),         nullable=False),
-            Column('ModifiedBy',    UUID(),         nullable=False))
+            Column('CreatedBy',     UUID(),         ForeignKey("UserProfile.Id"),  nullable=False),
+            Column('ModifiedBy',    UUID(),         ForeignKey("UserProfile.Id"),  nullable=False))
 
     nvivoUserProfile = nvivomd.tables.get('UserProfile')
     if nvivoUserProfile == None:
@@ -161,6 +161,27 @@ try:
             Column('ColorArgb',     Integer))
 
     nvivomd.create_all(nvivodb)
+
+# Users
+    if args.users != 'skip':
+        normUser = normmd.tables['User']
+        sel = select([normUser.c.Id,
+                      normUser.c.Name])
+
+        users = [dict(row) for row in normdb.execute(sel)]
+        for user in users:
+            user['Initials'] = ''.join(word[0].upper() for word in user['Name'].split())
+
+        if args.users == 'replace':
+            nvivodb.execute(nvivoUserProfile.delete())
+            if len(users) > 0:
+                nvivodb.execute(nvivoUserProfile.insert(), users)
+        elif args.users == 'merge':
+            existingusers = [row['Id'] for row in nvivodb.execute(select([nvivoUserProfile.c.Id]))]
+            newusers = [dict(user) for user in users if user['Id'] not in existingusers]
+            if len(newusers) > 0:
+                nvivodb.execute(nvivoUserProfile.insert(), newusers)
+            # Still need to update existing users
 
 # Project
     if args.project != 'skip':
@@ -173,10 +194,24 @@ try:
                       normProject.c.ModifiedDate])
         projects = [dict(row) for row in normdb.execute(sel)]
 
-        if args.windows:
-            for project in projects:
+        for project in projects:
+            if args.windows:
                 project['Title']       = ''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Title']))
                 project['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Description']))
+            project['Id']                = '778EAE97-4A06-4BF5-B555-A757F4CE463B'
+            project['ReadPassword']      = ''
+            project['WritePassword']     = ''
+            project['ReadPasswordHint']  = ''
+            project['WritePasswordHint'] = ''
+            project['Version']           = '10.0.338.0'
+            project['UnassignedLabel']   = ''
+            project['NotApplicableLabel'] = ''
+            project['IndexLanguage']     = ''
+            project['EmbedSources']      = ''
+            project['EmbeddedFileSizeLimitBytes'] = ''
+            project['AllowGuestAccess']  = False
+            project['EventLogging']      = False
+
 
         sel = select([nvivoProject.c.Title])
         nvivoprojects = [dict(row) for row in nvivodb.execute(sel)]
@@ -249,7 +284,7 @@ try:
                 }), nodecategories)
 
             nvivodb.execute(nvivoRole.insert().values({
-                        'Item1_Id': literal_column('\'' + headnodecategory['Id'] + '\''),
+                        'Item1_Id': literal_column('\'' + str(headnodecategory['Id']) + '\''),
                         'Item2_Id': bindparam('Id'),
                         'TypeId':   literal_column('0')
                 }), nodecategories)
@@ -297,13 +332,14 @@ try:
                 node['Name']        = ''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Name']))
                 node['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Description']))
             if node['Parent'] == None:
-                node['Tag'] = tag
+                node['RoleTag'] = tag   # Don't call the column 'Tag' or SQLALchemy will
+                                        # try to bind it when we don't want it bound
                 tag += 1
-                childtag = 65536
-                for childnode in nodes:
-                    if childnode['Parent'] == node['Id']:
-                        childnode['Tag'] = childtag
-                        childtag += 1
+            childtag = 65536
+            for childnode in nodes:
+                if childnode['Parent'] == node['Id']:
+                    childnode['RoleTag'] = childtag
+                    childtag += 1
 
         nodeswithparent    = [dict(row) for row in nodes if row['Parent'] != None]
         nodeswithoutparent = [dict(row) for row in nodes if row['Parent'] == None]
@@ -341,9 +377,8 @@ try:
 
             nvivodb.execute(nvivoRole.insert().values({
                     'Item1_Id': bindparam('Id'),
-                    'Item2_Id': literal_column('\'' + headnode['Id'] + '\''),
-                    'TypeId':   literal_column('0'),
-                    'Tag':      literal_column(None)
+                    'Item2_Id': literal_column('\'' + str(headnode['Id']) + '\''),
+                    'TypeId':   literal_column('0')
                 }), nodes)
             nvivodb.execute(nvivoRole.insert().values({
                     'Item1_Id': bindparam('Id'),
@@ -352,22 +387,22 @@ try:
                 }), nodes)
         if len(nodeswithparent) > 0:
             nvivodb.execute(nvivoRole.insert().values({
-                    'Item1_Id': bindparam('Id'),
-                    'Item2_Id': bindparam('Parent'),
+                    'Item1_Id': bindparam('Parent'),
+                    'Item2_Id': bindparam('Id'),
                     'TypeId':   literal_column('1')
                 }), nodeswithparent)
             nvivodb.execute(nvivoRole.insert().values({
-                    'Item1_Id': literal_column(row['Parent']),
+                    'Item1_Id': bindparam('Parent'),
                     'Item2_Id': bindparam('Id'),
                     'TypeId':   literal_column('2'),
-                    'Tag':      bindparam('Tag')
+                    'Tag':      bindparam('RoleTag')
                 }), nodeswithparent)
         if len(nodeswithoutparent) > 0:
             nvivodb.execute(nvivoRole.insert().values({
                     'Item1_Id': bindparam('Id'),
                     'Item2_Id': bindparam('Id'),
                     'TypeId':   literal_column('2'),
-                    'Tag':      bindparam('Tag')
+                    'Tag':      bindparam('RoleTag')
                 }), nodeswithoutparent)
 
     sys.exit()
