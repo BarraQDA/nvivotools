@@ -15,6 +15,9 @@ try:
 
     parser = argparse.ArgumentParser(description='Subtract the contents of one database from another.')
 
+    parser.add_argument('-r', '--reverse', action='store_true',
+                        help='Reverse the subtraction, that is swap the minuent and subtrahend.')
+    
     parser.add_argument('minuend', type=str,
                         help='Path of database from which to subtract contents.')
     parser.add_argument('subtrahend', type=str,
@@ -23,6 +26,9 @@ try:
                         help='Path of database to be populated with the difference.')
 
     args = parser.parse_args()
+    
+    if args.reverse:
+        args.minuend, args.subtrahend = args.subtrahend, args.minuend
 
     minuenddb = create_engine(args.minuend)
     minuendmd = MetaData()
@@ -95,7 +101,8 @@ try:
 
 # All done.
 
-    differencetrans.commit()
+    if args.difference != None:
+        differencetrans.commit()
 
 except exc.SQLAlchemyError:
     raise

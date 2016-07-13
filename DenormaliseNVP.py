@@ -96,7 +96,9 @@ try:
             Column('CreatedBy',     UUID(),         ForeignKey("UserProfile.Id"),  nullable=False),
             Column('ModifiedBy',    UUID(),         ForeignKey("UserProfile.Id"),  nullable=False),
             Column('System',        Boolean,        nullable=False),
-            Column('ReadOnly',      Boolean,        nullable=False))
+            Column('ReadOnly',      Boolean,        nullable=False),
+            Column('ColorArgb',     Integer,        nullable=False),
+            Column('Aggregate',     Boolean,        nullable=False))
 
     nvivoExtendedItem = nvivomd.tables.get('ExtendedItem')
     if nvivoExtendedItem == None:
@@ -179,8 +181,9 @@ try:
             if len(users) > 0:
                 nvivocon.execute(nvivoUserProfile.insert(), users)
         elif args.users == 'merge':
-            existingusers = [row['Id'] for row in nvivocon.execute(select([nvivoUserProfile.c.Id]))]
-            newusers = [dict(user) for user in users if user['Id'] not in existingusers]
+            # Could SQLAlchemy help with matching UUIDs?
+            existingusers = [str(row['Id']).upper() for row in nvivocon.execute(select([nvivoUserProfile.c.Id]))]
+            newusers = [dict(user) for user in users if str(user['Id']).upper() not in existingusers]
             if len(newusers) > 0:
                 nvivocon.execute(nvivoUserProfile.insert(), newusers)
             # Still need to update existing users
@@ -322,6 +325,7 @@ try:
                       normNode.c.Category,
                       normNode.c.Name,
                       normNode.c.Description,
+                      normNode.c.Color,
                       normNode.c.Aggregate,
                       normNode.c.CreatedBy,
                       normNode.c.CreatedDate,
@@ -331,23 +335,36 @@ try:
 
         tag = 0
         for node in nodes:
-            if nodecategory['Id'] == None:
-                nodecategory['Id'] = uuid.uuid4()
+            if node['Id'] == None:
+                node['Id'] = uuid.uuid4()
             if args.windows:
                 node['Name']        = ''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Name']))
                 node['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Description']))
-            if node['Parent'] == None:
-                node['RoleTag'] = tag   # Don't call the column 'Tag' or SQLALchemy will
-                                        # try to bind it when we don't want it bound
-                tag += 1
-            childtag = 65536
-            for childnode in nodes:
-                if childnode['Parent'] == node['Id']:
-                    childnode['RoleTag'] = childtag
-                    childtag += 1
+                
+        def tagchildnodes(TopParent, Parent, AggregateList, depth):
+            tag = depth << 16
+            for node in nodes:
+                if node['Parent'] == Parent:
+                    node['RoleTag'] = tag
+                    tag += 1
+                    node['AggregateList'] = [node['Id']] + AggregateList
+                    if Parent == None:
+                        node['TopParent'] = node['Id']
+                    else:
+                        node['TopParent'] = TopParent
+
+                    if node['Aggregate']:
+                        tagchildnodes(node['TopParent'], node['Id'], node['AggregateList'], depth+1)
+                    else:
+                        tagchildnodes(node['TopParent'], node['Id'], [], depth+1)
+                        
+        tagchildnodes(None, None, [], 0)
+        aggregatepairs = []
+        for node in nodes:
+            for dest in node['AggregateList']:
+                aggregatepairs += [{ 'Id': node['Id'], 'Ancestor': dest }]
 
         nodeswithparent    = [dict(row) for row in nodes if row['Parent'] != None]
-        nodeswithoutparent = [dict(row) for row in nodes if row['Parent'] == None]
 
         sel = select([nvivoItem.c.Id,
                       nvivoRole.c.Item1_Id,
@@ -376,6 +393,7 @@ try:
         if len(nodes) > 0:
             nvivocon.execute(nvivoItem.insert().values({
                     'TypeId':   literal_column('16'),
+                    'ColorArgb': bindparam('Color'),
                     'System':   literal_column('0'),
                     'ReadOnly': literal_column('0')
                 }), nodes)
@@ -386,9 +404,10 @@ try:
                     'TypeId':   literal_column('0')
                 }), nodes)
             nvivocon.execute(nvivoRole.insert().values({
-                    'Item1_Id': bindparam('Id'),
+                    'Item1_Id': bindparam('TopParent'),
                     'Item2_Id': bindparam('Id'),
-                    'TypeId':   literal_column('15')
+                    'TypeId':   literal_column('2'),
+                    'Tag':      bindparam('RoleTag')
                 }), nodes)
         if len(nodeswithparent) > 0:
             nvivocon.execute(nvivoRole.insert().values({
@@ -396,19 +415,12 @@ try:
                     'Item2_Id': bindparam('Id'),
                     'TypeId':   literal_column('1')
                 }), nodeswithparent)
+        if len(aggregatepairs) > 0:
             nvivocon.execute(nvivoRole.insert().values({
-                    'Item1_Id': bindparam('Parent'),
+                    'Item1_Id': bindparam('Ancestor'),
                     'Item2_Id': bindparam('Id'),
-                    'TypeId':   literal_column('2'),
-                    'Tag':      bindparam('RoleTag')
-                }), nodeswithparent)
-        if len(nodeswithoutparent) > 0:
-            nvivocon.execute(nvivoRole.insert().values({
-                    'Item1_Id': bindparam('Id'),
-                    'Item2_Id': bindparam('Id'),
-                    'TypeId':   literal_column('2'),
-                    'Tag':      bindparam('RoleTag')
-                }), nodeswithoutparent)
+                    'TypeId':   literal_column('15')
+                }), aggregatepairs)
 
     nvivotr.commit()
     sys.exit()
