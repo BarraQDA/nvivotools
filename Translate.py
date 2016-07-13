@@ -62,35 +62,5 @@ try:
         item['Description'] = ''.join(map(lambda ch: unichr(ord(ch) + charoffset), item['Description']))
         nvivodb.execute(updateSql, item)
 
-    sys.exit()
-    print "Translating " + sys.argv[1]
-    con = sqlite3.connect(sys.argv[1])
-    con.row_factory = sqlite3.Row
-
-    cur = con.cursor()
-    old_rows = cur.execute('SELECT Title, Description, Id FROM Project')
-    new_rows = []
-    for row in old_rows:
-        new_rows.append ( { "Title"       : translate(row["Title"]),
-                            "Description" : translate(row["Description"]),
-                            "Id"          : row["Id"] } )
-
-    cur.executemany('UPDATE Project SET Title=:Title, Description=:Description WHERE Id=:Id', new_rows)
-
-    cur = con.cursor()
-    old_rows = cur.execute('SELECT Name, Description, Id FROM Item')
-    new_rows = []
-    for row in old_rows:
-        new_rows.append ( { "Name"        : translate(row["Name"]),
-                            "Description" : translate(row["Description"]),
-                            "Id"          : row["Id"] } )
-
-    cur.executemany('UPDATE Item SET Name=:Name, Description=:Description WHERE Id=:Id', new_rows)
-
-    con.commit()
-    cur.close()
-
-    con.close()
-
 except exc.SQLAlchemyError:
     raise

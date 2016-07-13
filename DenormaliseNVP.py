@@ -21,25 +21,25 @@ try:
                         help='Replace existing table structures.')
 
     table_choices = ["", "skip", "replace", "merge"]
-    parser.add_argument('-p', '--project', choices=table_choices, default="replace",
+    parser.add_argument('-p', '--project', choices=table_choices, default="merge",
                         help='Project action.')
-    parser.add_argument('-nc', '--node-categories', choices=table_choices, default="replace",
+    parser.add_argument('-nc', '--node-categories', choices=table_choices, default="merge",
                         help='Node category action.')
-    parser.add_argument('-n', '--nodes', choices=table_choices, default="replace",
+    parser.add_argument('-n', '--nodes', choices=table_choices, default="merge",
                         help='Node action.')
-    parser.add_argument('-na', '--node-attributes', choices=table_choices, default="replace",
+    parser.add_argument('-na', '--node-attributes', choices=table_choices, default="merge",
                         help='Node attribute table action.')
-    parser.add_argument('-sc', '--source-categories', choices=table_choices, default="replace",
+    parser.add_argument('-sc', '--source-categories', choices=table_choices, default="merge",
                         help='Source category action.')
-    parser.add_argument('--sources', choices=table_choices, default="replace",
+    parser.add_argument('--sources', choices=table_choices, default="merge",
                         help='Source action.')
-    parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="replace",
+    parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="merge",
                         help='Source attribute action.')
-    parser.add_argument('-t', '--taggings', choices=table_choices, default="replace",
+    parser.add_argument('-t', '--taggings', choices=table_choices, default="merge",
                         help='Tagging action.')
-    parser.add_argument('-a', '--annotations', choices=table_choices, default="replace",
+    parser.add_argument('-a', '--annotations', choices=table_choices, default="merge",
                         help='Annotation action.')
-    parser.add_argument('-u', '--users', choices=table_choices, default="replace",
+    parser.add_argument('-u', '--users', choices=table_choices, default="merge",
                         help='User action.')
 
     parser.add_argument('infile', type=str,
@@ -58,9 +58,11 @@ try:
     nvivodb = create_engine(args.outfile)
     nvivomd = MetaData(bind=nvivodb)
     nvivomd.reflect(nvivodb)
+    nvivocon = nvivodb.connect()
+    nvivotr = nvivocon.begin()
 
     if args.structure:
-        nvivomd.drop_all(nvivodb)
+        nvivomd.drop_all(nvivocon)
         for table in reversed(nvivomd.sorted_tables):
             nvivomd.remove(table)
 
@@ -85,7 +87,7 @@ try:
     nvivoItem = nvivomd.tables.get('Item')
     if nvivoItem == None:
         nvivoItem = Table('Item', nvivomd,
-            Column('Id',            UUID(),         nullable=False),
+            Column('Id',            UUID(),         primary_key=True, nullable=False),
             Column('TypeId',        Integer,        nullable=False),
             Column('Name',          String(256),    nullable=False),
             Column('Description',   String(512),    nullable=False),
@@ -138,8 +140,8 @@ try:
     nvivoAnnotation = nvivomd.tables.get('Annotation')
     if nvivoAnnotation == None:
         nvivoAnnotation = Table('Annotation', nvivomd,
-            Column('Id',            UUID(),         nullable=False),
-            Column('Item_Id',       UUID(),         nullable=False),
+            Column('Id',            UUID(),         primary_key=True, nullable=False),
+            Column('Item_Id',       UUID(),         primary_key=True, nullable=False),
             Column('CompoundSourceRegion_Id', UUID()),
             Column('Text',          String(1024), nullable=False),
             Column('ReferenceTypeId', Integer,      nullable=False),
@@ -155,12 +157,12 @@ try:
     nvivoUserProfile = nvivomd.tables.get('UserProfile')
     if nvivoUserProfile == None:
         nvivoUserProfile = Table('UserProfile', nvivomd,
-            Column('Id',            UUID(),         nullable=False),
-            Column('Initials',      String(16),   nullable=False),
+            Column('Id',            UUID(),         primary_key=True, nullable=False),
+            Column('Initials',      String(16),     nullable=False),
             Column('AccountName',   String(256)),
             Column('ColorArgb',     Integer))
 
-    nvivomd.create_all(nvivodb)
+    nvivomd.create_all(nvivocon)
 
 # Users
     if args.users != 'skip':
@@ -173,14 +175,14 @@ try:
             user['Initials'] = ''.join(word[0].upper() for word in user['Name'].split())
 
         if args.users == 'replace':
-            nvivodb.execute(nvivoUserProfile.delete())
+            nvivocon.execute(nvivoUserProfile.delete())
             if len(users) > 0:
-                nvivodb.execute(nvivoUserProfile.insert(), users)
+                nvivocon.execute(nvivoUserProfile.insert(), users)
         elif args.users == 'merge':
-            existingusers = [row['Id'] for row in nvivodb.execute(select([nvivoUserProfile.c.Id]))]
+            existingusers = [row['Id'] for row in nvivocon.execute(select([nvivoUserProfile.c.Id]))]
             newusers = [dict(user) for user in users if user['Id'] not in existingusers]
             if len(newusers) > 0:
-                nvivodb.execute(nvivoUserProfile.insert(), newusers)
+                nvivocon.execute(nvivoUserProfile.insert(), newusers)
             # Still need to update existing users
 
 # Project
@@ -203,22 +205,22 @@ try:
             project['WritePassword']     = ''
             project['ReadPasswordHint']  = ''
             project['WritePasswordHint'] = ''
-            project['Version']           = '10.0.338.0'
+            project['Version']           = u'10.0.338.0'
             project['UnassignedLabel']   = ''
             project['NotApplicableLabel'] = ''
             project['IndexLanguage']     = ''
-            project['EmbedSources']      = ''
-            project['EmbeddedFileSizeLimitBytes'] = ''
+            project['EmbedSources']      = False
+            project['EmbeddedFileSizeLimitBytes'] = 0
             project['AllowGuestAccess']  = False
             project['EventLogging']      = False
 
 
         sel = select([nvivoProject.c.Title])
-        nvivoprojects = [dict(row) for row in nvivodb.execute(sel)]
+        nvivoprojects = [dict(row) for row in nvivocon.execute(sel)]
         if len(nvivoprojects) == 1:
-            nvivodb.execute(nvivoProject.update(), projects)
+            nvivocon.execute(nvivoProject.update(), projects)
         else:
-            nvivodb.execute(nvivoProject.insert(), projects)
+            nvivocon.execute(nvivoProject.insert(), projects)
 
 # Node Categories
     if args.node_categories != 'skip':
@@ -229,7 +231,7 @@ try:
             nvivoItem.c.TypeId == literal_column('0'),
             nvivoItem.c.Name   == literal_column('\'Node Classifications\''),  # Translate?
             nvivoItem.c.System == True))
-        headnodecategory = nvivodb.execute(sel).fetchone()
+        headnodecategory = nvivocon.execute(sel).fetchone()
         if headnodecategory == None:
             #  Create the magic node category from NVivo's empty project
             headnodecategory = {'Id':'987EFFB2-CC02-469B-9BB3-E345BB8F8362'}
@@ -258,41 +260,44 @@ try:
                       nvivoItem.c.TypeId   == literal_column('52'),
                       nvivoRole.c.TypeId   == literal_column('0'),
                       nvivoRole.c.Item2_Id == nvivoItem.c.Id))
-        if args.node_categories == 'merge':
-            sel = sel.where(
-                      nvivoItem.c.Id       == bindparam('Id'))
+        
+        nodecategoriestodelete = nvivocon.execute(sel)
+        if args.node_categories == 'replace':
+            nodecategoriestodelete = [dict(row) for row in nodecategoriestodelete]
+        elif args.node_categories == 'merge':
+            existingnodecategories = [nodecategory['Id'] for nodecategory in nodecategories]
+            nodecategoriestodelete = [dict(row) for row in nodecategoriestodelete
+                                      if row['Id'] not in existingnodecategories]
 
-        itemsandroles = [dict(row) for row in nvivodb.execute(sel)]
-
-        if len(itemsandroles) > 0:
-            nvivodb.execute(nvivoItem.delete(
-                nvivoItem.c.Id == bindparam('Id')), itemsandroles)
-            nvivodb.execute(nvivoRole.delete(and_(
+        if len(nodecategoriestodelete) > 0:
+            nvivocon.execute(nvivoItem.delete(
+                nvivoItem.c.Id == bindparam('Id')), nodecategoriestodelete)
+            nvivocon.execute(nvivoRole.delete(and_(
                 nvivoRole.c.Item1_Id == bindparam('Item1_Id'),
                 nvivoRole.c.TypeId   == literal_column('0'),
-                nvivoRole.c.Item2_Id == bindparam('Item2_Id'))), itemsandroles)
-            nvivodb.execute(nvivoExtendedItem.delete(
-                nvivoExtendedItem.c.Item_Id == bindparam('Id')), itemsandroles)
-            nvivodb.execute(nvivoCategory.delete(
-                nvivoCategory.c.Item_Id == bindparam('Id')), itemsandroles)
+                nvivoRole.c.Item2_Id == bindparam('Item2_Id'))), nodecategoriestodelete)
+            nvivocon.execute(nvivoExtendedItem.delete(
+                nvivoExtendedItem.c.Item_Id == bindparam('Id')), nodecategoriestodelete)
+            nvivocon.execute(nvivoCategory.delete(
+                nvivoCategory.c.Item_Id == bindparam('Id')), nodecategoriestodelete)
 
         if len(nodecategories) > 0:
-            nvivodb.execute(nvivoItem.insert().values({
+            nvivocon.execute(nvivoItem.insert().values({
                         'TypeId':   literal_column('52'),
                         'System':   literal_column('0'),
                         'ReadOnly': literal_column('0')
                 }), nodecategories)
 
-            nvivodb.execute(nvivoRole.insert().values({
+            nvivocon.execute(nvivoRole.insert().values({
                         'Item1_Id': literal_column('\'' + str(headnodecategory['Id']) + '\''),
                         'Item2_Id': bindparam('Id'),
                         'TypeId':   literal_column('0')
                 }), nodecategories)
-            nvivodb.execute(nvivoExtendedItem.insert().values({
+            nvivocon.execute(nvivoExtendedItem.insert().values({
                         'Item_Id': bindparam('Id'),
                         'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="EndNoteReferenceType" Value="-1" /></Properties>\'')
                 }), nodecategories)
-            nvivodb.execute(nvivoCategory.insert().values({
+            nvivocon.execute(nvivoCategory.insert().values({
                         'Item_Id': bindparam('Id'),
                         'Layout' : literal_column('\'<CategoryLayout xmlns="http://qsr.com.au/XMLSchema.xsd"><SortedColumn Ascending="true">-1</SortedColumn><RecordHeaderWidth>100</RecordHeaderWidth><ShowRowIDs>true</ShowRowIDs><ShowColumnIDs>true</ShowColumnIDs><Transposed>false</Transposed><NameSource>1</NameSource><RowsUserOrdered>false</RowsUserOrdered><ColumnsUserOrdered>true</ColumnsUserOrdered></CategoryLayout>\'')
                 }), nodecategories)
@@ -306,7 +311,7 @@ try:
             nvivoItem.c.TypeId == literal_column('0'),
             nvivoItem.c.Name == literal_column('\'Nodes\''),
             nvivoItem.c.System == True))
-        headnode = nvivodb.execute(sel).fetchone()
+        headnode = nvivocon.execute(sel).fetchone()
         if headnode == None:
             #  Create the magic node from NVivo's empty project
             headnode = {'Id':'F1450EED-D162-4CC9-B45D-6724156F7220'}
@@ -348,63 +353,64 @@ try:
                       nvivoRole.c.Item1_Id,
                       nvivoRole.c.Item2_Id,
                       nvivoRole.c.TypeId])
+        sel = sel.where(and_(
+                        or_(nvivoItem.c.TypeId == literal_column('16'), nvivoItem.c.TypeId == literal_column('62')),
+                        nvivoRole.c.TypeId == literal_column('14'),
+                        nvivoRole.c.Item1_Id == nvivoItem.c.Id))
+            
+        nodestodelete = nvivocon.execute(sel)
         if args.node_categories == 'replace':
-            sel = sel.where(and_(
-                          or_(nvivoItem.c.TypeId == literal_column('16'), nvivoItem.c.TypeId == literal_column('62')),
-                          nvivoRole.c.TypeId == literal_column('14'),
-                          nvivoRole.c.Item1_Id == nvivoItem.c.Id))
-            itemsandroles = [dict(row) for row in nvivodb.execute(sel)]
+            nodestodelete = [dict(row) for row in nodestodelete]
         elif args.node_categories == 'merge':
-            sel = sel.where(and_(
-                          nvivoItem.c.Id       == bindparam('Id'),
-                          nvivoRole.c.TypeId   == literal_column('14'),
-                          nvivoRole.c.Item1_Id == nvivoItem.c.Id))
-            itemsandroles = [dict(row) for row in nvivodb.execute(sel, nodecategories)]
-
-        if len(itemsandroles) > 0:
-            nvivodb.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Id')), itemsandroles)
-            nvivodb.execute(nvivoRole.delete(and_(
+            existingnodes = [node['Id'] for node in nodes]
+            nodestodelete = [dict(row) for row in nodestodelete
+                             if row['Id'] not in existingnodes]
+            
+        if len(nodestodelete) > 0:
+            nvivocon.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Id')), nodestodelete)
+            nvivocon.execute(nvivoRole.delete(and_(
                 nvivoRole.c.Item1_Id == bindparam('Item1_Id'),
                 nvivoRole.c.TypeId   == literal_column('0'),
-                nvivoRole.c.Item2_Id == bindparam('Item2_Id'))), itemsandroles)
+                nvivoRole.c.Item2_Id == bindparam('Item2_Id'))), nodestodelete)
 
         if len(nodes) > 0:
-            nvivodb.execute(nvivoItem.insert().values({
+            nvivocon.execute(nvivoItem.insert().values({
                     'TypeId':   literal_column('16'),
                     'System':   literal_column('0'),
                     'ReadOnly': literal_column('0')
                 }), nodes)
 
-            nvivodb.execute(nvivoRole.insert().values({
-                    'Item1_Id': bindparam('Id'),
-                    'Item2_Id': literal_column('\'' + str(headnode['Id']) + '\''),
+            nvivocon.execute(nvivoRole.insert().values({
+                    'Item1_Id': literal_column('\'' + str(headnode['Id']) + '\''),
+                    'Item2_Id': bindparam('Id'),
                     'TypeId':   literal_column('0')
                 }), nodes)
-            nvivodb.execute(nvivoRole.insert().values({
+            nvivocon.execute(nvivoRole.insert().values({
                     'Item1_Id': bindparam('Id'),
                     'Item2_Id': bindparam('Id'),
                     'TypeId':   literal_column('15')
                 }), nodes)
         if len(nodeswithparent) > 0:
-            nvivodb.execute(nvivoRole.insert().values({
+            nvivocon.execute(nvivoRole.insert().values({
                     'Item1_Id': bindparam('Parent'),
                     'Item2_Id': bindparam('Id'),
                     'TypeId':   literal_column('1')
                 }), nodeswithparent)
-            nvivodb.execute(nvivoRole.insert().values({
+            nvivocon.execute(nvivoRole.insert().values({
                     'Item1_Id': bindparam('Parent'),
                     'Item2_Id': bindparam('Id'),
                     'TypeId':   literal_column('2'),
                     'Tag':      bindparam('RoleTag')
                 }), nodeswithparent)
         if len(nodeswithoutparent) > 0:
-            nvivodb.execute(nvivoRole.insert().values({
+            nvivocon.execute(nvivoRole.insert().values({
                     'Item1_Id': bindparam('Id'),
                     'Item2_Id': bindparam('Id'),
                     'TypeId':   literal_column('2'),
                     'Tag':      bindparam('RoleTag')
                 }), nodeswithoutparent)
 
+    nvivotr.commit()
     sys.exit()
 
 # Node attribute values
@@ -499,7 +505,7 @@ try:
 
 
 
-            existingattributes = [dict(row) for row in nvivodb.execute(finalsel, nodeattribute)]
+            existingattributes = [dict(row) for row in nvivocon.execute(finalsel, nodeattribute)]
             if len(existingattributes) == 0:
                 print ("Node attribute: " + nodeattribute['Name'] + " needs definition.")
             elif len(existingattributes) == 1:
@@ -536,18 +542,18 @@ try:
                       #nvivoNameItem.c.Name       == bindparam('Name'),
                       #nvivoNameItem.c.Value      == bindparam('Value')))
 
-        #itemsandroles = [dict(row) for row in nvivodb.execute(sel), nodecategories]
+        #itemsandroles = [dict(row) for row in nvivocon.execute(sel), nodecategories]
 
         #if len(itemsandroles) > 0:
-            #nvivodb.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Name')), itemsandroles)
-            #nvivodb.execute(nvivoRole.delete(and_(
+            #nvivocon.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Name')), itemsandroles)
+            #nvivocon.execute(nvivoRole.delete(and_(
                 #nvivoRole.c.Item1_Id == bindparam('Item1_Id'),
                 #nvivoRole.c.TypeId   == column('0'),
                 #nvivoRole.c.Item2_Id == bindparam('Item2_Id'))), itemsandroles)
 
         #if len(nodeattributes) > 0:
             ## Name item
-            #nvivodb.execute(nvivoItem.insert().values({
+            #nvivocon.execute(nvivoItem.insert().values({
                     #'Id':           bindparam('nameuuid'),
                     #'TypeId':       column('20'),
                     #'Description':  column('\"\"'),
@@ -556,7 +562,7 @@ try:
                 #}), nodeattributes)
 
             ## Value item
-            #nvivodb.execute(nvivoItem.insert().values({
+            #nvivocon.execute(nvivoItem.insert().values({
                     #'Id':           bindparam('valueuuid'),
                     #'TypeId':       column('21'),
                     #'Description':  column('\"\"'),
@@ -566,7 +572,7 @@ try:
                 #}), nodeattributes)
 
             ## Name role
-            #nvivodb.execute(nvivoRole.insert().values({
+            #nvivocon.execute(nvivoRole.insert().values({
                     #'Item1_Id':     bindparam('nameuuid'),
                     #'Item2_Id':     bindparam('valueuuid'),
                     #'TypeId':       column('6')
@@ -1032,4 +1038,5 @@ try:
 # All done.
 
 except exc.SQLAlchemyError:
+    nvivotr.rollback()
     raise
