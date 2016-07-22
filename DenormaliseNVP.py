@@ -11,9 +11,11 @@ import argparse
 import uuid
 import re
 
-execfile(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py')
+exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
 
 try:
+    nvivotr = None
+
     parser = argparse.ArgumentParser(description='Denormalise a normalised NVivo project.')
     parser.add_argument('-w', '--windows', action='store_true',
                         help='Correct NVivo for Windows string coding. Use if offloaded file will be used with Windows version of NVivo.')
@@ -263,7 +265,7 @@ try:
                       nvivoItem.c.TypeId   == literal_column('52'),
                       nvivoRole.c.TypeId   == literal_column('0'),
                       nvivoRole.c.Item2_Id == nvivoItem.c.Id))
-        
+
         nodecategoriestodelete = nvivocon.execute(sel)
         if args.node_categories == 'replace':
             nodecategoriestodelete = [dict(row) for row in nodecategoriestodelete]
@@ -337,10 +339,11 @@ try:
         for node in nodes:
             if node['Id'] == None:
                 node['Id'] = uuid.uuid4()
+            node['PlainTextName'] = node['Name']
             if args.windows:
                 node['Name']        = ''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Name']))
                 node['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Description']))
-                
+
         def tagchildnodes(TopParent, Parent, AggregateList, depth):
             tag = depth << 16
             for node in nodes:
@@ -357,14 +360,15 @@ try:
                         tagchildnodes(node['TopParent'], node['Id'], node['AggregateList'], depth+1)
                     else:
                         tagchildnodes(node['TopParent'], node['Id'], [], depth+1)
-                        
+
         tagchildnodes(None, None, [], 0)
         aggregatepairs = []
         for node in nodes:
             for dest in node['AggregateList']:
                 aggregatepairs += [{ 'Id': node['Id'], 'Ancestor': dest }]
 
-        nodeswithparent    = [dict(row) for row in nodes if row['Parent'] != None]
+        nodeswithparent   = [dict(row) for row in nodes if row['Parent']   != None]
+        nodeswithcategory = [dict(row) for row in nodes if row['Category'] != None]
 
         sel = select([nvivoItem.c.Id,
                       nvivoRole.c.Item1_Id,
@@ -374,7 +378,7 @@ try:
                         or_(nvivoItem.c.TypeId == literal_column('16'), nvivoItem.c.TypeId == literal_column('62')),
                         nvivoRole.c.TypeId == literal_column('14'),
                         nvivoRole.c.Item1_Id == nvivoItem.c.Id))
-            
+
         nodestodelete = nvivocon.execute(sel)
         if args.node_categories == 'replace':
             nodestodelete = [dict(row) for row in nodestodelete]
@@ -382,7 +386,7 @@ try:
             existingnodes = [node['Id'] for node in nodes]
             nodestodelete = [dict(row) for row in nodestodelete
                              if row['Id'] not in existingnodes]
-            
+
         if len(nodestodelete) > 0:
             nvivocon.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Id')), nodestodelete)
             nvivocon.execute(nvivoRole.delete(and_(
@@ -409,6 +413,13 @@ try:
                     'TypeId':   literal_column('2'),
                     'Tag':      bindparam('RoleTag')
                 }), nodes)
+
+        if len(nodeswithcategory) > 0:
+            nvivocon.execute(nvivoRole.insert().values({
+                    'Item1_Id': bindparam('Id'),
+                    'Item2_Id': bindparam('Category'),
+                    'TypeId':   literal_column('14')
+                }), nodeswithcategory)
         if len(nodeswithparent) > 0:
             nvivocon.execute(nvivoRole.insert().values({
                     'Item1_Id': bindparam('Parent'),
@@ -422,9 +433,6 @@ try:
                     'TypeId':   literal_column('15')
                 }), aggregatepairs)
 
-    nvivotr.commit()
-    sys.exit()
-
 # Node attribute values
     if args.node_attributes != 'skip':
         normNodeAttribute = normmd.tables['NodeAttribute']
@@ -437,95 +445,183 @@ try:
                       normNodeAttribute.c.ModifiedDate])
         nodeattributes = [dict(row) for row in normdb.execute(sel)]
 
-        # Below is some SQL wrangling that gets pretty complicated: five joins in one query
-        # is about as much as I can handle.
-        nvivoNodeCategoryItem  = nvivoItem.alias(name='NodeCategoryItem')
-        nvivoNodeCategoryRole  = nvivoRole.alias(name='NodeCategoryRole')
-        nvivoCategoryAttributeItem = nvivoItem.alias(name='CategoryAttributeItem')
-        nvivoCategoryAttributeRole = nvivoRole.alias(name='CategoryAttributeRole')
-        nvivoAttributeValueItem = nvivoItem.alias(name='AttributeValueItem')
-        nvivoAttributeValueRole = nvivoRole.alias(name='AttributeValueRole')
-        nvivoNodeValueRole = nvivoRole.alias(name='NodeValueRole')
+        # The query looks up the node category, then does outer joins to find whether the
+        # attribute has already been defined, what its value is, and whether the new value
+        # has been defined.
+        nvivoNodeCategoryRole  = nvivomd.tables.get('Role').alias(name='NodeCategoryRole')
+        nvivoCategoryAttributeRole = nvivomd.tables.get('Role').alias(name='CategoryAttributeRole')
+        nvivoCategoryAttributeItem = nvivomd.tables.get('Item').alias(name='CategoryAttributeItem')
+        nvivoNewValueRole = nvivomd.tables.get('Role').alias(name='NewValueRole')
+        nvivoNewValueItem = nvivomd.tables.get('Item').alias(name='NewValueItem')
+        nvivoExistingValueRole = nvivomd.tables.get('Role').alias(name='ExistingValueRole')
+        nvivoNodeValueRole = nvivomd.tables.get('Role').alias(name='NodeValueRole')
+        nvivoCountAttributeRole = nvivomd.tables.get('Role').alias(name='CountAttributeRole')
+        nvivoCountValueRole = nvivomd.tables.get('Role').alias(name='CountValueRole')
 
-        categorysel = select([
-                nvivoNodeCategoryRole.c.Item2_Id.label('Category'),
-                nvivoNodeCategoryItem.c.Name.label('CategoryName')
+        sel = select([
+                nvivoNodeCategoryRole.c.Item2_Id.label('CategoryId'),
+                nvivoCategoryAttributeItem.c.Id.label("AttributeId"),
+                nvivoNewValueItem.c.Id.label('NewValueId'),
+                nvivoNodeValueRole.c.Item2_Id.label('ExistingValueId'),
+                func.max(nvivoCountAttributeRole.c.Tag).label('MaxAttributeTag'),
+                func.max(nvivoCountValueRole.c.Tag).label('MaxValueTag')
             ]).where(and_(
                 nvivoNodeCategoryRole.c.TypeId   == literal_column('14'),
-                nvivoNodeCategoryRole.c.Item1_Id == bindparam('Node'),
-                nvivoNodeCategoryItem.c.Id == nvivoNodeCategoryRole.c.Item2_Id
+                nvivoNodeCategoryRole.c.Item1_Id == bindparam('Node')
+            )).group_by(nvivoNodeCategoryRole.c.Item2_Id) \
+            .group_by(nvivoCategoryAttributeItem.c.Id) \
+            .group_by(nvivoNewValueItem.c.Id) \
+            .group_by(nvivoNodeValueRole.c.Item2_Id) \
+            .select_from(nvivoNodeCategoryRole.outerjoin(
+                nvivoCategoryAttributeRole.join(
+                        nvivoCategoryAttributeItem, and_(
+                        nvivoCategoryAttributeItem.c.Id == nvivoCategoryAttributeRole.c.Item1_Id,
+                        nvivoCategoryAttributeItem.c.Name == bindparam('Name')
+                )), and_(
+                    nvivoCategoryAttributeRole.c.TypeId == literal_column('13'),
+                    nvivoCategoryAttributeRole.c.Item2_Id == nvivoNodeCategoryRole.c.Item2_Id
+            )).outerjoin(
+                nvivoNewValueRole.join(
+                    nvivoNewValueItem, and_(
+                    nvivoNewValueItem.c.Id == nvivoNewValueRole.c.Item2_Id,
+                    nvivoNewValueItem.c.Name == bindparam('Value')
+                )), and_(
+                    nvivoNewValueRole.c.TypeId == literal_column('6'),
+                    nvivoNewValueRole.c.Item1_Id == nvivoCategoryAttributeItem.c.Id
+            )).outerjoin(
+                nvivoExistingValueRole.join(
+                    nvivoNodeValueRole, and_(
+                        nvivoNodeValueRole.c.Item2_Id == nvivoExistingValueRole.c.Item2_Id,
+                        nvivoNodeValueRole.c.TypeId == literal_column('7'),
+                        nvivoNodeValueRole.c.Item1_Id == bindparam('Node')
+                    )), and_(
+                        nvivoExistingValueRole.c.TypeId == literal_column('6'),
+                        nvivoExistingValueRole.c.Item1_Id == nvivoCategoryAttributeItem.c.Id
+            )).outerjoin(
+                nvivoCountAttributeRole, and_(
+                    nvivoCountAttributeRole.c.TypeId == literal_column('13'),
+                    nvivoCountAttributeRole.c.Item2_Id == nvivoNodeCategoryRole.c.Item2_Id
+            )).outerjoin(
+                nvivoCountValueRole, and_(
+                    nvivoCountValueRole.c.TypeId == literal_column('6'),
+                    nvivoCountValueRole.c.Item1_Id == nvivoCategoryAttributeRole.c.Item1_Id
             ))
-        attributeselect = select([
-                nvivoCategoryAttributeRole.c.Item1_Id.label("AttributeId"),
-                nvivoCategoryAttributeRole.c.TypeId.label("TypeId1"),
-                nvivoCategoryAttributeRole.c.Item2_Id.label("Category1")
-            ])
-        attributenamejoin = attributeselect.join(
-                nvivoCategoryAttributeItem,
-                nvivoCategoryAttributeItem.c.Id == attributeselect.c.AttributeId
             )
-        categoryjoin = categorysel.outerjoin(
-                attributenamejoin,
-                and_(
-                    attributeselect.c.TypeId1   == literal_column('13'),
-                    attributeselect.c.Category1 == categorysel.c.Category,
-                    nvivoCategoryAttributeItem.c.Id == attributeselect.c.AttributeId,
-                    nvivoCategoryAttributeItem.c.Name == bindparam('Name')
-            ))
-
-        valueselect = select([
-                nvivoAttributeValueRole.c.Item2_Id.label("ValueId"),
-                nvivoAttributeValueRole.c.TypeId.label("TypeId2"),
-                nvivoAttributeValueRole.c.Item1_Id.label("Attribute1")
-            ])
-        nodevaluejoin = valueselect.join(
-                nvivoNodeValueRole,
-                and_(
-                    nvivoNodeValueRole.c.TypeId == literal_column('7'),
-                    nvivoNodeValueRole.c.Item2_Id == valueselect.c.ValueId,
-                    # I can't figure out why using
-                    # 'nvivoNodeValueRole.c.Item1_Id == categorysel.c.Node' instead
-                    # of another bound parameter doesn't work here, so if anyone else can
-                    # please let me know.
-                    nvivoNodeValueRole.c.Item1_Id == bindparam('Node')
-            ))
-        valuenamejoin = nodevaluejoin.join(
-                nvivoAttributeValueItem,
-                nvivoAttributeValueItem.c.Id == nodevaluejoin.c.ValueId
-            )
-        valuejoin = categoryjoin.outerjoin(
-                valuenamejoin,
-                and_(
-                    valueselect.c.TypeId2 == literal_column('6'),
-                    valueselect.c.Attribute1 == attributeselect.c.AttributeId,
-                    nvivoAttributeValueItem.c.Id == valueselect.c.ValueId
-            ))
-
-        finalsel = select([
-                valuejoin.c.Category,
-                valuejoin.c.CategoryName,
-                valuejoin.c.AttributeId,
-                nvivoCategoryAttributeItem.c.Name.label('AttributeName'),
-                valuejoin.c.ValueId,
-                nvivoAttributeValueItem.c.Name.label('Value')]
-            ).select_from(valuejoin)
 
         for nodeattribute in nodeattributes:
+            nodeattribute['NodeName']       = next(node['Name'] for node in nodes if node['Id'] == nodeattribute['Node'])
+            nodeattribute['PlainTextName']  = nodeattribute['Name']
+            nodeattribute['PlainTextValue'] = nodeattribute['Value']
             if args.windows:
                 nodeattribute['Name']  = ''.join(map(lambda ch: chr(ord(ch) + 0x377), nodeattribute['Name']))
                 nodeattribute['Value'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), nodeattribute['Value']))
 
+            existingattributes = [dict(row) for row in nvivocon.execute(sel, nodeattribute)]
+            if len(existingattributes) == 0:    # Node has no category
+                print("WARNING: Node '" + nodeattribute['NodeName'] + "' has no category. NVivo cannot record attributes'")
+            else:
+                nodeattribute.update(existingattributes[0])
+                if nodeattribute['AttributeId'] == None:
+                    print("Creating attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['NodeName'] + "'")
+                    nodeattribute['AttributeId'] = uuid.uuid4()
+                    if nodeattribute['MaxAttributeTag'] == None:
+                        nodeattribute['NewAttributeTag'] = 0
+                    else:
+                        nodeattribute['NewAttributeTag'] = nodeattribute['MaxAttributeTag'] + 1
+                    nvivocon.execute(nvivoItem.insert().values({
+                            'Id':       bindparam('AttributeId'),
+                            'Name':     bindparam('Name'),
+                            'Description': literal_column('\'\''),
+                            'TypeId':   literal_column('20'),
+                            'System':   literal_column('0'),
+                            'ReadOnly': literal_column('0'),
+                            'InheritPermissions': literal_column('1')
+                        }), nodeattribute)
+                    nvivocon.execute(nvivoRole.insert().values({
+                            'Item1_Id': bindparam('AttributeId'),
+                            'Item2_Id': bindparam('CategoryId'),
+                            'TypeId':   literal_column('13'),
+                            'Tag':      bindparam('NewAttributeTag')
+                        }), nodeattribute)
+                    nvivocon.execute(nvivoExtendedItem.insert().values({
+                            'Item_Id': bindparam('AttributeId'),
+                            'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="DataType" Value="0" /><Property Key="Length" Value="0" /><Property Key="EndNoteFieldTypeId" Value="-1" /></Properties>\'')
+                    }), nodeattribute)
+                    # Create unassigned and not applicable attribute values
+                    nodeattribute['Id'] = uuid.uuid4()
+                    nvivocon.execute(nvivoItem.insert().values({
+                            'Id':       bindparam('Id'),
+                            'Name':     literal_column('\'Unassigned\''),
+                            'Description': literal_column('\'\''),
+                            'TypeId':   literal_column('21'),
+                            'System':   literal_column('1'),
+                            'ReadOnly': literal_column('0'),
+                            'InheritPermissions': literal_column('1'),
+                            'ColorArgb': literal_column('0')
+                        }), nodeattribute)
+                    nvivocon.execute(nvivoRole.insert().values({
+                            'Item1_Id': bindparam('AttributeId'),
+                            'Item2_Id': bindparam('Id'),
+                            'TypeId':   literal_column('6'),
+                            'Tag':      literal_column('0')
+                        }), nodeattribute )
+                    nodeattribute['Id'] = uuid.uuid4()
+                    nvivocon.execute(nvivoItem.insert().values({
+                            'Id':       bindparam('Id'),
+                            'Name':     literal_column('\'Not Applicable\''),
+                            'Description': literal_column('\'\''),
+                            'TypeId':   literal_column('21'),
+                            'System':   literal_column('1'),
+                            'ReadOnly': literal_column('0'),
+                            'InheritPermissions': literal_column('1'),
+                            'ColorArgb': literal_column('0')
+                        }), nodeattribute)
+                    nvivocon.execute(nvivoRole.insert().values({
+                            'Item1_Id': bindparam('AttributeId'),
+                            'Item2_Id': bindparam('Id'),
+                            'TypeId':   literal_column('6'),
+                            'Tag':      literal_column('1')
+                        }), nodeattribute )
+                    nodeattribute['MaxValueTag'] = 1
 
+                if nodeattribute['NewValueId'] == None:
+                    print("Creating value '" + nodeattribute['PlainTextValue'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['NodeName'] + "'")
+                    nodeattribute['NewValueId']  = uuid.uuid4()
+                    nodeattribute['NewValueTag'] = nodeattribute['MaxValueTag'] + 1
+                    nvivocon.execute(nvivoItem.insert().values({
+                            'Id':       bindparam('NewValueId'),
+                            'Name':     bindparam('Value'),
+                            'Description': literal_column('\'\''),
+                            'TypeId':   literal_column('21'),
+                            'System':   literal_column('0'),
+                            'ReadOnly': literal_column('0'),
+                            'InheritPermissions': literal_column('1')
+                        }), nodeattribute )
+                    nvivocon.execute(nvivoRole.insert().values({
+                            'Item1_Id': bindparam('AttributeId'),
+                            'Item2_Id': bindparam('NewValueId'),
+                            'TypeId':   literal_column('6'),
+                            'Tag':      bindparam('NewValueTag')
+                        }), nodeattribute )
 
-            existingattributes = [dict(row) for row in nvivocon.execute(finalsel, nodeattribute)]
-            if len(existingattributes) == 0:
-                print ("Node attribute: " + nodeattribute['Name'] + " needs definition.")
-            elif len(existingattributes) == 1:
-                for existingattribute in existingattributes:
-                    if existingattribute['Value'] == None:
-                        print ("Node attribute: " + nodeattribute['Name'] + " undefined.")
-                    elif existingattribute['Value'] != nodeattribute['Value']:
-                        print ("Node attribute: " + nodeattribute['Name'] + " defined.")
+                if nodeattribute['NewValueId'] != nodeattribute['ExistingValueId']:
+                    if nodeattribute['ExistingValueId'] != None:
+                        print("Removing existing value of attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['NodeName'] + "'")
+                        nvivocon.execute(nvivoRole.delete().values({
+                                'Item1_Id': bindparam('Node'),
+                                'Item2_Id': bindparam('ExistingValueId'),
+                                'TypeId':   literal_column('7')
+                            }), nodeattribute )
+                    #print("Assigning value '" + nodeattribute['Value'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['NodeName'] + "'")
+                    nvivocon.execute(nvivoRole.insert().values({
+                            'Item1_Id': bindparam('Node'),
+                            'Item2_Id': bindparam('NewValueId'),
+                            'TypeId':   literal_column('7')
+                        }), nodeattribute )
+
+    nvivotr.commit()
+    sys.exit()
+
 
             #nodeattribute['nameuuid']  = str(uuid.uuid4()).lower()
             #nodeattribute['valueuuid'] = str(uuid.uuid4()).lower()
@@ -1050,5 +1146,6 @@ try:
 # All done.
 
 except exc.SQLAlchemyError:
-    nvivotr.rollback()
+    if nvivotr != None:
+        nvivotr.rollback()
     raise

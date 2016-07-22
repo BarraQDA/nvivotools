@@ -9,7 +9,7 @@ import os
 import argparse
 import uuid
 
-execfile(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py')
+exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
 
 try:
 
@@ -17,7 +17,7 @@ try:
 
     parser.add_argument('-r', '--reverse', action='store_true',
                         help='Reverse the subtraction, that is swap the minuent and subtrahend.')
-    
+
     parser.add_argument('minuend', type=str,
                         help='Path of database from which to subtract contents.')
     parser.add_argument('subtrahend', type=str,
@@ -26,7 +26,7 @@ try:
                         help='Path of database to be populated with the difference.')
 
     args = parser.parse_args()
-    
+
     if args.reverse:
         args.minuend, args.subtrahend = args.subtrahend, args.minuend
 
@@ -49,7 +49,7 @@ try:
     for minuendtable in minuendmd.sorted_tables:
         if args.difference != None:
             if minuendtable.name not in differencemd.tables.keys():
-                print "Creating table: " + minuendtable.name
+                print("Creating table: " + minuendtable.name)
                 minuendtable.create(differenceconn)
 
     for minuendtable in minuendmd.sorted_tables:
@@ -70,13 +70,13 @@ try:
                         if not fk['name']:
                             continue
 
-                        #print "   " + fk['name']
+                        #print("   " + fk['name'])
                         fkreferredtable = minuendmd.tables[fk['referred_table']]
                         fkselect = fkreferredtable.select()
                         for referred_column, constrained_column in zip(fk['referred_columns'], fk['constrained_columns']):
                             fkselect = fkselect.where(fkreferredtable.c[referred_column]  == bindparam(constrained_column))
 
-                        #print fkselect
+                        #print(fkselect)
 
                         fkrows = []
                         fkexists = []
@@ -90,14 +90,13 @@ try:
                         fkinsert = [ x for x in fkrows if not x in fkexists ]
                         if len(fkinsert) > 0:
                             differencereferredtable = differencemd.tables[fk['referred_table']]
-                            #print "fkinsert: " + str(fkinsert)
-                            differenceconn.execute(differencereferredtable.insert(), fkinsert)
+                            #print( "fkinsert: " + str(fkinsert))                            differenceconn.execute(differencereferredtable.insert(), fkinsert)
 
                     differenceconn.execute(minuendtable.insert(), differencerows)
                 else:
-                    print "-------------- " + minuendtable.name + " --------------"
+                    print("-------------- " + minuendtable.name + " --------------")
                     for row in differencerows:
-                        print row
+                        print(row)
 
 # All done.
 

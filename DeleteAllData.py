@@ -9,7 +9,7 @@ import os
 import argparse
 import uuid
 
-execfile(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py')
+exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
 
 try:
     parser = argparse.ArgumentParser(description='Delete all data leaving only database structure.')
