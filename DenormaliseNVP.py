@@ -201,31 +201,31 @@ try:
                       normProject.c.ModifiedDate])
         projects = [dict(row) for row in normdb.execute(sel)]
 
-        for project in projects:
-            if args.windows:
-                project['Title']       = ''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Title']))
-                project['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Description']))
-            project['Id']                = '778EAE97-4A06-4BF5-B555-A757F4CE463B'
-            project['ReadPassword']      = ''
-            project['WritePassword']     = ''
-            project['ReadPasswordHint']  = ''
-            project['WritePasswordHint'] = ''
-            project['Version']           = u'10.0.338.0'
-            project['UnassignedLabel']   = ''
-            project['NotApplicableLabel'] = ''
-            project['IndexLanguage']     = ''
-            project['EmbedSources']      = False
-            project['EmbeddedFileSizeLimitBytes'] = 0
-            project['AllowGuestAccess']  = False
-            project['EventLogging']      = False
+        if len(projects) > 0:
+            for project in projects:
+                if args.windows:
+                    project['Title']       = ''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Title']))
+                    project['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Description']))
+                project['Id']                = '778EAE97-4A06-4BF5-B555-A757F4CE463B'
+                project['ReadPassword']      = ''
+                project['WritePassword']     = ''
+                project['ReadPasswordHint']  = ''
+                project['WritePasswordHint'] = ''
+                project['Version']           = u'10.0.338.0'
+                project['UnassignedLabel']   = ''
+                project['NotApplicableLabel'] = ''
+                project['IndexLanguage']     = ''
+                project['EmbedSources']      = False
+                project['EmbeddedFileSizeLimitBytes'] = 0
+                project['AllowGuestAccess']  = False
+                project['EventLogging']      = False
 
-
-        sel = select([nvivoProject.c.Title])
-        nvivoprojects = [dict(row) for row in nvivocon.execute(sel)]
-        if len(nvivoprojects) == 1:
-            nvivocon.execute(nvivoProject.update(), projects)
-        else:
-            nvivocon.execute(nvivoProject.insert(), projects)
+            sel = select([nvivoProject.c.Title])
+            nvivoprojects = [dict(row) for row in nvivocon.execute(sel)]
+            if len(nvivoprojects) == 1:
+                nvivocon.execute(nvivoProject.update(), projects)
+            else:
+                nvivocon.execute(nvivoProject.insert(), projects)
 
 # Node Categories
     if args.node_categories != 'skip':
@@ -565,6 +565,10 @@ try:
                             'TypeId':   literal_column('6'),
                             'Tag':      literal_column('0')
                         }), nodeattribute )
+                    nvivocon.execute(nvivoExtendedItem.insert().values({
+                            'Item_Id': bindparam('Id'),
+                            'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="True"/></Properties>\'')
+                    }), nodeattribute)
                     nodeattribute['Id'] = uuid.uuid4()
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('Id'),
@@ -582,6 +586,10 @@ try:
                             'TypeId':   literal_column('6'),
                             'Tag':      literal_column('1')
                         }), nodeattribute )
+                    nvivocon.execute(nvivoExtendedItem.insert().values({
+                            'Item_Id': bindparam('Id'),
+                            'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="False"/></Properties>\'')
+                    }), nodeattribute)
                     nodeattribute['MaxValueTag'] = 1
 
                 if nodeattribute['NewValueId'] == None:
@@ -603,6 +611,10 @@ try:
                             'TypeId':   literal_column('6'),
                             'Tag':      bindparam('NewValueTag')
                         }), nodeattribute )
+                    nvivocon.execute(nvivoExtendedItem.insert().values({
+                            'Item_Id': bindparam('NewValueId'),
+                            'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="False"/></Properties>\'')
+                    }), nodeattribute)
 
                 if nodeattribute['NewValueId'] != nodeattribute['ExistingValueId']:
                     if nodeattribute['ExistingValueId'] != None:
@@ -621,70 +633,6 @@ try:
 
     nvivotr.commit()
     sys.exit()
-
-
-            #nodeattribute['nameuuid']  = str(uuid.uuid4()).lower()
-            #nodeattribute['valueuuid'] = str(uuid.uuid4()).lower()
-
-        #nvivoNodeItem  = nvivoItem.alias(name='NodeItem')
-        #nvivoNameItem  = nvivoItem.alias(name='NameItem')
-        #nvivoNameRole  = nvivoRole.alias(name='NameRole')
-        #nvivoValueItem = nvivoItem.alias(name='ValueItem')
-        #nvivoValueRole = nvivoRole.alias(name='ValueRole')
-        #sel = select([nvivoNodeItem.c.Id.label('Node'),
-                      #nvivoNameItem.c.Name.label('Name'),
-                      #nvivoValueItem.c.Name.label('Value'),
-                      #nvivoNameRole.c.TypeId.label('NameRoleTypeId'),
-                      #nvivoValueRole.c.TypeId.label('ValueRoleTypeId')])
-        #sel = sel.where(and_(
-                      #or_(nvivoNodeItem.c.TypeId == column('16'), nvivoNodeItem.c.TypeId==column('62')),
-                      #nvivoNodeItem.c.Id         == nvivoValueRole.c.Item1_Id,
-                      #nvivoValueRole.c.TypeId    == column('7'),
-                      #nvivoValueItem.c.Id        == nvivoValueRole.c.Item2_Id,
-                      #nvivoNameRole.c.Item2_Id   == nvivoValueRole.c.Item2_Id,
-                      #nvivoNameRole.c.TypeId     == column('6'),
-                      #nvivoNameItem.c.Id         == nvivoNameRole.c.Item1_Id)))
-        #if args.node_categories == 'merge':
-            #sel = sel.where(and_(
-                      #nvivoNodeItem.c.Id         == bindparam('Node'),
-                      #nvivoNameItem.c.Name       == bindparam('Name'),
-                      #nvivoNameItem.c.Value      == bindparam('Value')))
-
-        #itemsandroles = [dict(row) for row in nvivocon.execute(sel), nodecategories]
-
-        #if len(itemsandroles) > 0:
-            #nvivocon.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Name')), itemsandroles)
-            #nvivocon.execute(nvivoRole.delete(and_(
-                #nvivoRole.c.Item1_Id == bindparam('Item1_Id'),
-                #nvivoRole.c.TypeId   == column('0'),
-                #nvivoRole.c.Item2_Id == bindparam('Item2_Id'))), itemsandroles)
-
-        #if len(nodeattributes) > 0:
-            ## Name item
-            #nvivocon.execute(nvivoItem.insert().values({
-                    #'Id':           bindparam('nameuuid'),
-                    #'TypeId':       column('20'),
-                    #'Description':  column('\"\"'),
-                    #'System':       column('0'),
-                    #'ReadOnly':     column('0')
-                #}), nodeattributes)
-
-            ## Value item
-            #nvivocon.execute(nvivoItem.insert().values({
-                    #'Id':           bindparam('valueuuid'),
-                    #'TypeId':       column('21'),
-                    #'Description':  column('\"\"'),
-                    #'Tag':          column('0'),  # This should be ordinal of node attribute value
-                    #'System':       column('0'),
-                    #'ReadOnly':     column('0')
-                #}), nodeattributes)
-
-            ## Name role
-            #nvivocon.execute(nvivoRole.insert().values({
-                    #'Item1_Id':     bindparam('nameuuid'),
-                    #'Item2_Id':     bindparam('valueuuid'),
-                    #'TypeId':       column('6')
-                #}), nodeattributes)
 
 # Source categories
 
