@@ -447,7 +447,8 @@ try:
 
         # The query looks up the node category, then does outer joins to find whether the
         # attribute has already been defined, what its value is, and whether the new value
-        # has been defined.
+        # has been defined. It also finds the highest tag for both Category Attributes and
+        # Values, as this is needed to create a new attribute or value.
         nvivoNodeCategoryRole  = nvivomd.tables.get('Role').alias(name='NodeCategoryRole')
         nvivoCategoryAttributeRole = nvivomd.tables.get('Role').alias(name='CategoryAttributeRole')
         nvivoCategoryAttributeItem = nvivomd.tables.get('Item').alias(name='CategoryAttributeItem')
@@ -460,7 +461,7 @@ try:
 
         sel = select([
                 nvivoNodeCategoryRole.c.Item2_Id.label('CategoryId'),
-                nvivoCategoryAttributeItem.c.Id.label("AttributeId"),
+                nvivoCategoryAttributeItem.c.Id.label('AttributeId'),
                 nvivoNewValueItem.c.Id.label('NewValueId'),
                 nvivoNodeValueRole.c.Item2_Id.label('ExistingValueId'),
                 func.max(nvivoCountAttributeRole.c.Tag).label('MaxAttributeTag'),
@@ -508,6 +509,7 @@ try:
             ))
             )
 
+        addedattributes = []
         for nodeattribute in nodeattributes:
             nodeattribute['NodeName']       = next(node['Name'] for node in nodes if node['Id'] == nodeattribute['Node'])
             nodeattribute['PlainTextName']  = nodeattribute['Name']
@@ -548,9 +550,14 @@ try:
                             'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="DataType" Value="0" /><Property Key="Length" Value="0" /><Property Key="EndNoteFieldTypeId" Value="-1" /></Properties>\'')
                     }), nodeattribute)
                     # Create unassigned and not applicable attribute values
-                    nodeattribute['Id'] = uuid.uuid4()
+                    nodeattribute['ValueId'] = uuid.uuid4()
+                    # Save the attribute and 'Unassigned' value so that it can be filled in for all
+                    # nodes of the present category.
+                    addedattributes.append({ 'CategoryId':     nodeattribute['CategoryId'],
+                                             'AttributeId':    nodeattribute['AttributeId'],
+                                             'DefaultValueId': nodeattribute['ValueId'] })
                     nvivocon.execute(nvivoItem.insert().values({
-                            'Id':       bindparam('Id'),
+                            'Id':       bindparam('ValueId'),
                             'Name':     literal_column('\'Unassigned\''),
                             'Description': literal_column('\'\''),
                             'TypeId':   literal_column('21'),
@@ -561,17 +568,17 @@ try:
                         }), nodeattribute)
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('AttributeId'),
-                            'Item2_Id': bindparam('Id'),
+                            'Item2_Id': bindparam('ValueId'),
                             'TypeId':   literal_column('6'),
                             'Tag':      literal_column('0')
                         }), nodeattribute )
                     nvivocon.execute(nvivoExtendedItem.insert().values({
-                            'Item_Id': bindparam('Id'),
+                            'Item_Id': bindparam('ValueId'),
                             'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="True"/></Properties>\'')
                     }), nodeattribute)
-                    nodeattribute['Id'] = uuid.uuid4()
+                    nodeattribute['ValueId'] = uuid.uuid4()
                     nvivocon.execute(nvivoItem.insert().values({
-                            'Id':       bindparam('Id'),
+                            'Id':       bindparam('ValueId'),
                             'Name':     literal_column('\'Not Applicable\''),
                             'Description': literal_column('\'\''),
                             'TypeId':   literal_column('21'),
@@ -582,12 +589,12 @@ try:
                         }), nodeattribute)
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('AttributeId'),
-                            'Item2_Id': bindparam('Id'),
+                            'Item2_Id': bindparam('ValueId'),
                             'TypeId':   literal_column('6'),
                             'Tag':      literal_column('1')
                         }), nodeattribute )
                     nvivocon.execute(nvivoExtendedItem.insert().values({
-                            'Item_Id': bindparam('Id'),
+                            'Item_Id': bindparam('ValueId'),
                             'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="False"/></Properties>\'')
                     }), nodeattribute)
                     nodeattribute['MaxValueTag'] = 1
@@ -630,6 +637,37 @@ try:
                             'Item2_Id': bindparam('NewValueId'),
                             'TypeId':   literal_column('7')
                         }), nodeattribute )
+
+        # Fill in default ('Undefined') value for all nodes lacking an attribute value
+        sel = select([
+                nvivoNodeCategoryRole.c.Item1_Id.label('NodeId'),
+                func.count(nvivoExistingValueRole.c.Item1_Id).label('ValueCount')
+            ]).where(and_(
+                nvivoNodeCategoryRole.c.TypeId   == literal_column('14'),
+                nvivoNodeCategoryRole.c.Item2_Id == bindparam('CategoryId')
+            )).group_by(nvivoNodeCategoryRole.c.Item1_Id)\
+            .select_from(nvivoNodeCategoryRole.outerjoin(
+                nvivoExistingValueRole.join(
+                    nvivoNodeValueRole, and_(
+                        nvivoNodeValueRole.c.Item2_Id == nvivoExistingValueRole.c.Item2_Id,
+                        nvivoNodeValueRole.c.TypeId == literal_column('7')
+                    )), and_(
+                        nvivoExistingValueRole.c.TypeId == literal_column('6'),
+                        nvivoExistingValueRole.c.Item1_Id == bindparam('AttributeId'),
+                        nvivoNodeValueRole.c.Item1_Id == nvivoNodeCategoryRole.c.Item1_Id
+            )))
+
+        for addedattribute in addedattributes:
+            attributes = [dict(row) for row in nvivocon.execute(sel, addedattribute)]
+            for attribute in attributes:
+                if attribute['ValueCount'] == 0:
+                    attribute.update(addedattribute)
+                    #print(attribute)
+                    nvivocon.execute(nvivoRole.insert().values({
+                            'Item1_Id': bindparam('NodeId'),
+                            'Item2_Id': bindparam('DefaultValueId'),
+                            'TypeId':   literal_column('7')
+                        }), attribute )
 
     nvivotr.commit()
     sys.exit()
