@@ -672,85 +672,85 @@ try:
     nvivotr.commit()
     sys.exit()
 
-# Source categories
+# Source Categories
+    if args.source_categories != 'skip':
 
-    sourcecategories = norm.execute ('''
-                    SELECT
-                        Id,
-                        Parent,
-                        Name,
-                        Description,
-                        CreatedBy,
-                        CreatedDate,
-                        ModifiedBy,
-                        ModifiedDate
-                    FROM
-                        SourceCategory
-                ''')
+        # Look up head source category, fudge it if it doesn't exist.
+        sel = select([nvivoItem.c.Id])
+        sel = sel.where(and_(
+            nvivoItem.c.TypeId == literal_column('0'),
+            nvivoItem.c.Name   == literal_column('\'Source Classifications\''),  # Translate?
+            nvivoItem.c.System == True))
+        headsourcecategory = nvivocon.execute(sel).fetchone()
+        if headsourcecategory == None:
+            #  Create the magic source category from NVivo's empty project
+            headsourcecategory = {'Id':'72218145-56BB-4FFA-A6D5-348F5D4766F1'}
 
-    if args.windows:
-        sourcecategories = [dict(row) for row in sourcecategories]
+        normSourceCategory = normmd.tables['SourceCategory']
+        sel = select([normSourceCategory.c.Id,
+                      normSourceCategory.c.Name,
+                      normSourceCategory.c.Description,
+                      normSourceCategory.c.CreatedBy,
+                      normSourceCategory.c.CreatedDate,
+                      normSourceCategory.c.ModifiedBy,
+                      normSourceCategory.c.ModifiedDate])
+        sourcecategories = [dict(row) for row in normdb.execute(sel)]
         for sourcecategory in sourcecategories:
-            sourcecategory['Name']        = ''.join(map(lambda ch: chr(ord(ch) + 0x377), sourcecategory['Name']))
-            sourcecategory['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), sourcecategory['Description']))
+            if sourcecategory['Id'] == None:
+                sourcecategory['Id'] = uuid.uuid4()
+            if args.windows:
+                sourcecategory['Name']        = ''.join(map(lambda ch: chr(ord(ch) + 0x377), sourcecategory['Name']))
+                sourcecategory['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), sourcecategory['Description']))
 
-    for sourcecategory in sourcecategories:
-        # Item
-        nvivo.execute ('''
-                    INSERT INTO
-                        Item
-                    (
-                        Id,
-                        TypeId,
-                        Name,
-                        Description,
-                        CreatedBy,
-                        CreatedDate,
-                        ModifiedBy,
-                        ModifiedDate
-                    ) VALUES (
-                        :Id,
-                        51,
-                        :Name,
-                        :Description,
-                        :CreatedBy,
-                        :CreatedDate,
-                        :ModifiedBy,
-                        :ModifiedDate
-                    )
-                ''',
-                    {
-                        'Id':sourcecategory['Id'],
-                        'Name':sourcecategory['Name'],
-                        'Description':sourcecategory['Description'],
-                        'CreatedBy':sourcecategory['CreatedBy'],
-                        'CreatedDate':sourcecategory['CreatedDate'],
-                        'ModifiedBy':sourcecategory['ModifiedBy'],
-                        'ModifiedDate':sourcecategory['ModifiedDate']
-                    }
-            )
-        if sourcecategory['Parent'] != None:
-            parentsourcecategory = next(index for index in sourcecategories if index['Id'] == sourcecategory['Parent'])
-            nvivo.execute ('''
-                    INSERT INTO
-                        Role
-                    (
-                        Item1_Id,
-                        TypeId,
-                        Item2_Id,
-                        Tag
-                    ) VALUES (
-                        :Item1_Id,
-                        0,
-                        :Item2_Id,
-                        0
-                    )
-                    ''',
-                    {
-                        'Item1_Id':parentsourcecategory['Id'],
-                        'Item2_Id':sourcecategory['Id']
-                    }
-                )
+        sel = select([nvivoItem.c.Id,
+                      nvivoRole.c.Item1_Id,
+                      nvivoRole.c.Item2_Id,
+                      nvivoRole.c.TypeId])
+        sel = sel.where(and_(
+                      nvivoItem.c.TypeId   == literal_column('51'),
+                      nvivoRole.c.TypeId   == literal_column('0'),
+                      nvivoRole.c.Item2_Id == nvivoItem.c.Id))
+
+        sourcecategoriestodelete = nvivocon.execute(sel)
+        if args.source_categories == 'replace':
+            sourcecategoriestodelete = [dict(row) for row in sourcecategoriestodelete]
+        elif args.source_categories == 'merge':
+            existingsourcecategories = [sourcecategory['Id'] for sourcecategory in sourcecategories]
+            sourcecategoriestodelete = [dict(row) for row in sourcecategoriestodelete
+                                      if row['Id'] not in existingsourcecategories]
+
+        if len(sourcecategoriestodelete) > 0:
+            nvivocon.execute(nvivoItem.delete(
+                nvivoItem.c.Id == bindparam('Id')), sourcecategoriestodelete)
+            nvivocon.execute(nvivoRole.delete(and_(
+                nvivoRole.c.Item1_Id == bindparam('Item1_Id'),
+                nvivoRole.c.TypeId   == literal_column('0'),
+                nvivoRole.c.Item2_Id == bindparam('Item2_Id'))), sourcecategoriestodelete)
+            nvivocon.execute(nvivoExtendedItem.delete(
+                nvivoExtendedItem.c.Item_Id == bindparam('Id')), sourcecategoriestodelete)
+            nvivocon.execute(nvivoCategory.delete(
+                nvivoCategory.c.Item_Id == bindparam('Id')), sourcecategoriestodelete)
+
+        if len(sourcecategories) > 0:
+            nvivocon.execute(nvivoItem.insert().values({
+                        'TypeId':   literal_column('52'),
+                        'System':   literal_column('0'),
+                        'ReadOnly': literal_column('0')
+                }), sourcecategories)
+
+            nvivocon.execute(nvivoRole.insert().values({
+                        'Item1_Id': literal_column('\'' + str(headsourcecategory['Id']) + '\''),
+                        'Item2_Id': bindparam('Id'),
+                        'TypeId':   literal_column('0')
+                }), sourcecategories)
+            nvivocon.execute(nvivoExtendedItem.insert().values({
+                        'Item_Id': bindparam('Id'),
+                        'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="EndNoteReferenceType" Value="-1" /></Properties>\'')
+                }), sourcecategories)
+            nvivocon.execute(nvivoCategory.insert().values({
+                        'Item_Id': bindparam('Id'),
+                        'Layout' : literal_column('\'<CategoryLayout xmlns="http://qsr.com.au/XMLSchema.xsd"><SortedColumn Ascending="true">-1</SortedColumn><RecordHeaderWidth>100</RecordHeaderWidth><ShowRowIDs>true</ShowRowIDs><ShowColumnIDs>true</ShowColumnIDs><Transposed>false</Transposed><NameSource>1</NameSource><RowsUserOrdered>false</RowsUserOrdered><ColumnsUserOrdered>true</ColumnsUserOrdered></CategoryLayout>\'')
+                }), sourcecategories)
 
 # Sources
 
