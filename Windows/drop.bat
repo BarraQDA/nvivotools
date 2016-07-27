@@ -1,3 +1,4 @@
+@echo off
 set DB=%1
 IF "%DB%"=="" (
     set DB=NVivo

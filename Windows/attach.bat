@@ -1,3 +1,4 @@
+@echo off
 set TEMPDIR=%TMP%\SQL
 mkdir %TEMPDIR%
 icacls "%TEMPDIR%" /grant Everyone:(OI)(CI)F
