@@ -4,6 +4,7 @@
 from builtins import chr
 from sqlalchemy import *
 from sqlalchemy import exc
+from xml.dom.minidom import *
 import warnings
 import sys
 import os
@@ -302,9 +303,25 @@ try:
                         'Item_Id': bindparam('Id'),
                         'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="EndNoteReferenceType" Value="-1" /></Properties>\'')
                 }), nodecategories)
+
+            # Construct Layout column
+            normNode = normmd.tables['Node']
+            for nodecategory in nodecategories:
+                nodesel = select(
+                        [normNode.c.Id]
+                                ).where(
+                        normNode.c.Category == bindparam('Id')
+                                )
+                nodes = [dict(row) for row in normdb.execute(nodesel, nodecategory)]
+                nodecategory['Layout'] = '<CategoryLayout xmlns="http://qsr.com.au/XMLSchema.xsd">'
+                nodeidx = 0
+                for node in nodes:
+                    nodecategory['Layout'] += '<Row Guid="' + node['Id'] + '" Id="' + str(nodeidx) + '" OrderId="' + str(nodeidx) + '" Hidden="false" Size="-1"/>'
+                nodecategory['Layout'] += '<SortedColumn Ascending="true">-1</SortedColumn><RecordHeaderWidth>100</RecordHeaderWidth><ShowRowIDs>true</ShowRowIDs><ShowColumnIDs>true</ShowColumnIDs><Transposed>false</Transposed><NameSource>1</NameSource><RowsUserOrdered>false</RowsUserOrdered><ColumnsUserOrdered>true</ColumnsUserOrdered></CategoryLayout>'
+
             nvivocon.execute(nvivoCategory.insert().values({
                         'Item_Id': bindparam('Id'),
-                        'Layout' : literal_column('\'<CategoryLayout xmlns="http://qsr.com.au/XMLSchema.xsd"><SortedColumn Ascending="true">-1</SortedColumn><RecordHeaderWidth>100</RecordHeaderWidth><ShowRowIDs>true</ShowRowIDs><ShowColumnIDs>true</ShowColumnIDs><Transposed>false</Transposed><NameSource>1</NameSource><RowsUserOrdered>false</RowsUserOrdered><ColumnsUserOrdered>true</ColumnsUserOrdered></CategoryLayout>\'')
+                        'Layout' : bindparam('Layout')
                 }), nodecategories)
 
 #Nodes
@@ -511,9 +528,10 @@ try:
 
         addedattributes = []
         for nodeattribute in nodeattributes:
-            nodeattribute['NodeName']       = next(node['Name'] for node in nodes if node['Id'] == nodeattribute['Node'])
-            nodeattribute['PlainTextName']  = nodeattribute['Name']
-            nodeattribute['PlainTextValue'] = nodeattribute['Value']
+            nodeattribute['NodeName']          = next(node['Name']          for node in nodes if node['Id'] == nodeattribute['Node'])
+            nodeattribute['PlainTextNodeName'] = next(node['PlainTextName'] for node in nodes if node['Id'] == nodeattribute['Node'])
+            nodeattribute['PlainTextName']     = nodeattribute['Name']
+            nodeattribute['PlainTextValue']    = nodeattribute['Value']
             if args.windows:
                 nodeattribute['Name']  = ''.join(map(lambda ch: chr(ord(ch) + 0x377), nodeattribute['Name']))
                 nodeattribute['Value'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), nodeattribute['Value']))
@@ -524,7 +542,7 @@ try:
             else:
                 nodeattribute.update(existingattributes[0])
                 if nodeattribute['AttributeId'] == None:
-                    print("Creating attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['NodeName'] + "'")
+                    print("Creating attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                     nodeattribute['AttributeId'] = uuid.uuid4()
                     if nodeattribute['MaxAttributeTag'] == None:
                         nodeattribute['NewAttributeTag'] = 0
@@ -600,7 +618,7 @@ try:
                     nodeattribute['MaxValueTag'] = 1
 
                 if nodeattribute['NewValueId'] == None:
-                    print("Creating value '" + nodeattribute['PlainTextValue'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['NodeName'] + "'")
+                    print("Creating value '" + nodeattribute['PlainTextValue'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                     nodeattribute['NewValueId']  = uuid.uuid4()
                     nodeattribute['NewValueTag'] = nodeattribute['MaxValueTag'] + 1
                     nvivocon.execute(nvivoItem.insert().values({
@@ -625,13 +643,13 @@ try:
 
                 if nodeattribute['NewValueId'] != nodeattribute['ExistingValueId']:
                     if nodeattribute['ExistingValueId'] != None:
-                        print("Removing existing value of attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['NodeName'] + "'")
+                        print("Removing existing value of attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                         nvivocon.execute(nvivoRole.delete().values({
                                 'Item1_Id': bindparam('Node'),
                                 'Item2_Id': bindparam('ExistingValueId'),
                                 'TypeId':   literal_column('7')
                             }), nodeattribute )
-                    #print("Assigning value '" + nodeattribute['Value'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['NodeName'] + "'")
+                    #print("Assigning value '" + nodeattribute['Value'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Node'),
                             'Item2_Id': bindparam('NewValueId'),
@@ -657,7 +675,29 @@ try:
                         nvivoNodeValueRole.c.Item1_Id == nvivoNodeCategoryRole.c.Item1_Id
             )))
 
+        categorysel = select([nvivoCategory.c.Layout]).where(
+                              nvivoCategory.c.Item_Id == bindparam('CategoryId'))
         for addedattribute in addedattributes:
+            # Patch up Layout column in Category table
+            category = dict(nvivocon.execute(categorysel, addedattribute).fetchone())
+            layoutdoc = parseString(category['Layout'])
+            followingelement = layoutdoc.documentElement.getElementsByTagName('SortedColumn')[0]
+            previouselement = followingelement.previousSibling
+            if previouselement != None and previouselement.tagName == 'Column':
+                nextid = int(previouselement.getAttribute('Id')) + 1
+            else:
+                nextid = 0
+            newelement = layoutdoc.createElement('Column')
+            newelement.setAttribute('Guid', str(addedattribute['AttributeId']))
+            newelement.setAttribute('Id', str(nextid))
+            newelement.setAttribute('OrderId', str(nextid))
+            newelement.setAttribute('Hidden', 'false')
+            newelement.setAttribute('Size', '-1')
+            layoutdoc.documentElement.insertBefore(newelement, followingelement)
+            category['Layout'] = layoutdoc.documentElement.toxml()
+            nvivocon.execute(nvivoCategory.update(), category)
+
+            # Set value of undefined attribute to 'Unassigned'
             attributes = [dict(row) for row in nvivocon.execute(sel, addedattribute)]
             for attribute in attributes:
                 if attribute['ValueCount'] == 0:
