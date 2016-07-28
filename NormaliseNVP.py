@@ -4,6 +4,7 @@
 from builtins import chr
 from sqlalchemy import *
 from sqlalchemy import exc
+from xml.dom.minidom import *
 import warnings
 import sys
 import os
@@ -149,6 +150,8 @@ try:
             Column('Source',        UUID(),         ForeignKey("Source.Id"),    primary_key=True),
             Column('Name',          String(256),                                primary_key=True),
             Column('Value',         String(256)),
+            Column('Type',          String(16)),
+            Column('Length',        Integer),
             Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
             Column('CreatedDate',   DateTime),
             Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
@@ -160,7 +163,8 @@ try:
             Column('Node',          UUID(),         ForeignKey("Node.Id"),      primary_key=True),
             Column('Name',          String(256),                                primary_key=True),
             Column('Value',         String(256)),
-            Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+            Column('Type',          String(16)),
+            Column('Length',        Integer),
             Column('CreatedDate',   DateTime),
             Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
             Column('ModifiedDate',  DateTime))
@@ -261,13 +265,12 @@ try:
 
 # Node attribute values
     if args.node_attributes != 'skip':
-        nvivoItem      = nvivomd.tables['Item']
-        nvivoRole      = nvivomd.tables['Role']
-        nvivoNodeItem  = nvivoItem.alias(name='NodeItem')
-        nvivoNameItem  = nvivoItem.alias(name='NameItem')
-        nvivoNameRole  = nvivoRole.alias(name='NameRole')
-        nvivoValueItem = nvivoItem.alias(name='ValueItem')
-        nvivoValueRole = nvivoRole.alias(name='ValueRole')
+        nvivoNodeItem     = nvivomd.tables['Item'].alias(name='NodeItem')
+        nvivoNameItem     = nvivomd.tables['Item'].alias(name='NameItem')
+        nvivoNameRole     = nvivomd.tables['Role'].alias(name='NameRole')
+        nvivoValueItem    = nvivomd.tables['Item'].alias(name='ValueItem')
+        nvivoValueRole    = nvivomd.tables['Role'].alias(name='ValueRole')
+        nvivoExtendedItem = nvivomd.tables['ExtendedItem'].alias(name='ExtendedNameItem')
 
         sel = select([nvivoNodeItem.c.Id.label('Node'),
                       nvivoNameItem.c.Name.label('Name'),
@@ -277,7 +280,8 @@ try:
                       nvivoValueItem.c.ModifiedBy,
                       nvivoValueItem.c.ModifiedDate,
                       nvivoNameRole.c.TypeId.label('NameRoleTypeId'),
-                      nvivoValueRole.c.TypeId.label('ValueRoleTypeId')])
+                      nvivoValueRole.c.TypeId.label('ValueRoleTypeId'),
+                      nvivoExtendedItem.c.Properties])
         sel = sel.where(and_(
                       or_(nvivoNodeItem.c.TypeId==literal_column('16'), nvivoNodeItem.c.TypeId==literal_column('62')),
                       nvivoNodeItem.c.Id == nvivoValueRole.c.Item1_Id,
@@ -286,8 +290,17 @@ try:
                       nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
                       nvivoNameRole.c.TypeId == literal_column('6'),
                       nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
-                      nvivoValueItem.c.Name != literal_column('\'Unassigned\'')))
+                      nvivoValueItem.c.Name != literal_column('\'Unassigned\''),
+                      nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
+                      ))
         nodeattrs = [dict(row) for row in nvivodb.execute(sel)]
+        for nodeattr in nodeattrs:
+            properties = parseString(nodeattr['Properties'])
+            for property in properties.documentElement.getElementsByTagName('Property'):
+                if property.getAttribute('Key') == 'DataType':
+                    nodeattr['Type'] = TypeName[int(property.getAttribute('Value'))]
+                elif property.getAttribute('Key') == 'Length':
+                    nodeattr['Length'] = int(property.getAttribute('Value'))
 
         if args.windows:
             for nodeattr in nodeattrs:
@@ -373,13 +386,14 @@ try:
 
 # Source attribute values
     if args.source_attributes != 'skip':
-        nvivoItem      = nvivomd.tables['Item']
-        nvivoRole      = nvivomd.tables['Role']
-        nvivoSource    = nvivomd.tables['Source']
-        nvivoNameItem  = nvivoItem.alias(name='NameItem')
-        nvivoNameRole  = nvivoRole.alias(name='NameRole')
-        nvivoValueItem = nvivoItem.alias(name='ValueItem')
-        nvivoValueRole = nvivoRole.alias(name='ValueRole')
+        nvivoItem         = nvivomd.tables['Item']
+        nvivoRole         = nvivomd.tables['Role']
+        nvivoSource       = nvivomd.tables['Source']
+        nvivoNameItem     = nvivoItem.alias(name='NameItem')
+        nvivoNameRole     = nvivoRole.alias(name='NameRole')
+        nvivoValueItem    = nvivoItem.alias(name='ValueItem')
+        nvivoValueRole    = nvivoRole.alias(name='ValueRole')
+        nvivoExtendedItem = nvivomd.tables['ExtendedItem'].alias(name='ExtendedNameItem')
 
         sel = select([nvivoSource.c.Item_Id.label('Source'),
                       nvivoNameItem.c.Name,
@@ -388,8 +402,7 @@ try:
                       nvivoValueItem.c.CreatedDate,
                       nvivoValueItem.c.ModifiedBy,
                       nvivoValueItem.c.ModifiedDate,
-                      nvivoNameRole.c.TypeId.label(None),
-                      nvivoValueRole.c.TypeId.label(None)])
+                      nvivoExtendedItem.c.Properties])
         sel = sel.where(and_(
                       nvivoSource.c.Item_Id == nvivoValueRole.c.Item1_Id,
                       nvivoValueRole.c.TypeId == literal_column('7'),
@@ -397,9 +410,18 @@ try:
                       nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
                       nvivoNameRole.c.TypeId == literal_column('6'),
                       nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
-                      nvivoValueItem.c.Name != literal_column('\'Unassigned\'')))
-
+                      nvivoValueItem.c.Name != literal_column('\'Unassigned\''),
+                      nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
+                    ))
         sourceattrs  = [dict(row) for row in nvivodb.execute(sel)]
+        for sourceattr in sourceattrs:
+            properties = parseString(sourceattr['Properties'])
+            for property in properties.documentElement.getElementsByTagName('Property'):
+                if property.getAttribute('Key') == 'DataType':
+                    sourceattr['Type'] = TypeName[int(property.getAttribute('Value'))]
+                elif property.getAttribute('Key') == 'Length':
+                    sourceattr['Length'] = int(property.getAttribute('Value'))
+        
         if args.windows:
             for sourceattr in sourceattrs:
                 sourceattr['Name']  = ''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Name']))
@@ -427,8 +449,7 @@ try:
                       nvivoNodeReference.c.CreatedBy,
                       nvivoNodeReference.c.CreatedDate,
                       nvivoNodeReference.c.ModifiedBy,
-                      nvivoNodeReference.c.ModifiedDate,
-                      nvivoNodeReference.c.ReferenceTypeId.label(None)])
+                      nvivoNodeReference.c.ModifiedDate])
         sel = sel.where(
                       nvivoNodeReference.c.ReferenceTypeId == literal_column('0'))
 

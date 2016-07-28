@@ -55,3 +55,11 @@ def compile_UNIQUEIDENTIFIER_mssql_sqlite(element, compiler, **kw):
 
 mssql.ischema_names['xml'] = String
 sqlite.ischema_names['UNIQUEIDENTIFIER'] = UUID
+
+TypeName = { 0: 'Text',
+             1: 'Integer',
+             2: 'Decimal',
+             3: 'DateTime',
+             4: 'Date',
+             5: 'Time',
+             6: 'Boolean' }
