@@ -563,9 +563,13 @@ try:
                             'TypeId':   literal_column('13'),
                             'Tag':      bindparam('NewAttributeTag')
                         }), nodeattribute)
+                    if nodeattribute['Type'] in DataTypeName.values():
+                        datatype = DataTypeName.keys()[DataTypeName.values().index(nodeattribute['Type'])
+                    else:
+                        datatype = 0;
                     nvivocon.execute(nvivoExtendedItem.insert().values({
                             'Item_Id': bindparam('AttributeId'),
-                            'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="DataType" Value="0" /><Property Key="Length" Value="0" /><Property Key="EndNoteFieldTypeId" Value="-1" /></Properties>\'')
+                            'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="DataType" Value="' + str(datatype) + '" /><Property Key="Length" Value="0" /><Property Key="EndNoteFieldTypeId" Value="-1" /></Properties>\'')
                     }), nodeattribute)
                     # Create unassigned and not applicable attribute values
                     nodeattribute['ValueId'] = uuid.uuid4()

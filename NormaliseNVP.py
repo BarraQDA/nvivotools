@@ -90,6 +90,8 @@ try:
             Column('Description',   String(512)),
             Column('URL',           String(256)),
             Column('Content',       String(16384)),
+            Column('ObjectType',    String(256)),
+            Column('Object',        LargeBinary,    nullable=False),
             Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
             Column('CreatedDate',   DateTime),
             Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
@@ -220,7 +222,7 @@ try:
 
 # Nodes
     if args.nodes != 'skip':
-        nvivoItem         = nvivomd.tables['Item'].alias(name='NodeItem')
+        nvivoItem         = nvivomd.tables['Item']
         nvivoCategoryRole = nvivomd.tables['Role'].alias(name='CategoryRole')
         nvivoParentRole   = nvivomd.tables['Role'].alias(name='ParentRole')
 
@@ -298,7 +300,7 @@ try:
             properties = parseString(nodeattr['Properties'])
             for property in properties.documentElement.getElementsByTagName('Property'):
                 if property.getAttribute('Key') == 'DataType':
-                    nodeattr['Type'] = TypeName[int(property.getAttribute('Value'))]
+                    nodeattr['Type'] = DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
                 elif property.getAttribute('Key') == 'Length':
                     nodeattr['Length'] = int(property.getAttribute('Value'))
 
@@ -348,32 +350,43 @@ try:
 
 # Sources
     if args.sources != 'skip':
-        nvivoSource = nvivomd.tables['Source']
-        nvivoItem = nvivomd.tables['Item']
-        nvivoRole = nvivomd.tables['Role']
+        nvivoSource       = nvivomd.tables['Source']
+        nvivoItem         = nvivomd.tables['Item']
+        nvivoCategoryRole = nvivomd.tables['Role'].alias(name='CategoryRole')
+        nvivoParentRole   = nvivomd.tables['Role'].alias(name='ParentRole')
 
-        sel = select([nvivoItem.c.Id,
-                      nvivoRole.c.Item2_Id.label('Category'),
-                      nvivoItem.c.Name,
-                      nvivoItem.c.Description,
-                      nvivoSource.c.PlainText.label('Content'),
-                      nvivoItem.c.CreatedBy,
-                      nvivoItem.c.CreatedDate,
-                      nvivoItem.c.ModifiedBy,
-                      nvivoItem.c.ModifiedDate])
-        sel = sel.where(and_(
-                      nvivoItem.c.Id == nvivoSource.c.Item_Id,
-                      nvivoRole.c.TypeId == literal_column('14'),
-                      nvivoRole.c.Item1_Id == nvivoItem.c.Id))
+        sel = select([
+                    nvivoItem.c.Id,
+                    nvivoCategoryRole.c.Item2_Id.label('Category'),
+                    nvivoItem.c.Name,
+                    nvivoItem.c.Description,
+                    nvivoSource.c.TypeId.label('ObjectTypeId'),
+                    nvivoSource.c.Object,
+                    nvivoSource.c.PlainText,
+                    nvivoSource.c.MetaData,
+                    nvivoItem.c.TypeId.label('SourceTypeId'),
+                    nvivoItem.c.CreatedBy,
+                    nvivoItem.c.CreatedDate,
+                    nvivoItem.c.ModifiedBy,
+                    nvivoItem.c.ModifiedDate]
+            ).where(
+                    nvivoItem.c.Id == nvivoSource.c.Item_Id
+            ).select_from(nvivoItem.outerjoin(
+                    nvivoCategoryRole, and_(
+                    nvivoCategoryRole.c.TypeId == literal_column('14'),
+                    nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id)
+            ))
+                
         sources = [dict(row) for row in nvivodb.execute(sel)]
         for source in sources:
             if args.windows:
                 source['Name']        = ''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Name']))
                 source['Description'] = ''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description']))
-
-            if source['Content'] != None:
-                source['Content'] = source['Content'].replace ('\\n', os.linesep * int(2 / len(os.linesep)))
-
+            if source['PlainText'] != None:
+                source['Content'] = source['PlainText'].replace ('\\n', os.linesep * int(2 / len(os.linesep)))
+            else:
+                source['Content'] = None
+            source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
 
         if args.sources == 'replace':
             normdb.execute(normSource.delete())
@@ -418,7 +431,7 @@ try:
             properties = parseString(sourceattr['Properties'])
             for property in properties.documentElement.getElementsByTagName('Property'):
                 if property.getAttribute('Key') == 'DataType':
-                    sourceattr['Type'] = TypeName[int(property.getAttribute('Value'))]
+                    sourceattr['Type'] = DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
                 elif property.getAttribute('Key') == 'Length':
                     sourceattr['Length'] = int(property.getAttribute('Value'))
         
