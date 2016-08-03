@@ -62,6 +62,7 @@ DataTypeName = { 0: 'Text',
                  3: 'DateTime',
                  4: 'Date',
                  5: 'Time',
-                 6: 'Boolean'}
+                 6: 'Boolean' }
 
-ObjectTypeName = { 11: 'PDF' }
+ObjectTypeName = {  8: 'JPEG',
+                   11: 'PDF' }
