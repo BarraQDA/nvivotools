@@ -64,5 +64,8 @@ DataTypeName = { 0: 'Text',
                  5: 'Time',
                  6: 'Boolean' }
 
-ObjectTypeName = {  8: 'JPEG',
+ObjectTypeName = {  0: 'DOC',
+                    1: 'MP3',
+                    5: 'WMV',
+                    8: 'JPEG',
                    11: 'PDF' }

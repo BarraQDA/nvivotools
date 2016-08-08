@@ -100,8 +100,9 @@ try:
             Column('ModifiedBy',    UUID(),         ForeignKey("UserProfile.Id"),  nullable=False),
             Column('System',        Boolean,        nullable=False),
             Column('ReadOnly',      Boolean,        nullable=False),
-            Column('ColorArgb',     Integer,        nullable=False),
-            Column('Aggregate',     Boolean,        nullable=False))
+            Column('InheritPermissions', Boolean,   nullable=False),
+            Column('ColorArgb',     Integer),
+            Column('Aggregate',     Boolean))
 
     nvivoExtendedItem = nvivomd.tables.get('ExtendedItem')
     if nvivoExtendedItem == None:
@@ -120,7 +121,7 @@ try:
         nvivoSource = Table('Source', nvivomd,
             Column('Item_Id',       UUID(),         nullable=False),
             Column('TypeId',        Integer,        nullable=False),
-            Column('Object',        blob,           nullable=False),
+            Column('Object',        LargeBinary,    nullable=False),
             Column('PlainText',     String),
             Column('LengthX',       Integer,        nullable=False),
             Column('LengthY',       Integer))
@@ -180,9 +181,9 @@ try:
             user['Initials'] = ''.join(word[0].upper() for word in user['Name'].split())
 
         userstodelete = nvivocon.execute(select([nvivoUserProfile.c.Id]))
-        if args.user_categories == 'replace':
+        if args.users == 'replace':
             userstodelete = [dict(row) for row in userstodelete]
-        elif args.user_categories == 'merge':
+        elif args.users == 'merge':
             newusers = [user['Id'] for user in users]
             userstodelete = [dict(row) for row in userstodelete
                              if row['Id'] in newusers]
@@ -293,7 +294,8 @@ try:
             nvivocon.execute(nvivoItem.insert().values({
                         'TypeId':   literal_column('52'),
                         'System':   literal_column('0'),
-                        'ReadOnly': literal_column('0')
+                        'ReadOnly': literal_column('0'),
+                        'InheritPermissions': literal_column('1')
                 }), nodecategories)
 
             nvivocon.execute(nvivoRole.insert().values({
@@ -418,7 +420,8 @@ try:
                     'TypeId':   literal_column('16'),
                     'ColorArgb': bindparam('Color'),
                     'System':   literal_column('0'),
-                    'ReadOnly': literal_column('0')
+                    'ReadOnly': literal_column('0'),
+                    'InheritPermissions': literal_column('1')
                 }), nodes)
 
             nvivocon.execute(nvivoRole.insert().values({
@@ -457,6 +460,7 @@ try:
         normNodeAttribute = normmd.tables['NodeAttribute']
         sel = select([normNodeAttribute.c.Node,
                       normNodeAttribute.c.Name,
+                      normNodeAttribute.c.Type,
                       normNodeAttribute.c.Value,
                       normNodeAttribute.c.CreatedBy,
                       normNodeAttribute.c.CreatedDate,
@@ -471,6 +475,7 @@ try:
         nvivoNodeCategoryRole  = nvivomd.tables.get('Role').alias(name='NodeCategoryRole')
         nvivoCategoryAttributeRole = nvivomd.tables.get('Role').alias(name='CategoryAttributeRole')
         nvivoCategoryAttributeItem = nvivomd.tables.get('Item').alias(name='CategoryAttributeItem')
+        nvivoCategoryAttributeExtendedItem = nvivomd.tables.get('ExtendedItem').alias(name='CategoryAttributeExtendedItem')
         nvivoNewValueRole = nvivomd.tables.get('Role').alias(name='NewValueRole')
         nvivoNewValueItem = nvivomd.tables.get('Item').alias(name='NewValueItem')
         nvivoExistingValueRole = nvivomd.tables.get('Role').alias(name='ExistingValueRole')
@@ -481,6 +486,7 @@ try:
         sel = select([
                 nvivoNodeCategoryRole.c.Item2_Id.label('CategoryId'),
                 nvivoCategoryAttributeItem.c.Id.label('AttributeId'),
+                nvivoCategoryAttributeExtendedItem.c.Properties,
                 nvivoNewValueItem.c.Id.label('NewValueId'),
                 nvivoNodeValueRole.c.Item2_Id.label('ExistingValueId'),
                 func.max(nvivoCountAttributeRole.c.Tag).label('MaxAttributeTag'),
@@ -494,7 +500,10 @@ try:
             .group_by(nvivoNodeValueRole.c.Item2_Id) \
             .select_from(nvivoNodeCategoryRole.outerjoin(
                 nvivoCategoryAttributeRole.join(
-                        nvivoCategoryAttributeItem, and_(
+                        nvivoCategoryAttributeItem.join(
+                                nvivoCategoryAttributeExtendedItem,
+                                nvivoCategoryAttributeExtendedItem.c.Item_Id == nvivoCategoryAttributeItem.c.Id
+                            ), and_(
                         nvivoCategoryAttributeItem.c.Id == nvivoCategoryAttributeRole.c.Item1_Id,
                         nvivoCategoryAttributeItem.c.Name == bindparam('Name')
                 )), and_(
@@ -543,6 +552,17 @@ try:
                 print("WARNING: Node '" + nodeattribute['NodeName'] + "' has no category. NVivo cannot record attributes'")
             else:
                 nodeattribute.update(newattributes[0])
+                if nodeattribute['Type'] == None:
+                    if nodeattribute['Properties'] != None:
+                        properties = parseString(nodeattribute['Properties'])
+                        for property in properties.documentElement.getElementsByTagName('Property'):
+                            if property.getAttribute('Key') == 'DataType':
+                                nodeattribute['Type'] = DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
+                            elif property.getAttribute('Key') == 'Length':
+                                nodeattribute['Length'] = int(property.getAttribute('Value'))
+                    else:
+                        nodeattribute['Type'] = 'Text'
+                    
                 if nodeattribute['AttributeId'] == None:
                     print("Creating attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                     nodeattribute['AttributeId'] = uuid.uuid4()
@@ -565,8 +585,9 @@ try:
                             'TypeId':   literal_column('13'),
                             'Tag':      bindparam('NewAttributeTag')
                         }), nodeattribute)
+                    #print nodeattribute
                     if nodeattribute['Type'] in DataTypeName.values():
-                        datatype = DataTypeName.keys()[DataTypeName.values().index(nodeattribute['Type'])
+                        datatype = DataTypeName.keys()[DataTypeName.values().index(nodeattribute['Type'])]
                     else:
                         datatype = 0;
                     nvivocon.execute(nvivoExtendedItem.insert().values({
@@ -624,7 +645,7 @@ try:
                     nodeattribute['MaxValueTag'] = 1
 
                 if nodeattribute['NewValueId'] == None:
-                    print("Creating value '" + nodeattribute['PlainTextValue'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
+                    #print("Creating value '" + nodeattribute['PlainTextValue'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                     nodeattribute['NewValueId']  = uuid.uuid4()
                     nodeattribute['NewValueTag'] = nodeattribute['MaxValueTag'] + 1
                     nvivocon.execute(nvivoItem.insert().values({
@@ -649,7 +670,7 @@ try:
 
                 if nodeattribute['NewValueId'] != nodeattribute['ExistingValueId']:
                     if nodeattribute['ExistingValueId'] != None:
-                        print("Removing existing value of attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
+                        #print("Removing existing value of attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                         nvivocon.execute(nvivoRole.delete().values({
                                 'Item1_Id': bindparam('Node'),
                                 'Item2_Id': bindparam('ExistingValueId'),
@@ -715,9 +736,6 @@ try:
                             'TypeId':   literal_column('7')
                         }), attribute )
 
-    nvivotr.commit()
-    sys.exit()
-
 # Source Categories
     if args.source_categories != 'skip':
 
@@ -781,7 +799,8 @@ try:
             nvivocon.execute(nvivoItem.insert().values({
                         'TypeId':   literal_column('52'),
                         'System':   literal_column('0'),
-                        'ReadOnly': literal_column('0')
+                        'ReadOnly': literal_column('0'),
+                        'InheritPermissions': literal_column('1')
                 }), sourcecategories)
 
             nvivocon.execute(nvivoRole.insert().values({
@@ -814,10 +833,11 @@ try:
             headsource = {'Id':'89288984-4637-42A8-8999-FCB8334BDA68'}
 
         normSource = normmd.tables['Source']
-        sel = select([normSource.c.Id,
+        sel = select([normSource.c.Id.label('Item_Id'),
                       normSource.c.Category,
                       normSource.c.Name,
                       normSource.c.Description,
+                      normSource.c.Color,
                       normSource.c.Content,
                       normSource.c.ObjectType.label('ObjectTypeName'),
                       normSource.c.SourceType,
@@ -829,26 +849,42 @@ try:
         sources = [dict(row) for row in normdb.execute(sel)]
 
         for source in sources:
-            if source['Id'] == None:
-                source['Id'] = uuid.uuid4()
+            if source['Item_Id'] == None:
+                source['Item_Id'] = uuid.uuid4()
             source['PlainTextName'] = source['Name']
             if args.windows:
                 source['Name']        = ''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
                 source['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description']))
             if source['ObjectTypeName'] in ObjectTypeName.values():
-                source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])
+                source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])]
             else:
-                source['ObjectType'] = int(source['ObjectTypeName'];
+                source['ObjectType'] = int(source['ObjectTypeName'])
+            if source['Content'] != None:
+                doc = Document()
+                paragraphs = doc.createElement("Paragraphs")
+                paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                start = 0
+                while start < len(source['Content']):
+                    end = source['Content'].find('\n', start)
+                    if end == -1:
+                        end = len(source['Content']) - 1
+                    para = paragraphs.appendChild(doc.createElement("Para"))
+                    para.setAttribute("Pos", str(start))
+                    para.setAttribute("Len", str(end - start + 1))
+                    para.setAttribute("Style", "")
+                    start = end + 1
+
+                source['MetaData'] = paragraphs.toxml()                
 
         sourceswithcategory = [dict(row) for row in sources if row['Category'] != None]
 
-        sourcestodelete = nvivocon.execute(select([nvivoSource.c.Id]))
+        sourcestodelete = nvivocon.execute(select([nvivoSource.c.Item_Id]))
         if args.source_categories == 'replace':
             sourcestodelete = [dict(row) for row in sourcestodelete]
         elif args.source_categories == 'merge':
-            newsources = [source['Id'] for source in sources]
+            newsources = [source['Item_Id'] for source in sources]
             sourcestodelete = [dict(row) for row in sourcestodelete
-                               if row['Id'] in newsources]
+                               if row['Item_Id'] in newsources]
 
         if len(sourcestodelete) > 0:
             # Need to delete taggings associated with source
@@ -856,37 +892,36 @@ try:
             nvivocon.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Id')), sourcestodelete)
             nvivocon.execute(nvivoRole.delete(and_(
                 nvivoRole.c.Item1_Id == bindparam('Id'),
-                nvivoRole.c.TypeId   == literal_column('14')), sourcestodelete)
+                nvivoRole.c.TypeId   == literal_column('14')), sourcestodelete))
 
         if len(sources) > 0:
             nvivocon.execute(nvivoSource.insert().values({
-                    'Item_Id':   bind_column('Id'),
-                    'TypeId':    
-                    'Object':
-                    'PlainText':
-                    'LengthX':
-                    'MetaData':
+                    'TypeId':   bindparam('ObjectType'),
+                    'LengthX':  literal_column('0')
                 }), sources)
-                
             nvivocon.execute(nvivoItem.insert().values({
-                    'TypeId':   literal_column('16'),
+                    'Id':        bindparam('Item_Id'),
+                    'TypeId':   literal_column('2'),
                     'ColorArgb': bindparam('Color'),
                     'System':   literal_column('0'),
-                    'ReadOnly': literal_column('0')
+                    'ReadOnly': literal_column('0'),
+                    'InheritPermissions': literal_column('1')
                 }), sources)
             nvivocon.execute(nvivoRole.insert().values({
                     'Item1_Id': literal_column('\'' + str(headsource['Id']) + '\''),
-                    'Item2_Id': bindparam('Id'),
+                    'Item2_Id': bindparam('Item_Id'),
                     'TypeId':   literal_column('0')
                 }), sources)
 
         if len(sourceswithcategory) > 0:
             nvivocon.execute(nvivoRole.insert().values({
-                    'Item1_Id': bindparam('Id'),
+                    'Item1_Id': bindparam('Item_Id'),
                     'Item2_Id': bindparam('Category'),
                     'TypeId':   literal_column('14')
                 }), sourceswithcategory)
 
+    nvivotr.commit()
+    sys.exit()
 # Source attribute values
 
     sourceattrs = norm.execute ('''

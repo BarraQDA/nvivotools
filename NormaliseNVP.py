@@ -10,6 +10,7 @@ import sys
 import os
 import argparse
 import uuid
+import zlib
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
 
@@ -88,6 +89,7 @@ try:
             Column('Category',      UUID()),
             Column('Name',          String(256)),
             Column('Description',   String(512)),
+            Column('Color',         Integer),
             Column('Content',       String(16384)),
             Column('ObjectType',    String(256)),
             Column('SourceType',    Integer),
@@ -167,6 +169,7 @@ try:
             Column('Value',         String(256)),
             Column('Type',          String(16)),
             Column('Length',        Integer),
+            Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
             Column('CreatedDate',   DateTime),
             Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
             Column('ModifiedDate',  DateTime))
@@ -360,6 +363,7 @@ try:
                     nvivoCategoryRole.c.Item2_Id.label('Category'),
                     nvivoItem.c.Name,
                     nvivoItem.c.Description,
+                    nvivoItem.c.ColorArgb.label('Color'),
                     nvivoSource.c.TypeId.label('ObjectTypeId'),
                     nvivoSource.c.Object,
                     nvivoSource.c.PlainText,
@@ -387,6 +391,9 @@ try:
             else:
                 source['Content'] = None
             source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
+            if source['ObjectType'] == 'DOC':
+                # Object is zlib-compressed but without header
+                source['Object'] = zlib.decompress(source['Object'], -15)
 
         if args.sources == 'replace':
             normdb.execute(normSource.delete())
