@@ -11,6 +11,7 @@ import os
 import argparse
 import uuid
 import re
+import zlib
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
 
@@ -58,7 +59,7 @@ try:
 
     if args.outfile is None:
         args.outfile = args.infile.rsplit('.',1)[0] + '.nvivo'
-    nvivodb = create_engine(args.outfile)
+    nvivodb = create_engine(args.outfile, deprecate_large_types=True)
     nvivomd = MetaData(bind=nvivodb)
     nvivomd.reflect(nvivodb)
     nvivocon = nvivodb.connect()
@@ -123,6 +124,7 @@ try:
             Column('TypeId',        Integer,        nullable=False),
             Column('Object',        LargeBinary,    nullable=False),
             Column('PlainText',     String),
+            Column('MetaData',      String),
             Column('LengthX',       Integer,        nullable=False),
             Column('LengthY',       Integer))
 
@@ -842,6 +844,7 @@ try:
                       normSource.c.ObjectType.label('ObjectTypeName'),
                       normSource.c.SourceType,
                       normSource.c.Object,
+                      normSource.c.Thumbnail,
                       normSource.c.CreatedBy,
                       normSource.c.CreatedDate,
                       normSource.c.ModifiedBy,
@@ -855,10 +858,19 @@ try:
             if args.windows:
                 source['Name']        = ''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
                 source['Description'] = ''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description']))
+            if source['Content'] != None:
+                source['PlainText'] = source['Content'].replace (os.linesep * int(2 / len(os.linesep)), '\\n')
+            else:
+                source['PlainText'] = None
             if source['ObjectTypeName'] in ObjectTypeName.values():
                 source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])]
             else:
                 source['ObjectType'] = int(source['ObjectTypeName'])
+            if source['ObjectTypeName'] == 'DOC':
+                # Compress object using zlib without header
+                compressor = zlib.compressobj(-1, zlib.DEFLATED, -15)
+                source['Object'] = compressor.compress(source['Object']) + compressor.flush()
+                
             if source['Content'] != None:
                 doc = Document()
                 paragraphs = doc.createElement("Paragraphs")
@@ -874,7 +886,10 @@ try:
                     para.setAttribute("Style", "")
                     start = end + 1
 
-                source['MetaData'] = paragraphs.toxml()                
+                source['MetaData'] = paragraphs.toxml()
+            else:
+                source['MetaData'] = None
+                
 
         sourceswithcategory = [dict(row) for row in sources if row['Category'] != None]
 
@@ -895,10 +910,6 @@ try:
                 nvivoRole.c.TypeId   == literal_column('14')), sourcestodelete))
 
         if len(sources) > 0:
-            nvivocon.execute(nvivoSource.insert().values({
-                    'TypeId':   bindparam('ObjectType'),
-                    'LengthX':  literal_column('0')
-                }), sources)
             nvivocon.execute(nvivoItem.insert().values({
                     'Id':        bindparam('Item_Id'),
                     'TypeId':   literal_column('2'),
@@ -906,6 +917,13 @@ try:
                     'System':   literal_column('0'),
                     'ReadOnly': literal_column('0'),
                     'InheritPermissions': literal_column('1')
+                }), sources)
+            nvivocon.execute(nvivoSource.insert().values({
+                    'TypeId':   bindparam('ObjectType'),
+                    # This work-around is specific to MSSQL
+                    'Object':   func.CONVERT(literal_column('VARBINARY(MAX)'),
+                                             bindparam('Object')),
+                    'LengthX':  literal_column('0')
                 }), sources)
             nvivocon.execute(nvivoRole.insert().values({
                     'Item1_Id': literal_column('\'' + str(headsource['Id']) + '\''),

@@ -94,6 +94,7 @@ try:
             Column('ObjectType',    String(256)),
             Column('SourceType',    Integer),
             Column('Object',        LargeBinary,    nullable=False),
+            Column('Thumbnail',     LargeBinary,    nullable=False),
             Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
             Column('CreatedDate',   DateTime),
             Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
@@ -388,11 +389,9 @@ try:
                 source['Description'] = ''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description']))
             if source['PlainText'] != None:
                 source['Content'] = source['PlainText'].replace ('\\n', os.linesep * int(2 / len(os.linesep)))
-            else:
-                source['Content'] = None
             source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
             if source['ObjectType'] == 'DOC':
-                # Object is zlib-compressed but without header
+                # Object is zlib-compressed without header
                 source['Object'] = zlib.decompress(source['Object'], -15)
 
         if args.sources == 'replace':
