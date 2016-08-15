@@ -17,6 +17,8 @@ try:
 
     parser.add_argument('-r', '--reverse', action='store_true',
                         help='Reverse the subtraction, that is swap the minuent and subtrahend.')
+    parser.add_argument('-i', '--ignore', type=str, nargs='?',
+                        help='Comma-separated list of columns to ignore when doing record comparison.')
 
     parser.add_argument('minuend', type=str,
                         help='Path of database from which to subtract contents.')
@@ -29,6 +31,8 @@ try:
 
     if args.reverse:
         args.minuend, args.subtrahend = args.subtrahend, args.minuend
+        
+    ignorecols = args.ignore.split(",")
 
     minuenddb = create_engine(args.minuend)
     minuendmd = MetaData()
@@ -57,9 +61,15 @@ try:
         if subtrahendtable != None:
             subtrahendrows = subtrahenddb.execute(subtrahendtable.select())
             subtrahendrows = [dict(row) for row in subtrahendrows]
+            for row in subtrahendrows:
+                for ignorecolumn in ignorecols:
+                    row['ignorecolumne'] = None
 
             minuendrows = minuenddb.execute(minuendtable.select())
             minuendrows = [dict(row) for row in minuendrows]
+            for row in minuendrows:
+                for ignorecolumn in ignorecols:
+                    row['ignorecolumne'] = None
 
             differencerows = [ x for x in minuendrows if not x in subtrahendrows ]
 
