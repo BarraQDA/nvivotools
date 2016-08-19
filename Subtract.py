@@ -31,8 +31,11 @@ try:
 
     if args.reverse:
         args.minuend, args.subtrahend = args.subtrahend, args.minuend
-        
-    ignorecols = args.ignore.split(",")
+
+    if args.ignore != None:
+        ignorecols = args.ignore.split(",")
+    else:
+        ignorecols = []
 
     minuenddb = create_engine(args.minuend)
     minuendmd = MetaData()
