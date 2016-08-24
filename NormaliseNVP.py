@@ -369,6 +369,7 @@ try:
                     nvivoSource.c.Object,
                     nvivoSource.c.PlainText,
                     nvivoSource.c.MetaData,
+                    nvivoSource.c.Thumbnail,
                     nvivoItem.c.TypeId.label('SourceType'),
                     nvivoItem.c.CreatedBy,
                     nvivoItem.c.CreatedDate,
