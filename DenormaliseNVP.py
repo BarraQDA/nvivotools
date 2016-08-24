@@ -911,8 +911,8 @@ try:
 
         if len(sources) > 0:
             nvivocon.execute(nvivoItem.insert().values({
-                    'Id':        bindparam('Item_Id'),
-                    'TypeId':   literal_column('2'),
+                    'Id':       bindparam('Item_Id'),
+                    'TypeId':   bindparam('SourceType'),
                     'ColorArgb': bindparam('Color'),
                     'System':   literal_column('0'),
                     'ReadOnly': literal_column('0'),
@@ -929,6 +929,10 @@ try:
                     'Item1_Id': literal_column('\'' + str(headsource['Id']) + '\''),
                     'Item2_Id': bindparam('Item_Id'),
                     'TypeId':   literal_column('0')
+                }), sources)
+            nvivocon.execute(nvivoExtendedItem.insert().values({
+                    # Need to work out how to calculate PDF checksum!
+                    'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>\'')
                 }), sources)
 
         if len(sourceswithcategory) > 0:
