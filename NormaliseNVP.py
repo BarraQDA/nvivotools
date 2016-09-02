@@ -34,6 +34,8 @@ try:
                         help='Source category action.')
     parser.add_argument('--sources', choices=table_choices, default="replace",
                         help='Source action.')
+    parser.add_argument('--no-decompress', action='store_true',
+                        help='Don\'t decompress source objects')
     parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="replace",
                         help='Source attribute action.')
     parser.add_argument('-t', '--taggings', choices=table_choices, default="replace",
@@ -391,8 +393,9 @@ try:
             if source['PlainText'] != None:
                 source['Content'] = source['PlainText'].replace ('\\n', os.linesep * int(2 / len(os.linesep)))
             source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
-            if source['ObjectType'] == 'DOC':
+            if (not args.no_decompress) and source['ObjectType'] == 'DOC':
                 # Object is zlib-compressed without header
+                print ("Decompressing")
                 source['Object'] = zlib.decompress(source['Object'], -15)
 
         if args.sources == 'replace':

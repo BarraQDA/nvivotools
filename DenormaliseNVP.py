@@ -37,6 +37,8 @@ try:
                         help='Source category action.')
     parser.add_argument('--sources', choices=table_choices, default="merge",
                         help='Source action.')
+    parser.add_argument('-z', '--compress-level', default='9',
+                        help='Compress level for source objects.')
     parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="merge",
                         help='Source attribute action.')
     parser.add_argument('-t', '--taggings', choices=table_choices, default="merge",
@@ -868,8 +870,10 @@ try:
                 source['ObjectType'] = int(source['ObjectTypeName'])
             if source['ObjectTypeName'] == 'DOC':
                 # Compress object using zlib without header
-                compressor = zlib.compressobj(-1, zlib.DEFLATED, -15)
-                source['Object'] = compressor.compress(source['Object']) + compressor.flush()
+                if int(args.compress_level) != 0:
+                    print ("Compressing with level " + args.compress_level)
+                    compressor = zlib.compressobj(int(args.compress_level), zlib.DEFLATED, -15)
+                    source['Object'] = compressor.compress(source['Object']) + compressor.flush()
                 
             if source['Content'] != None:
                 doc = Document()
@@ -885,6 +889,11 @@ try:
                     para.setAttribute("Len", str(end - start + 1))
                     para.setAttribute("Style", "")
                     start = end + 1
+                    
+                if source['ObjectTypeName'] == 'PDF':
+                    pages = doc.createElement("PdfPages")
+                    pages.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                    # PDF page elements need PageLength, PageOffset, PageWidth, PageHeight attributes
 
                 source['MetaData'] = paragraphs.toxml()
             else:
