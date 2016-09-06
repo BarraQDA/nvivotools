@@ -192,8 +192,8 @@ try:
 
         if args.windows:
             for project in projects:
-                project['Title']       = ''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Title']))
-                project['Description'] = ''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Description']))
+                project['Title']       = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Title']))
+                project['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Description']))
 
         normdb.execute(normProject.delete())
         normdb.execute(normProject.insert(), projects)
@@ -214,8 +214,8 @@ try:
         nodecategories = [dict(row) for row in nvivodb.execute(sel)]
         for nodecategory in nodecategories:
             if args.windows:
-                nodecategory['Name']        = ''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Name']))
-                nodecategory['Description'] = ''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Description']))
+                nodecategory['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Name']))
+                nodecategory['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Description']))
 
         if args.node_categories == 'replace':
             normdb.execute(normNodeCategory.delete())
@@ -259,8 +259,8 @@ try:
         nodes = [dict(row) for row in nvivodb.execute(sel)]
         if args.windows:
             for node in nodes:
-                node['Name']        = ''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Name']))
-                node['Description'] = ''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Description']))
+                node['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Name']))
+                node['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Description']))
 
         if args.nodes == 'replace':
             normdb.execute(normNode.delete())
@@ -312,8 +312,8 @@ try:
 
         if args.windows:
             for nodeattr in nodeattrs:
-                nodeattr['Name']  = ''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattr['Name']))
-                nodeattr['Value'] = ''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattr['Value']))
+                nodeattr['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattr['Name']))
+                nodeattr['Value'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattr['Value']))
 
         if args.node_attributes == 'replace':
             normdb.execute(normNodeAttribute.delete())
@@ -342,8 +342,8 @@ try:
         sourcecats  = [dict(row) for row in nvivodb.execute(sel)]
         for sourcecat in sourcecats:
             if args.windows:
-                sourcecat['Name']        = ''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Name']))
-                sourcecat['Description'] = ''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Description']))
+                sourcecat['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Name']))
+                sourcecat['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Description']))
 
         if args.source_categories == 'replace':
             normdb.execute(normSourceCategory.delete())
@@ -388,8 +388,8 @@ try:
         sources = [dict(row) for row in nvivodb.execute(sel)]
         for source in sources:
             if args.windows:
-                source['Name']        = ''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Name']))
-                source['Description'] = ''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description']))
+                source['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Name']))
+                source['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description']))
             if source['PlainText'] != None:
                 source['Content'] = source['PlainText'].replace ('\\n', os.linesep * int(2 / len(os.linesep)))
             source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
@@ -447,8 +447,8 @@ try:
         
         if args.windows:
             for sourceattr in sourceattrs:
-                sourceattr['Name']  = ''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Name']))
-                sourceattr['Value'] = ''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Value']))
+                sourceattr['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Name']))
+                sourceattr['Value'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Value']))
 
         if args.source_attributes == 'replace':
             normdb.execute(normSourceAttribute.delete())
@@ -481,7 +481,8 @@ try:
             tagging['Fragment'] = str(tagging['StartX']) + ':' + str(tagging['StartX'] + tagging['LengthX'] - 1);
 
         if args.taggings == 'replace':
-            normdb.execute(normTagging.delete())
+            normdb.execute(normTagging.delete(
+                                normTagging.c.Node   != None))                                
         elif args.taggings == 'merge':
             normdb.execute(normTagging.delete(
                            and_(normSource.c.Source  == bindparam('Source'),
@@ -511,7 +512,8 @@ try:
             annotation['Fragment'] = str(annotation['StartX']) + ':' + str(annotation['StartX'] + annotation['LengthX'] - 1);
 
         if args.annotations == 'replace':
-            normdb.execute(normTagging.delete())
+            normdb.execute(normTagging.delete(
+                                normTagging.c.Node   == None))                                
         elif args.annotations == 'merge':
             normdb.execute(normTagging.delete(
                            and_(normSource.c.Source  == bindparam('Source'),
