@@ -1,0 +1,67 @@
+NVivo database structure notes
+
+Item.TypeID
+
+0 - Folders
+2 - Source (internal)
+3 - Source (Memo)
+4 - Source (external)
+33 - Source - ?
+34 - Source - Online?
+48 - Source - ?
+14 - ? Query/Report something?
+16 - Node (NVivo 10), : NVivo11 also uses 62?
+17 - Node Matrix
+24 - Matrix Coding Query
+21 - Attribute value
+51 - Source classifications
+52 - Node classifications
+20 - Attribute name
+
+62 - NVivo11 only - Cases
+66 - NVivo11 only - Sentiment
+
+Role.TypeId
+0 - Item2 belongs in Item1 (eg source classifications,?)
+1 - Item2 is Node ID
+
+2 - Attribute parent-child - Item1 is parent, Item2 is child
+6 - Attribute name - Item1 is attribute name, Item2 Attribute value, Tag is value ordinal
+7 - Source/node attribute value -  Item1 is source/node, Item2 Attribute value
+13 - Attribute - Item1 is attribute name, Item2 is Source/Node classification, Tag is attribute index
+
+
+14 - Source/Node Category - Item1 is Source/Node Item2 is Category
+
+15 - Item2 is Node, Item1 is Parent Node ? Nodes seem to be linked to themselves?
+
+ExtendedItem
+ - XML contains attribute type: 0-Text, 1=Integer, 2-Decimal, 3-Date/time, 4-Date, 5-Time, 6-Boolean
+
+Node attribute structures
+
+ Node <-> Item1 7 Item2 <-> Value <-> Item2 6 Item1 <-> Name
+
+Node classifications
+
+ Node <-> Item1 14 Item2 <-> Category <-> Item2 13 Item1 <-> Attribute
+
+Nodes:
+
+Aggregate is stored in Item table.
+
+All have type 0 link to node folder or base node 'Nodes' (F1450EED-D162-4CC9-B45D-6724156F7220)
+All have type 15 link to self or to parent if aggregating
+Non top-level nodes have type 1 link to parent
+Top-level nodes have type 2 link to self with incrementing tag beginning zero
+Top-level nodes have type 2 link to their childen with incrementing tag beginning 65536 * depth
+
+Sources:
+
+TypeID: 0=???;
+        1 = sound recording;
+        11 = PDF;
+        5=video;
+        8=image;
+        14=dataset (spreadsheet); 
+        18=Twitter feed
