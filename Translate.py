@@ -42,8 +42,8 @@ try:
                 .values(Title = bindparam('Title')) \
                 .values(Description = bindparam('Description'))
     for project in projectRows:
-        project['Title']       = ''.join(map(lambda ch: unichr(ord(ch) + charoffset), project['Title']))
-        project['Description'] = ''.join(map(lambda ch: unichr(ord(ch) + charoffset), project['Description']))
+        project['Title']       = u''.join(map(lambda ch: unichr(ord(ch) + charoffset), project['Title']))
+        project['Description'] = u''.join(map(lambda ch: unichr(ord(ch) + charoffset), project['Description']))
         nvivodb.execute(updateSql, project)
 
     nvivoItem = nvivomd.tables.get('Item')
@@ -58,8 +58,8 @@ try:
                 .values(Name = bindparam('Name')) \
                 .values(Description = bindparam('Description'))
     for item in itemRows:
-        item['Name']       = ''.join(map(lambda ch: unichr(ord(ch) + charoffset), item['Name']))
-        item['Description'] = ''.join(map(lambda ch: unichr(ord(ch) + charoffset), item['Description']))
+        item['Name']       = u''.join(map(lambda ch: unichr(ord(ch) + charoffset), item['Name']))
+        item['Description'] = u''.join(map(lambda ch: unichr(ord(ch) + charoffset), item['Description']))
         nvivodb.execute(updateSql, item)
 
 except exc.SQLAlchemyError:
