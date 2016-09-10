@@ -65,3 +65,12 @@ TypeID: 0=???;
         8=image;
         14=dataset (spreadsheet); 
         18=Twitter feed
+
+SourceType: 2,3,4 - DOC
+   31 - MP3
+   32 - WMV
+   33 - JPEG
+   34 - PDF
+   48 - ?
+   34 - PDF
+   

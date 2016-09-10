@@ -392,6 +392,8 @@ try:
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description']))
             if source['PlainText'] != None:
                 source['Content'] = source['PlainText'].replace ('\\n', os.linesep * int(2 / len(os.linesep)))
+            else:
+                source['Content'] = None
             source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
             if (not args.no_decompress) and source['ObjectType'] == 'DOC':
                 # Object is zlib-compressed without header

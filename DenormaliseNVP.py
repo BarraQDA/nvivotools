@@ -176,6 +176,8 @@ try:
 
 # Users
     if args.users != 'skip':
+        print("Denormalising users")
+        
         normUser = normmd.tables['User']
         sel = select([normUser.c.Id,
                       normUser.c.Name])
@@ -199,7 +201,25 @@ try:
             nvivocon.execute(nvivoUserProfile.insert(), users)
 
 # Project
+    # First read existing NVivo project record to test that it is there and extract
+    # Unassigned and Not Applicable field labels.
+    nvivoproject = nvivocon.execute(select[nvivoProject.c.UnassignedLabel,
+                                           nvivoProject.c.NotApplicableLabel]).fetchone()
+    if nvivoproject == None:
+        raise RuntimeError, """
+NVivo file contains no project record. Begin denormalisation with an
+existing project or stock empty project.
+"""
+    else:
+        unassignedLabel    = nvivoproject['UnassignedLabel']
+        notapplicableLabel = nvivoproject['NotApplicableLabel']
+        if args.windows:
+            unassignedLabel    = u''.join(map(lambda ch: chr(ord(ch) + 0x377), unassignedLabel))
+            notapplicableLabel = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicableLabel))
+
     if args.project != 'skip':
+        print("Denormalising project")
+
         normProject = normmd.tables['Project']
         sel = select([normProject.c.Title,
                       normProject.c.Description,
@@ -208,35 +228,16 @@ try:
                       normProject.c.ModifiedBy,
                       normProject.c.ModifiedDate])
         projects = [dict(row) for row in normdb.execute(sel)]
-
-        if len(projects) > 0:
-            for project in projects:
-                if args.windows:
-                    project['Title']       = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Title']))
-                    project['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Description']))
-                project['Id']                = '778EAE97-4A06-4BF5-B555-A757F4CE463B'
-                project['ReadPassword']      = ''
-                project['WritePassword']     = ''
-                project['ReadPasswordHint']  = ''
-                project['WritePasswordHint'] = ''
-                project['Version']           = u'10.0.338.0'
-                project['UnassignedLabel']   = ''
-                project['NotApplicableLabel'] = ''
-                project['IndexLanguage']     = ''
-                project['EmbedSources']      = False
-                project['EmbeddedFileSizeLimitBytes'] = 0
-                project['AllowGuestAccess']  = False
-                project['EventLogging']      = False
-
-            sel = select([nvivoProject.c.Title])
-            nvivoprojects = [dict(row) for row in nvivocon.execute(sel)]
-            if len(nvivoprojects) == 1:
-                nvivocon.execute(nvivoProject.update(), projects)
-            else:
-                nvivocon.execute(nvivoProject.insert(), projects)
+        for project in projects:
+            if args.windows:
+                project['Title']       = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Title']))
+                project['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Description']))
+                
+            nvivocon.execute(nvivoProject.update(), projects)
 
 # Node Categories
     if args.node_categories != 'skip':
+        print("Denormalising node categories")
 
         # Look up head node category, fudge it if it doesn't exist.
         sel = select([nvivoItem.c.Id])
@@ -334,6 +335,7 @@ try:
 
 #Nodes
     if args.nodes != 'skip':
+        print("Denormalising nodes")
 
         # Look up head node, fudge it if it doesn't exist.
         sel = select([nvivoItem.c.Id])
@@ -461,6 +463,8 @@ try:
 
 # Node attribute values
     if args.node_attributes != 'skip':
+        print("Denormalising node attributes")
+
         normNodeAttribute = normmd.tables['NodeAttribute']
         sel = select([normNodeAttribute.c.Node,
                       normNodeAttribute.c.Name,
@@ -542,12 +546,6 @@ try:
             ))
             )
                 
-        unassignedtext    = u'Unassigned'
-        notapplicabletext = u'Not Applicable'
-        if args.windows:
-            unassignedtext    = u''.join(map(lambda ch: chr(ord(ch) + 0x377), unassignedtext))
-            notapplicabletext = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicabletext))
-
         addedattributes = []
         for nodeattribute in nodeattributes:
             nodeattribute['NodeName']          = next(node['Name']          for node in nodes if node['Id'] == nodeattribute['Node'])
@@ -612,7 +610,7 @@ try:
                     addedattributes.append({ 'CategoryId':     nodeattribute['CategoryId'],
                                              'AttributeId':    nodeattribute['AttributeId'],
                                              'DefaultValueId': nodeattribute['ValueId'] })
-                    nodeattribute['Unassigned'] = unassignedtext
+                    nodeattribute['Unassigned'] = unassignedLabel
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
                             'Name':     bindparam('Unassigned'),
@@ -634,7 +632,7 @@ try:
                             'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="True"/></Properties>\'')
                     }), nodeattribute)
                     nodeattribute['ValueId'] = uuid.uuid4()
-                    nodeattribute['NotApplicable'] = notapplicabletext
+                    nodeattribute['NotApplicable'] = notapplicableLabel
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
                             'Name':     bindparam('NotApplicable'),
@@ -751,6 +749,7 @@ try:
 
 # Source Categories
     if args.source_categories != 'skip':
+        print("Denormalising source categories")
 
         # Look up head source category, fudge it if it doesn't exist.
         sel = select([nvivoItem.c.Id])
@@ -810,7 +809,7 @@ try:
 
         if len(sourcecategories) > 0:
             nvivocon.execute(nvivoItem.insert().values({
-                        'TypeId':   literal_column('52'),
+                        'TypeId':   literal_column('51'),
                         'System':   literal_column('0'),
                         'ReadOnly': literal_column('0'),
                         'InheritPermissions': literal_column('1')
@@ -831,8 +830,8 @@ try:
                 }), sourcecategories)
 
 # Sources
-
     if args.sources != 'skip':
+        print("Denormalising sources")
 
         # Look up head source, fudge it if it doesn't exist.
         sel = select([nvivoItem.c.Id])
@@ -896,15 +895,21 @@ try:
                     para = paragraphs.appendChild(doc.createElement("Para"))
                     para.setAttribute("Pos", str(start))
                     para.setAttribute("Len", str(end - start + 1))
-                    para.setAttribute("Style", "")
+                    para.setAttribute("Style", "")   #  JS: Not always empty
                     start = end + 1
+                    
+                source['MetaData'] = paragraphs.toxml()
                     
                 if source['ObjectTypeName'] == 'PDF':
                     pages = doc.createElement("PdfPages")
                     pages.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
                     # PDF page elements need PageLength, PageOffset, PageWidth, PageHeight attributes
-
-                source['MetaData'] = paragraphs.toxml()
+                    source['MetaData'] += pages.toxml()
+                elif source['ObjectTypeName'] == 'DOC':
+                    settings = doc.createElement("DisplaySettings")
+                    settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                    settings.setAttribute("InputPosition", "0")
+                    source['MetaData'] += settings.toxml()
             else:
                 source['MetaData'] = None
                 
@@ -950,10 +955,15 @@ try:
                     'Item2_Id': bindparam('Item_Id'),
                     'TypeId':   literal_column('0')
                 }), sources)
-            nvivocon.execute(nvivoExtendedItem.insert().values({
-                    # Need to work out how to calculate PDF checksum!
-                    'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>\'')
-                }), sources)
+            if source['ObjectTypeName'] == 'PDF':
+                nvivocon.execute(nvivoExtendedItem.insert().values({
+                        # Need to work out how to calculate PDF checksum!
+                        'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>\'')
+                    }), sources)
+            else:
+                nvivocon.execute(nvivoExtendedItem.insert().values({
+                        'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"/>\'')
+                    }), sources)
 
         if len(sourceswithcategory) > 0:
             nvivocon.execute(nvivoRole.insert().values({
@@ -964,6 +974,12 @@ try:
 
 # Source attribute values
     if args.source_attributes != 'skip':
+        print("Denormalising source attributes")
+
+        sources = [dict(row) for row in nvivocon.execute(select([nvivoSource.c.Item_Id,
+                                                                 nvivoItem.  c.Name]).
+                                                         where ( nvivoItem.  c.Id == nvivoSource.c.Item_Id))]
+
         normSourceAttribute = normmd.tables['SourceAttribute']
         sel = select([normSourceAttribute.c.Source,
                       normSourceAttribute.c.Name,
@@ -1045,19 +1061,14 @@ try:
             ))
             )
 
-        unassignedtext    = u'Unassigned'
-        notapplicabletext = u'Not Applicable'
-        if args.windows:
-            unassignedtext    = u''.join(map(lambda ch: chr(ord(ch) + 0x377), unassignedtext))
-            notapplicabletext = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicabletext))
-
         addedattributes = []
         for sourceattribute in sourceattributes:
-            sourceattribute['SourceName']          = next(source['Name']          for source in sources if source['Item_Id'] == sourceattribute['Source'])
-            sourceattribute['PlainTextSourceName'] = next(source['PlainTextName'] for source in sources if source['Item_Id'] == sourceattribute['Source'])
-            sourceattribute['PlainTextName']     = sourceattribute['Name']
-            sourceattribute['PlainTextValue']    = sourceattribute['Value']
+            sourceattribute['SourceName']          = next(source['Name']          for source in sources if source['Item_Id'] == uuid.UUID(sourceattribute['Source']))
+            sourceattribute['PlainTextSourceName'] = sourceattribute['SourceName']
+            sourceattribute['PlainTextName']       = sourceattribute['Name']
+            sourceattribute['PlainTextValue']      = sourceattribute['Value']
             if args.windows:
+                sourceattribute['PlainTextSourceName'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattribute['PlainTextSourceName']))
                 sourceattribute['Name']  = u''.join(map(lambda ch: chr(ord(ch) + 0x377), sourceattribute['Name']))
                 sourceattribute['Value'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), sourceattribute['Value']))
 
@@ -1115,7 +1126,7 @@ try:
                     addedattributes.append({ 'CategoryId':     sourceattribute['CategoryId'],
                                              'AttributeId':    sourceattribute['AttributeId'],
                                              'DefaultValueId': sourceattribute['ValueId'] })
-                    sourceattribute['Unassigned'] = unassignedtext
+                    sourceattribute['Unassigned'] = unassignedLabel
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
                             'Name':     bindparam('Unassigned'),
@@ -1137,7 +1148,7 @@ try:
                             'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="True"/></Properties>\'')
                     }), sourceattribute)
                     sourceattribute['ValueId'] = uuid.uuid4()
-                    sourceattribute['NotApplicable'] = notapplicabletext
+                    sourceattribute['NotApplicable'] = notapplicableLabel
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
                             'Name':     bindparam('NotApplicable'),
