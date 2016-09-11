@@ -97,6 +97,7 @@ try:
             Column('SourceType',    Integer),
             Column('Object',        LargeBinary,    nullable=False),
             Column('Thumbnail',     LargeBinary,    nullable=False),
+            #Column('Waveform',      LargeBinary,    nullable=False),
             Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
             Column('CreatedDate',   DateTime),
             Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
@@ -179,8 +180,30 @@ try:
 
     normmd.create_all(normdb)
 
+# Users
+    if args.users != 'skip':
+        print("Normalising users")
+        
+        nvivoUserProfile = nvivomd.tables['UserProfile']
+
+        sel = select([nvivoUserProfile.c.Id,
+                      nvivoUserProfile.c.Name])
+
+        users = [dict(row) for row in nvivodb.execute(sel)]
+
+        if args.users == 'replace':
+            normdb.execute(normUser.delete())
+        elif args.users == 'merge':
+            normdb.execute(normUser.delete(normSource.c.Id == bindparam('Id')),
+                           users)
+
+        if len(users) > 0:
+            normdb.execute(normUser.insert(), users)
+
 # Project
     if args.project != 'skip':
+        print("Normalising project")
+        
         nvivoProject = nvivomd.tables['Project']
         sel = select([nvivoProject.c.Title,
                       nvivoProject.c.Description,
@@ -200,6 +223,8 @@ try:
 
 # Node Categories
     if args.node_categories != 'skip':
+        print("Normalising node categories")
+        
         nvivoItem       = nvivomd.tables['Item']
         nvivoRole       = nvivomd.tables['Role']
 
@@ -228,6 +253,8 @@ try:
 
 # Nodes
     if args.nodes != 'skip':
+        print("Normalising nodes")
+        
         nvivoItem         = nvivomd.tables['Item']
         nvivoCategoryRole = nvivomd.tables['Role'].alias(name='CategoryRole')
         nvivoParentRole   = nvivomd.tables['Role'].alias(name='ParentRole')
@@ -246,6 +273,7 @@ try:
                     nvivoParentRole.c.Item1_Id.label('Parent')]
               ).where(or_(
                     nvivoItem.c.TypeId == literal_column('16'),
+                    nvivoItem.c.TypeId == literal_column('14'),
                     nvivoItem.c.TypeId == literal_column('62'))
               ).select_from(nvivoItem.outerjoin(
                     nvivoCategoryRole, and_(
@@ -271,8 +299,10 @@ try:
         if len(nodes) > 0:
             normdb.execute(normNode.insert(), nodes)
 
-# Node attribute values
+# Node attributes
     if args.node_attributes != 'skip':
+        print("Normalising node attributes")
+        
         nvivoNodeItem     = nvivomd.tables['Item'].alias(name='NodeItem')
         nvivoNameItem     = nvivomd.tables['Item'].alias(name='NameItem')
         nvivoNameRole     = nvivomd.tables['Role'].alias(name='NameRole')
@@ -328,6 +358,8 @@ try:
 
 # Source categories
     if args.source_categories != 'skip':
+        print("Normalising source categories")
+        
         nvivoItem       = nvivomd.tables['Item']
         nvivoRole       = nvivomd.tables['Role']
 
@@ -356,6 +388,8 @@ try:
 
 # Sources
     if args.sources != 'skip':
+        print("Normalising sources")
+        
         nvivoSource       = nvivomd.tables['Source']
         nvivoItem         = nvivomd.tables['Item']
         nvivoCategoryRole = nvivomd.tables['Role'].alias(name='CategoryRole')
@@ -372,6 +406,7 @@ try:
                     nvivoSource.c.PlainText,
                     nvivoSource.c.MetaData,
                     nvivoSource.c.Thumbnail,
+                    nvivoSource.c.Waveform,
                     nvivoItem.c.TypeId.label('SourceType'),
                     nvivoItem.c.CreatedBy,
                     nvivoItem.c.CreatedDate,
@@ -390,14 +425,17 @@ try:
             if args.windows:
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Name']))
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description']))
+                
             if source['PlainText'] != None:
-                source['Content'] = source['PlainText'].replace ('\\n', os.linesep * int(2 / len(os.linesep)))
+                #source['Content'] = source['PlainText'].replace ('\\n', os.linesep * int(2 / len(os.linesep)))
+                source['Content'] = source['PlainText']
             else:
                 source['Content'] = None
+                
             source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
+
             if (not args.no_decompress) and source['ObjectType'] == 'DOC':
                 # Object is zlib-compressed without header
-                print ("Decompressing")
                 source['Object'] = zlib.decompress(source['Object'], -15)
 
         if args.sources == 'replace':
@@ -409,8 +447,10 @@ try:
         if len(sources) > 0:
             normdb.execute(normSource.insert(), sources)
 
-# Source attribute values
+# Source attributes
     if args.source_attributes != 'skip':
+        print("Normalising source attributes")
+        
         nvivoItem         = nvivomd.tables['Item']
         nvivoRole         = nvivomd.tables['Role']
         nvivoSource       = nvivomd.tables['Source']
@@ -465,12 +505,17 @@ try:
 
 # Tagging
     if args.taggings != 'skip':
+        print("Normalising taggings")
+        
         nvivoNodeReference = nvivomd.tables['NodeReference']
 
         sel = select([nvivoNodeReference.c.Source_Item_Id.label('Source'),
                       nvivoNodeReference.c.Node_Item_Id.label('Node'),
                       nvivoNodeReference.c.StartX,
                       nvivoNodeReference.c.LengthX,
+                      nvivoNodeReference.c.StartY,
+                      nvivoNodeReference.c.LengthY,
+                      nvivoNodeReference.c.StartZ,
                       nvivoNodeReference.c.CreatedBy,
                       nvivoNodeReference.c.CreatedDate,
                       nvivoNodeReference.c.ModifiedBy,
@@ -480,7 +525,13 @@ try:
 
         taggings  = [dict(row) for row in nvivodb.execute(sel)]
         for tagging in taggings:
-            tagging['Fragment'] = str(tagging['StartX']) + ':' + str(tagging['StartX'] + tagging['LengthX'] - 1);
+            #if tagging['StartZ'] != None:
+                #next
+            tagging['Fragment'] = str(tagging['StartX']) + ':' + str(tagging['StartX'] + tagging['LengthX'] - 1)
+            if tagging['StartY'] != None:
+                tagging['Fragment'] += ',' + str(tagging['StartY'])
+                if tagging['LengthY'] > 0:
+                    tagging['Fragment'] += ':' + str(tagging['StartY'] + tagging['LengthY'] - 1)
 
         if args.taggings == 'replace':
             normdb.execute(normTagging.delete(
@@ -498,12 +549,16 @@ try:
 
 # Annotations
     if args.annotations != 'skip':
+        print("Normalising annotations")
+        
         nvivoAnnotation = nvivomd.tables['Annotation']
 
         sel = select([nvivoAnnotation.c.Item_Id.label('Source'),
                       nvivoAnnotation.c.Text.label('Memo'),
                       nvivoAnnotation.c.StartX,
                       nvivoAnnotation.c.LengthX,
+                      nvivoAnnotation.c.StartY,
+                      nvivoAnnotation.c.LengthY,
                       nvivoAnnotation.c.CreatedBy,
                       nvivoAnnotation.c.CreatedDate,
                       nvivoAnnotation.c.ModifiedBy,
@@ -512,6 +567,10 @@ try:
         annotations  = [dict(row) for row in nvivodb.execute(sel)]
         for annotation in annotations:
             annotation['Fragment'] = str(annotation['StartX']) + ':' + str(annotation['StartX'] + annotation['LengthX'] - 1);
+            if annotation['StartY'] != None:
+                annotation['Fragment'] += ',' + str(annotation['StartY'])
+                if annotation['LengthY'] > 0:
+                    annotation['Fragment'] += ':' + str(annotation['StartY'] + annotation['LengthY'] - 1)
 
         if args.annotations == 'replace':
             normdb.execute(normTagging.delete(
@@ -526,25 +585,6 @@ try:
 
         if len(annotations) > 0:
             normdb.execute(normTagging.insert(), annotations)
-
-# Users
-
-    if args.users != 'skip':
-        nvivoUserProfile = nvivomd.tables['UserProfile']
-
-        sel = select([nvivoUserProfile.c.Id,
-                      nvivoUserProfile.c.Name])
-
-        users = [dict(row) for row in nvivodb.execute(sel)]
-
-        if args.users == 'replace':
-            normdb.execute(normUser.delete())
-        elif args.users == 'merge':
-            normdb.execute(normUser.delete(normSource.c.Id == bindparam('Id')),
-                           users)
-
-        if len(users) > 0:
-            normdb.execute(normUser.insert(), users)
 
 except exc.SQLAlchemyError:
     raise

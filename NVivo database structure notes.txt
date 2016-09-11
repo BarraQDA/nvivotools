@@ -9,7 +9,7 @@ Item.TypeID
 33 - Source - ?
 34 - Source - Online?
 48 - Source - ?
-14 - ? Query/Report something?
+14 - Connected with node matrix
 16 - Node (NVivo 10), : NVivo11 also uses 62?
 17 - Node Matrix
 24 - Matrix Coding Query

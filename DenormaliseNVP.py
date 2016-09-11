@@ -203,8 +203,8 @@ try:
 # Project
     # First read existing NVivo project record to test that it is there and extract
     # Unassigned and Not Applicable field labels.
-    nvivoproject = nvivocon.execute(select[nvivoProject.c.UnassignedLabel,
-                                           nvivoProject.c.NotApplicableLabel]).fetchone()
+    nvivoproject = nvivocon.execute(select([nvivoProject.c.UnassignedLabel,
+                                            nvivoProject.c.NotApplicableLabel])).fetchone()
     if nvivoproject == None:
         raise RuntimeError, """
 NVivo file contains no project record. Begin denormalisation with an
@@ -391,8 +391,11 @@ existing project or stock empty project.
         tagchildnodes(None, None, [], 0)
         aggregatepairs = []
         for node in nodes:
-            for dest in node['AggregateList']:
-                aggregatepairs += [{ 'Id': node['Id'], 'Ancestor': dest }]
+            if not node.has_key('AggregateList'):
+                print node
+            else:
+                for dest in node['AggregateList']:
+                    aggregatepairs += [{ 'Id': node['Id'], 'Ancestor': dest }]
 
         nodeswithparent   = [dict(row) for row in nodes if row['Parent']   != None]
         nodeswithcategory = [dict(row) for row in nodes if row['Category'] != None]
@@ -402,7 +405,10 @@ existing project or stock empty project.
                       nvivoRole.c.Item2_Id,
                       nvivoRole.c.TypeId])
         sel = sel.where(and_(
-                        or_(nvivoItem.c.TypeId == literal_column('16'), nvivoItem.c.TypeId == literal_column('62')),
+                        or_(
+                            nvivoItem.c.TypeId == literal_column('16'), 
+                            nvivoItem.c.TypeId == literal_column('14'), 
+                            nvivoItem.c.TypeId == literal_column('62')),
                         nvivoRole.c.TypeId == literal_column('14'),
                         nvivoRole.c.Item1_Id == nvivoItem.c.Id))
 
@@ -461,7 +467,7 @@ existing project or stock empty project.
                     'TypeId':   literal_column('15')
                 }), aggregatepairs)
 
-# Node attribute values
+# Node attributes
     if args.node_attributes != 'skip':
         print("Denormalising node attributes")
 
@@ -687,7 +693,7 @@ existing project or stock empty project.
                                 'Item2_Id': bindparam('ExistingValueId'),
                                 'TypeId':   literal_column('7')
                             }), nodeattribute )
-                    print("Assigning value '" + nodeattribute['PlainTextValue'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
+                    #print("Assigning value '" + nodeattribute['PlainTextValue'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Node'),
                             'Item2_Id': bindparam('NewValueId'),
@@ -747,7 +753,7 @@ existing project or stock empty project.
                             'TypeId':   literal_column('7')
                         }), attribute )
 
-# Source Categories
+# Source categories
     if args.source_categories != 'skip':
         print("Denormalising source categories")
 
@@ -868,21 +874,19 @@ existing project or stock empty project.
             if args.windows:
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description']))
+                
             if source['Content'] != None:
-                source['PlainText'] = source['Content'].replace (os.linesep * int(2 / len(os.linesep)), '\\n')
+                #source['PlainText'] = source['Content'].replace (os.linesep * int(2 / len(os.linesep)), '\\n')
+                source['PlainText'] = source['Content']
             else:
                 source['PlainText'] = None
+                
+            # Lookup object type from name
             if source['ObjectTypeName'] in ObjectTypeName.values():
                 source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])]
             else:
                 source['ObjectType'] = int(source['ObjectTypeName'])
-            if source['ObjectTypeName'] == 'DOC':
-                # Compress object using zlib without header
-                if int(args.compress_level) != 0:
-                    print ("Compressing with level " + args.compress_level)
-                    compressor = zlib.compressobj(int(args.compress_level), zlib.DEFLATED, -15)
-                    source['Object'] = compressor.compress(source['Object']) + compressor.flush()
-                
+
             if source['Content'] != None:
                 doc = Document()
                 paragraphs = doc.createElement("Paragraphs")
@@ -895,25 +899,45 @@ existing project or stock empty project.
                     para = paragraphs.appendChild(doc.createElement("Para"))
                     para.setAttribute("Pos", str(start))
                     para.setAttribute("Len", str(end - start + 1))
-                    para.setAttribute("Style", "")   #  JS: Not always empty
+                    if source['ObjectTypeName'] == 'DOC':
+                        para.setAttribute("Style", "Normal")
+                    else:
+                        para.setAttribute("Style", "")
                     start = end + 1
                     
                 source['MetaData'] = paragraphs.toxml()
-                    
-                if source['ObjectTypeName'] == 'PDF':
-                    pages = doc.createElement("PdfPages")
-                    pages.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-                    # PDF page elements need PageLength, PageOffset, PageWidth, PageHeight attributes
-                    source['MetaData'] += pages.toxml()
-                elif source['ObjectTypeName'] == 'DOC':
-                    settings = doc.createElement("DisplaySettings")
-                    settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-                    settings.setAttribute("InputPosition", "0")
-                    source['MetaData'] += settings.toxml()
             else:
                 source['MetaData'] = None
-                
-
+                    
+            if source['ObjectTypeName'] == 'PDF':
+                source['LengthX'] = 0
+                pages = doc.createElement("PdfPages")
+                pages.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                # JS: PDF page elements also need PageLength, PageOffset, PageWidth, PageHeight attributes
+                source['MetaData'] += pages.toxml()
+            elif source['ObjectTypeName'] == 'DOC':
+                source['LengthX'] = 0
+                settings = doc.createElement("DisplaySettings")
+                settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                settings.setAttribute("InputPosition", "0")
+                source['MetaData'] += settings.toxml()
+                # Compress object using zlib without header
+                if int(args.compress_level) != 0:
+                    print ("Compressing with level " + args.compress_level)
+                    compressor = zlib.compressobj(int(args.compress_level), zlib.DEFLATED, -15)
+                    source['Object'] = compressor.compress(source['Object']) + compressor.flush()
+            else:
+                source['LengthX'] = 0
+            #elif source['ObjectTypeName'] == 'JPEG':
+                #source['LengthX'] = width of image
+                #source['LengthY'] = height of image
+            #elif source['ObjectTypeName'] == 'MP3':
+                #source['LengthX'] = length of recording in milliseconds
+                #source['Waveform'] = waveform of recording, one byte per centisecond
+            #elif source['ObjectTypeName'] == 'WMV':
+                #source['LengthX'] = length of recording in milliseconds
+                #source['Waveform'] = waveform of recording, one byte per centisecond
+                    
         sourceswithcategory = [dict(row) for row in sources if row['Category'] != None]
 
         sourcestodelete = nvivocon.execute(select([nvivoSource.c.Item_Id]))
@@ -948,7 +972,6 @@ existing project or stock empty project.
                                              bindparam('Object')),
                     'Thumbnail': func.CONVERT(literal_column('VARBINARY(MAX)'),
                                              bindparam('Thumbnail')),
-                    'LengthX':  literal_column('0')
                 }), sources)
             nvivocon.execute(nvivoRole.insert().values({
                     'Item1_Id': literal_column('\'' + str(headsource['Id']) + '\''),
@@ -972,7 +995,7 @@ existing project or stock empty project.
                     'TypeId':   literal_column('14')
                 }), sourceswithcategory)
 
-# Source attribute values
+# Source attributes
     if args.source_attributes != 'skip':
         print("Denormalising source attributes")
 
@@ -1203,7 +1226,7 @@ existing project or stock empty project.
                                 'Item2_Id': bindparam('ExistingValueId'),
                                 'TypeId':   literal_column('7')
                             }), sourceattribute )
-                    print("Assigning value '" + sourceattribute['PlainTextValue'] + "' for attribute '" + sourceattribute['PlainTextName'] + "' for source '" + sourceattribute['PlainTextSourceName'] + "'")
+                    #print("Assigning value '" + sourceattribute['PlainTextValue'] + "' for attribute '" + sourceattribute['PlainTextName'] + "' for source '" + sourceattribute['PlainTextSourceName'] + "'")
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Source'),
                             'Item2_Id': bindparam('NewValueId'),
@@ -1263,287 +1286,88 @@ existing project or stock empty project.
                             'TypeId':   literal_column('7')
                         }), attribute )
 
-    nvivotr.commit()
-    sys.exit()
+# Taggings
+    if args.taggings != 'skip':
+        print("Denormalising taggings")
 
-    sourceattrs = norm.execute ('''
-                    SELECT
-                        Source,
-                        Name,
-                        Value,
-                        CreatedBy,
-                        CreatedDate,
-                        ModifiedBy,
-                        ModifiedDate
-                    FROM
-                        SourceAttribute
-        ''')
+        normTagging = normmd.tables['Tagging']
+        taggings = [dict(row) for row in normdb.execute(select([
+                normTagging.c.Source,
+                normTagging.c.Node,
+                normTagging.c.Memo,
+                normTagging.c.Fragment,
+                normTagging.c.CreatedBy,
+                normTagging.c.CreatedDate,
+                normTagging.c.ModifiedBy,
+                normTagging.c.ModifiedDate]).where(
+                normTagging.c.Node != None))]
+            
+        for tagging in taggings:
+            matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
+            tagging['StartX'] = int(matchfragment.group(1))
+            tagging['LengthX'] = int(matchfragment.group(2)) - tagging['StartX'] + 1
+            tagging['StartY'] = None
+            tagging['LengthY'] = None
+            startY = matchfragment.group(3)
+            if startY != None:
+                tagging['StartY'] = int(startY)
+                endY = matchfragment.group(4)
+                if endY != None:
+                    tagging['LengthY'] = int(endY) - tagging['StartY'] + 1
+                    tagging['OfX'] = tagging['StartX']
 
-    if args.windows:
-        sourceattrs = [dict(row) for row in sourceattrs]
-        for sourceattr in sourceattrs:
-            sourceattr['Name']  = u''.join(map(lambda ch: chr(ord(ch) + 0x377), sourceattr['Name']))
-            sourceattr['Value'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), sourceattr['Value']))
+            tagging['Id'] = uuid.uuid4()  # Not clear what purpose this field serves
+            
+            if tagging['Memo'] != None:
+                print("Warning - Tagging contains memo - memo will be lost.")
 
-    for sourceattr in sourceattrs:
-        nameuuid  = str(uuid.uuid4()).lower()
-        valueuuid = str(uuid.uuid4()).lower()
+        nvivocon.execute(nvivoNodeReference.insert().values({
+                    'Node_Item_Id':     bindparam('Node'),
+                    'Source_Item_Id':   bindparam('Source'),
+                    'ReferenceTypeId':  literal_column('0')
+            }), taggings)
 
-        # Name item
-        nvivo.execute ('''
-                    INSERT INTO
-                        Item
-                    (
-                        Id,
-                        TypeId,
-                        Name,
-                        Description,
-                        CreatedBy,
-                        CreatedDate,
-                        ModifiedBy,
-                        ModifiedDate
-                    ) VALUES (
-                        :Id,
-                        20,
-                        :Name,
-                        '',
-                        :CreatedBy,
-                        :CreatedDate,
-                        :ModifiedBy,
-                        :ModifiedDate
-                    )
-                ''',
-                    {
-                        'Id':nameuuid,
-                        'Name':sourceattr['Name'],
-                        'CreatedBy':sourceattr['CreatedBy'],
-                        'CreatedDate':sourceattr['CreatedDate'],
-                        'ModifiedBy':sourceattr['ModifiedBy'],
-                        'ModifiedDate':sourceattr['ModifiedDate']
-                    }
-            )
-        # Value item
-        nvivo.execute ('''
-                    INSERT INTO
-                        Item
-                    (
-                        Id,
-                        TypeId,
-                        Name,
-                        Description,
-                        CreatedBy,
-                        CreatedDate,
-                        ModifiedBy,
-                        ModifiedDate
-                    ) VALUES (
-                        :Id,
-                        21,
-                        :Name,
-                        '',
-                        :CreatedBy,
-                        :CreatedDate,
-                        :ModifiedBy,
-                        :ModifiedDate
-                    )
-                ''',
-                    {
-                        'Id':valueuuid,
-                        'Name':sourceattr['Value'],
-                        'CreatedBy':sourceattr['CreatedBy'],
-                        'CreatedDate':sourceattr['CreatedDate'],
-                        'ModifiedBy':sourceattr['ModifiedBy'],
-                        'ModifiedDate':sourceattr['ModifiedDate']
-                    }
-            )
-        # Name role
-        nvivo.execute ('''
-                    INSERT INTO
-                        Role
-                    (
-                        Item1_Id,
-                        TypeId,
-                        Item2_Id,
-                        Tag
-                    ) VALUES (
-                        :Item1_Id,
-                        6,
-                        :Item2_Id,
-                        0
-                    )
-                ''',
-                    {
-                        'Item1_Id':nameuuid,
-                        'Item2_Id':valueuuid
-                    }
-            )
-        # Value role
-        nvivo.execute ('''
-                    INSERT INTO
-                        Role
-                    (
-                        Item1_Id,
-                        TypeId,
-                        Item2_Id,
-                        Tag
-                    ) VALUES (
-                        :Item1_Id,
-                        7,
-                        :Item2_Id,
-                        0
-                    )
-                ''',
-                    {
-                        'Item1_Id':sourceattr['Source'],
-                        'Item2_Id':valueuuid
-                    }
-            )
+# Annotations
+    if args.annotations != 'skip':
+        print("Denormalising annotations")
 
-# Tagging and annotations
+        normTagging = normmd.tables['Tagging']
+        annotations = [dict(row) for row in normdb.execute(select([
+                normTagging.c.Source,
+                normTagging.c.Node,
+                normTagging.c.Memo,
+                normTagging.c.Fragment,
+                normTagging.c.CreatedBy,
+                normTagging.c.CreatedDate,
+                normTagging.c.ModifiedBy,
+                normTagging.c.ModifiedDate]).where(
+                normTagging.c.Node == None))]
+            
+        for annotation in annotations:
+            matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", annotation['Fragment'])
+            annotation['StartX'] = int(matchfragment.group(1))
+            annotation['LengthX'] = int(matchfragment.group(2)) - annotation['StartX'] + 1
+            annotation['StartY'] = None
+            annotation['LengthY'] = None
+            startY = matchfragment.group(3)
+            if startY != None:
+                annotation['StartY'] = int(startY)
+                endY = matchfragment.group(4)
+                if endY != None:
+                    annotation['LengthY'] = int(endY) - annotation['StartY'] + 1
 
-    taggings = norm.execute('''
-                    SELECT
-                        Source,
-                        Node,
-                        Memo,
-                        Fragment,
-                        CreatedBy,
-                        CreatedDate,
-                        ModifiedBy,
-                        ModifiedDate
-                    FROM
-                        Tagging
-        ''')
+            annotation['Id'] = uuid.uuid4()  # Not clear what purpose this field serves
 
-    for tagging in taggings:
-        matchfragment = re.match("([0-9]+):([0-9]+)", tagging['Fragment'])
-        startX = int(matchfragment.group(1))
-        endX = int(matchfragment.group(2))
-        lengthX = endX - startX + 1
-
-        annotationuuid  = str(uuid.uuid4()).lower() # Not clear what purpose this field serves
-
-        # If no node then this is what NVivo calls an annotation
-        if tagging['Node'] == None:
-            nvivo.execute ('''
-                    INSERT INTO
-                        Annotation
-                    (
-                        Id,
-                        Item_Id,
-                        Text,
-                        ReferenceTypeId,
-                        StartX,
-                        LengthX,
-                        StartY,
-                        LengthY,
-                        CreatedBy,
-                        CreatedDate,
-                        ModifiedBy,
-                        ModifiedDate
-                    ) VALUES (
-                        :Id,
-                        :Item1_Id,
-                        :Memo,
-                        0,
-                        :StartX,
-                        :LengthX,
-                        0,
-                        0,
-                        :CreatedBy,
-                        :CreatedDate,
-                        :ModifiedBy,
-                        :ModifiedDate
-                    )
-                    ''',
-                    {
-                        'Id':annotationuuid,
-                        'Item1_Id':tagging['Source'],
-                        'Memo':tagging['Memo'],
-                        'StartX':startX,
-                        'LengthX':lengthX,
-                        'CreatedBy':tagging['CreatedBy'],
-                        'CreatedDate':tagging['CreatedDate'],
-                        'ModifiedBy':tagging['ModifiedBy'],
-                        'ModifiedDate':tagging['ModifiedDate']
-                    }
-                )
-        # Otherwise this is a tagging and memo will be lost.
-        else:
-            nvivo.execute ('''
-                    INSERT INTO
-                        NodeReference
-                    (
-                        Id,
-                        Node_Item_Id,
-                        Source_Item_Id,
-                        ReferenceTypeId,
-                        StartX,
-                        LengthX,
-                        StartY,
-                        LengthY,
-                        CreatedBy,
-                        CreatedDate,
-                        ModifiedBy,
-                        ModifiedDate
-                    ) VALUES (
-                        :Id,
-                        :Node_Item_Id,
-                        :Source_Item_Id,
-                        0,
-                        :StartX,
-                        :LengthX,
-                        0,
-                        0,
-                        :CreatedBy,
-                        :CreatedDate,
-                        :ModifiedBy,
-                        :ModifiedDate
-                    )
-                    ''',
-                    {
-                        'Id':annotationuuid,
-                        'Node_Item_Id':tagging['Node'],
-                        'Source_Item_Id':tagging['Source'],
-                        'StartX':startX,
-                        'LengthX':lengthX,
-                        'CreatedBy':tagging['CreatedBy'],
-                        'CreatedDate':tagging['CreatedDate'],
-                        'ModifiedBy':tagging['ModifiedBy'],
-                        'ModifiedDate':tagging['ModifiedDate']
-                    }
-                )
-
-    # Users
-    users = norm.execute('''
-                    SELECT
-                        Id,
-                        Name
-                    FROM
-                        User
-                                         ''')
-
-    for user in users:
-        nvivo.execute ('''
-                    INSERT INTO
-                        UserProfile
-                    (
-                        Id,
-                        Initials,
-                        Name
-                    ) VALUES (
-                        :Id,
-                        :Initials,
-                        :Name
-                    )
-                    ''',
-                    {
-                        'Id':user['Id'],
-                        'Initials':u''.join(partname[0].upper() for partname in user['Name'].split()),
-                        'Name':user['Name']
-                    }
-                )
+        nvivocon.execute(nvivoAnnotation.insert().values({
+                    'Item_Id':          bindparam('Source'),
+                    'Text':             bindparam('Memo'),
+                    # JS: Need to figure out ReferenceTypeId column
+                    'ReferenceTypeId':  literal_column('0')
+            }), annotations)
 
 # All done.
+    
+    nvivotr.commit()
 
 except exc.SQLAlchemyError:
     if nvivotr != None:
