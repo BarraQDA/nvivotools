@@ -273,7 +273,6 @@ try:
                     nvivoParentRole.c.Item1_Id.label('Parent')]
               ).where(or_(
                     nvivoItem.c.TypeId == literal_column('16'),
-                    nvivoItem.c.TypeId == literal_column('14'),
                     nvivoItem.c.TypeId == literal_column('62'))
               ).select_from(nvivoItem.outerjoin(
                     nvivoCategoryRole, and_(
@@ -519,14 +518,20 @@ try:
                       nvivoNodeReference.c.CreatedBy,
                       nvivoNodeReference.c.CreatedDate,
                       nvivoNodeReference.c.ModifiedBy,
-                      nvivoNodeReference.c.ModifiedDate])
-        sel = sel.where(
-                      nvivoNodeReference.c.ReferenceTypeId == literal_column('0'))
+                      nvivoNodeReference.c.ModifiedDate,
+                      nvivoItem.c.TypeId])
+        sel = sel.where(and_(
+                      nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
+                      nvivoItem.c.Id == nvivoNodeReference.c.Node_Item_Id,
+                      or_(
+                        nvivoItem.c.TypeId == literal_column('16'),
+                        nvivoItem.c.TypeId == literal_column('62'))))
 
         taggings  = [dict(row) for row in nvivodb.execute(sel)]
         for tagging in taggings:
-            #if tagging['StartZ'] != None:
-                #next
+            # JS: Should be able to do this in select statement - figure out how!
+            if tagging['StartZ'] != None:
+                next
             tagging['Fragment'] = str(tagging['StartX']) + ':' + str(tagging['StartX'] + tagging['LengthX'] - 1)
             if tagging['StartY'] != None:
                 tagging['Fragment'] += ',' + str(tagging['StartY'])

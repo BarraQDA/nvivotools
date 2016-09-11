@@ -391,11 +391,8 @@ existing project or stock empty project.
         tagchildnodes(None, None, [], 0)
         aggregatepairs = []
         for node in nodes:
-            if not node.has_key('AggregateList'):
-                print node
-            else:
-                for dest in node['AggregateList']:
-                    aggregatepairs += [{ 'Id': node['Id'], 'Ancestor': dest }]
+            for dest in node['AggregateList']:
+                aggregatepairs += [{ 'Id': node['Id'], 'Ancestor': dest }]
 
         nodeswithparent   = [dict(row) for row in nodes if row['Parent']   != None]
         nodeswithcategory = [dict(row) for row in nodes if row['Category'] != None]
@@ -407,7 +404,6 @@ existing project or stock empty project.
         sel = sel.where(and_(
                         or_(
                             nvivoItem.c.TypeId == literal_column('16'), 
-                            nvivoItem.c.TypeId == literal_column('14'), 
                             nvivoItem.c.TypeId == literal_column('62')),
                         nvivoRole.c.TypeId == literal_column('14'),
                         nvivoRole.c.Item1_Id == nvivoItem.c.Id))
@@ -1304,6 +1300,9 @@ existing project or stock empty project.
             
         for tagging in taggings:
             matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
+            if matchfragment == None:
+                raise RuntimeError, "ERROR: Unrecognised tagging fragment: " + tagging['Fragment']
+
             tagging['StartX'] = int(matchfragment.group(1))
             tagging['LengthX'] = int(matchfragment.group(2)) - tagging['StartX'] + 1
             tagging['StartY'] = None
@@ -1345,6 +1344,9 @@ existing project or stock empty project.
             
         for annotation in annotations:
             matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", annotation['Fragment'])
+            if matchfragment == None:
+                raise RuntimeError, "ERROR: Unrecognised annotation fragment: " + annotation['Fragment']
+            
             annotation['StartX'] = int(matchfragment.group(1))
             annotation['LengthX'] = int(matchfragment.group(2)) - annotation['StartX'] + 1
             annotation['StartY'] = None
