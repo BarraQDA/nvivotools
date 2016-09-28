@@ -12,6 +12,12 @@ import argparse
 import uuid
 import re
 import zlib
+from PIL import Image
+import StringIO
+from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
+from pdfminer.converter import TextConverter
+from pdfminer.layout import LAParams
+from pdfminer.pdfpage import PDFPage
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
 
@@ -922,17 +928,17 @@ existing project or stock empty project.
                     print ("Compressing with level " + args.compress_level)
                     compressor = zlib.compressobj(int(args.compress_level), zlib.DEFLATED, -15)
                     source['Object'] = compressor.compress(source['Object']) + compressor.flush()
-            else:
-                source['LengthX'] = 0
-            #elif source['ObjectTypeName'] == 'JPEG':
-                #source['LengthX'] = width of image
-                #source['LengthY'] = height of image
+            elif source['ObjectTypeName'] == 'JPEG':
+                image = Image.open(StringIO.StringIO(source['Object']))
+                source['LengthX'], source['LengthY'] = image.size
             #elif source['ObjectTypeName'] == 'MP3':
                 #source['LengthX'] = length of recording in milliseconds
                 #source['Waveform'] = waveform of recording, one byte per centisecond
             #elif source['ObjectTypeName'] == 'WMV':
                 #source['LengthX'] = length of recording in milliseconds
                 #source['Waveform'] = waveform of recording, one byte per centisecond
+            else:
+                source['LengthX'] = 0
                     
         sourceswithcategory = [dict(row) for row in sources if row['Category'] != None]
 
