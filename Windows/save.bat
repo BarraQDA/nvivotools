@@ -1,7 +1,7 @@
 @echo off
 set DB=%2
 IF "%DB%"=="" (
-    set DB=NVivo
+    set DB=nvivo
     )
 set INSTANCE=%3
 IF "%INSTANCE%"=="" (
@@ -13,4 +13,4 @@ FOR /F "tokens=* USEBACKQ" %%F IN (`sqlcmd -W -S %server% -h -1 -Q "SET NOCOUNT 
 SET FILENAME=%%F
 )
 sqlcmd -S %server% -Q "EXEC sp_detach_db %DB%"
-copy "%FILENAME%" "%~1"
+copy "%FILENAME%" "%~1" >nul

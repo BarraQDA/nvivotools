@@ -1,7 +1,7 @@
 @echo off
 set DB=%1
 IF "%DB%"=="" (
-    set DB=NVivo
+    set DB=nvivo
     )
 
     set INSTANCE=%2
