@@ -74,3 +74,12 @@ SourceType: 2,3,4 - DOC
    48 - ?
    34 - PDF
    
+CompoundSourceRegion:
+
+ItemId refers to source
+
+Noderefernce.startX/lengthX refer to transcript (?), compoundsourceregion.start{X,Y}/length{X,Y}
+refer to media.
+
+
+
