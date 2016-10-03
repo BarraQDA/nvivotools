@@ -14,10 +14,12 @@ import re
 import zlib
 from PIL import Image
 import StringIO
+import tempfile
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.converter import TextConverter
 from pdfminer.layout import LAParams
 from pdfminer.pdfpage import PDFPage
+from cStringIO import StringIO
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
 
@@ -860,7 +862,7 @@ existing project or stock empty project.
                       normSource.c.Color,
                       normSource.c.Content,
                       normSource.c.ObjectType.label('ObjectTypeName'),
-                      normSource.c.SourceType,
+                      #normSource.c.SourceType,
                       normSource.c.Object,
                       normSource.c.Thumbnail,
                       normSource.c.CreatedBy,
@@ -870,6 +872,7 @@ existing project or stock empty project.
         sources = [dict(row) for row in normdb.execute(sel)]
 
         for source in sources:
+            
             if source['Item_Id'] == None:
                 source['Item_Id'] = uuid.uuid4()
             source['PlainTextName'] = source['Name']
@@ -877,46 +880,72 @@ existing project or stock empty project.
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description']))
                 
-            if source['Content'] != None:
-                #source['PlainText'] = source['Content'].replace (os.linesep * int(2 / len(os.linesep)), '\\n')
-                source['PlainText'] = source['Content']
-            else:
-                source['PlainText'] = None
-                
             # Lookup object type from name
             if source['ObjectTypeName'] in ObjectTypeName.values():
                 source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])]
             else:
                 source['ObjectType'] = int(source['ObjectTypeName'])
 
-            if source['Content'] != None:
+            #if source['Content'] != None:
+                #source['PlainText'] = source['Content']
+            #else:
+                #source['PlainText'] = None
+                    
+            if source['ObjectTypeName'] == 'PDF':
+                source['SourceType'] = 34
+                source['LengthX'] = 0
+                
                 doc = Document()
+                pages = doc.createElement("PdfPages")
+                pages.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                
+                tmpfilename = tempfile.mktemp()
+                tmpfileptr  = file(tmpfilename, 'wb')
+                tmpfileptr.write(source['Object'])
+                tmpfileptr.close()
+                rsrcmgr = PDFResourceManager()
+                retstr = StringIO()
+                laparams = LAParams()
+                device = TextConverter(rsrcmgr, retstr, codec='utf-8', laparams=laparams)
+                tmpfileptr = file(tmpfilename, 'rb')
+                interpreter = PDFPageInterpreter(rsrcmgr, device)
+                pagenos = set()
+                pdfpages = PDFPage.get_pages(tmpfileptr, password='', check_extractable=True)
+                pageoffset = 0
+                pdfstr = u''
+                for pdfpage in pdfpages:
+                    mediabox   = pdfpage.attrs['MediaBox']
+                    
+                    interpreter.process_page(pdfpage)
+                    pageelement = pages.appendChild(doc.createElement("PdfPage"))
+                    pageelement.setAttribute("PageLength", str(retstr.tell()))
+                    pageelement.setAttribute("PageOffset", str(pageoffset))
+                    pageelement.setAttribute("PageWidth",  str(int(mediabox[2] - mediabox[0])))
+                    pageelement.setAttribute("PageHeight", str(int(mediabox[3] - mediabox[1])))
+                    
+                    pagestr = unicode(retstr.getvalue().replace('\n\n', '\l').replace('\n', ' ').replace('\l','\n'), 'utf-8')
+                    retstr.truncate(0)
+                    pdfstr += pagestr
+                    pageoffset += len(pagestr)
+                                        
+                source['PlainText'] = pdfstr
+                tmpfileptr.close()
+                os.remove(tmpfilename)
+                
                 paragraphs = doc.createElement("Paragraphs")
                 paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
                 start = 0
-                while start < len(source['Content']):
-                    end = source['Content'].find('\n', start)
+                while start < len(source['PlainText']):
+                    end = source['PlainText'].find('\n', start)
                     if end == -1:
-                        end = len(source['Content']) - 1
+                        end = len(source['PlainText']) - 1
                     para = paragraphs.appendChild(doc.createElement("Para"))
                     para.setAttribute("Pos", str(start))
                     para.setAttribute("Len", str(end - start + 1))
-                    if source['ObjectTypeName'] == 'DOC':
-                        para.setAttribute("Style", "Normal")
-                    else:
-                        para.setAttribute("Style", "")
+                    para.setAttribute("Style", "")
                     start = end + 1
-                    
-                source['MetaData'] = paragraphs.toxml()
-            else:
-                source['MetaData'] = None
-                    
-            if source['ObjectTypeName'] == 'PDF':
-                source['LengthX'] = 0
-                pages = doc.createElement("PdfPages")
-                pages.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-                # JS: PDF page elements also need PageLength, PageOffset, PageWidth, PageHeight attributes
-                source['MetaData'] += pages.toxml()
+
+                source['MetaData'] = paragraphs.toxml() + pages.toxml()
             elif source['ObjectTypeName'] == 'DOC':
                 source['LengthX'] = 0
                 settings = doc.createElement("DisplaySettings")
@@ -928,6 +957,22 @@ existing project or stock empty project.
                     print ("Compressing with level " + args.compress_level)
                     compressor = zlib.compressobj(int(args.compress_level), zlib.DEFLATED, -15)
                     source['Object'] = compressor.compress(source['Object']) + compressor.flush()
+                    
+                doc = Document()
+                paragraphs = doc.createElement("Paragraphs")
+                paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                start = 0
+                while start < len(source['Content']):
+                    end = source['Content'].find('\n', start)
+                    if end == -1:
+                        end = len(source['Content']) - 1
+                    para = paragraphs.appendChild(doc.createElement("Para"))
+                    para.setAttribute("Pos", str(start))
+                    para.setAttribute("Len", str(end - start + 1))
+                    para.setAttribute("Style", "Normal")
+                    start = end + 1
+
+                source['MetaData'] = paragraphs.toxml() + pages.toxml()
             elif source['ObjectTypeName'] == 'JPEG':
                 image = Image.open(StringIO.StringIO(source['Object']))
                 source['LengthX'], source['LengthY'] = image.size
@@ -1326,11 +1371,12 @@ existing project or stock empty project.
             if tagging['Memo'] != None:
                 print("Warning - Tagging contains memo - memo will be lost.")
 
-        nvivocon.execute(nvivoNodeReference.insert().values({
-                    'Node_Item_Id':     bindparam('Node'),
-                    'Source_Item_Id':   bindparam('Source'),
-                    'ReferenceTypeId':  literal_column('0')
-            }), taggings)
+        if len(taggings) > 0:
+            nvivocon.execute(nvivoNodeReference.insert().values({
+                        'Node_Item_Id':     bindparam('Node'),
+                        'Source_Item_Id':   bindparam('Source'),
+                        'ReferenceTypeId':  literal_column('0')
+                }), taggings)
 
 # Annotations
     if args.annotations != 'skip':
@@ -1366,12 +1412,13 @@ existing project or stock empty project.
 
             annotation['Id'] = uuid.uuid4()  # Not clear what purpose this field serves
 
-        nvivocon.execute(nvivoAnnotation.insert().values({
-                    'Item_Id':          bindparam('Source'),
-                    'Text':             bindparam('Memo'),
-                    # JS: Need to figure out ReferenceTypeId column
-                    'ReferenceTypeId':  literal_column('0')
-            }), annotations)
+        if len(annotations) > 0:
+            nvivocon.execute(nvivoAnnotation.insert().values({
+                        'Item_Id':          bindparam('Source'),
+                        'Text':             bindparam('Memo'),
+                        # JS: Need to figure out ReferenceTypeId column
+                        'ReferenceTypeId':  literal_column('0')
+                }), annotations)
 
 # All done.
     
