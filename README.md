@@ -7,11 +7,11 @@ A range of tools to help you get more out of NVivo(tm).
 NVivo stores its projects in the form of a relational database. The Windows version uses
 Microsoft SQL Server while the Mac version uses SQL Anywhere. NVivotools currently only works with
 Microsoft Windows NVivo files though a Mac version should be fairly simple to write using
-[https://github.com/sqlanywhere/sqlalchemy-sqlany](sqlalchemy-sqlany).
+[sqlalchemy-sqlany](https://github.com/sqlanywhere/sqlalchemy-sqlany).
 
 NVivo files for Windows (with extension .nvp) are simply Microsoft SQL Server files. NVivotools
 works with them just as NVivo does, by attaching them to SQL Server. Unlike NVivo, NVivotools
-uses something called [https://en.wikipedia.org/wiki/Tabular_Data_Stream](Tabular Data Stream) (TDS)
+uses something called [Tabular Data Stream](https://en.wikipedia.org/wiki/Tabular_Data_Stream) (TDS)
 to communicate with SQL server. This approach has the advantage of abstracting the database
 access so that NVivotools does not need to know too much about the messy details of SQL Server. It
 does, however, mean that SQL Server needs to be set up to allow TDS connections.
@@ -33,7 +33,7 @@ prolifically about their experiences. So if you have trouble with any of this, t
 first place to look for help is on the web by googling the text of any error message you need
 to investigate or concise description of a problem you encounter.
 
-The version of SQL Server that NVivo 10 uses is called Microsoft SQL Server 2008 R2. This program is installed as part of the NVivo installation process. If you want to use NVivotools without having NVivo installed, you'll need to download and install [https://www.microsoft.com/en-au/download/details.aspx?id=30438](Microsoft SQL Server 2008 R2 Express) (free). NVivo 11 uses Microsoft SQL Server 2014, but only installs a stripped-down 'LocalDB' version. To use NVivotools with NVivo 11, you'll need to download and install [https://www.microsoft.com/en-au/download/details.aspx?id=42299](Microsoft SQL Server 2014 Express) (free) yourself.
+The version of SQL Server that NVivo 10 uses is called Microsoft SQL Server 2008 R2. This program is installed as part of the NVivo installation process. If you want to use NVivotools without having NVivo installed, you'll need to download and install [Microsoft SQL Server 2008 R2 Express](https://www.microsoft.com/en-au/download/details.aspx?id=30438) (free). NVivo 11 uses Microsoft SQL Server 2014, but only installs a stripped-down 'LocalDB' version. To use NVivotools with NVivo 11, you'll need to download and install [Microsoft SQL Server 2014 Express](https://www.microsoft.com/en-au/download/details.aspx?id=42299) (free) yourself.
 
 ### Set up SQL Server
 
@@ -83,7 +83,7 @@ Although I have done my best to make NVivotools work with both Python versions 2
 
 ### Windows
 
-Install a recent version of Python from [https://www.python.org/downloads/windows/](Python Releases for Windows). During the installation process you will be asked whether to add Python to the path - say 'Yes' to keep things simple.
+Install a recent version of Python from [Python Releases for Windows](https://www.python.org/downloads/windows/). During the installation process you will be asked whether to add Python to the path - say 'Yes' to keep things simple.
 
 ### Linux
 
