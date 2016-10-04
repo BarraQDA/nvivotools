@@ -13,7 +13,6 @@ import uuid
 import re
 import zlib
 from PIL import Image
-import StringIO
 import tempfile
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.converter import TextConverter
@@ -185,7 +184,7 @@ try:
 # Users
     if args.users != 'skip':
         print("Denormalising users")
-        
+
         normUser = normmd.tables['User']
         sel = select([normUser.c.Id,
                       normUser.c.Name])
@@ -204,7 +203,7 @@ try:
 
         if len(userstodelete) > 0:
             nvivocon.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Id')), userstodelete)
-            
+
         if len(users) > 0:
             nvivocon.execute(nvivoUserProfile.insert(), users)
 
@@ -214,10 +213,10 @@ try:
     nvivoproject = nvivocon.execute(select([nvivoProject.c.UnassignedLabel,
                                             nvivoProject.c.NotApplicableLabel])).fetchone()
     if nvivoproject == None:
-        raise RuntimeError, """
+        raise RuntimeError("""
 NVivo file contains no project record. Begin denormalisation with an
 existing project or stock empty project.
-"""
+""")
     else:
         unassignedLabel    = nvivoproject['UnassignedLabel']
         notapplicableLabel = nvivoproject['NotApplicableLabel']
@@ -240,7 +239,7 @@ existing project or stock empty project.
             if args.windows:
                 project['Title']       = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Title']))
                 project['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Description']))
-                
+
             nvivocon.execute(nvivoProject.update(), projects)
 
 # Node Categories
@@ -411,7 +410,7 @@ existing project or stock empty project.
                       nvivoRole.c.TypeId])
         sel = sel.where(and_(
                         or_(
-                            nvivoItem.c.TypeId == literal_column('16'), 
+                            nvivoItem.c.TypeId == literal_column('16'),
                             nvivoItem.c.TypeId == literal_column('62')),
                         nvivoRole.c.TypeId == literal_column('14'),
                         nvivoRole.c.Item1_Id == nvivoItem.c.Id))
@@ -555,7 +554,7 @@ existing project or stock empty project.
                     nvivoCountValueRole.c.Item1_Id == nvivoCategoryAttributeRole.c.Item1_Id
             ))
             )
-                
+
         addedattributes = []
         for nodeattribute in nodeattributes:
             nodeattribute['NodeName']          = next(node['Name']          for node in nodes if node['Id'] == nodeattribute['Node'])
@@ -581,7 +580,7 @@ existing project or stock empty project.
                                 nodeattribute['Length'] = int(property.getAttribute('Value'))
                     else:
                         nodeattribute['Type'] = 'Text'
-                    
+
                 if nodeattribute['AttributeId'] == None:
                     print("Creating attribute '" + nodeattribute['PlainTextName'] + "/" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                     nodeattribute['AttributeId'] = uuid.uuid4()
@@ -872,14 +871,14 @@ existing project or stock empty project.
         sources = [dict(row) for row in normdb.execute(sel)]
 
         for source in sources:
-            
+
             if source['Item_Id'] == None:
                 source['Item_Id'] = uuid.uuid4()
             source['PlainTextName'] = source['Name']
             if args.windows:
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description']))
-                
+
             # Lookup object type from name
             if source['ObjectTypeName'] in ObjectTypeName.values():
                 source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])]
@@ -890,15 +889,15 @@ existing project or stock empty project.
                 #source['PlainText'] = source['Content']
             #else:
                 #source['PlainText'] = None
-                    
+
             if source['ObjectTypeName'] == 'PDF':
                 source['SourceType'] = 34
                 source['LengthX'] = 0
-                
+
                 doc = Document()
                 pages = doc.createElement("PdfPages")
                 pages.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-                
+
                 tmpfilename = tempfile.mktemp()
                 tmpfileptr  = file(tmpfilename, 'wb')
                 tmpfileptr.write(source['Object'])
@@ -915,23 +914,23 @@ existing project or stock empty project.
                 pdfstr = u''
                 for pdfpage in pdfpages:
                     mediabox   = pdfpage.attrs['MediaBox']
-                    
+
                     interpreter.process_page(pdfpage)
                     pageelement = pages.appendChild(doc.createElement("PdfPage"))
                     pageelement.setAttribute("PageLength", str(retstr.tell()))
                     pageelement.setAttribute("PageOffset", str(pageoffset))
                     pageelement.setAttribute("PageWidth",  str(int(mediabox[2] - mediabox[0])))
                     pageelement.setAttribute("PageHeight", str(int(mediabox[3] - mediabox[1])))
-                    
+
                     pagestr = unicode(retstr.getvalue().replace('\n\n', '\l').replace('\n', ' ').replace('\l','\n'), 'utf-8')
                     retstr.truncate(0)
                     pdfstr += pagestr
                     pageoffset += len(pagestr)
-                                        
+
                 source['PlainText'] = pdfstr
                 tmpfileptr.close()
                 os.remove(tmpfilename)
-                
+
                 paragraphs = doc.createElement("Paragraphs")
                 paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
                 start = 0
@@ -957,7 +956,7 @@ existing project or stock empty project.
                     print ("Compressing with level " + args.compress_level)
                     compressor = zlib.compressobj(int(args.compress_level), zlib.DEFLATED, -15)
                     source['Object'] = compressor.compress(source['Object']) + compressor.flush()
-                    
+
                 doc = Document()
                 paragraphs = doc.createElement("Paragraphs")
                 paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
@@ -984,7 +983,7 @@ existing project or stock empty project.
                 #source['Waveform'] = waveform of recording, one byte per centisecond
             else:
                 source['LengthX'] = 0
-                    
+
         sourceswithcategory = [dict(row) for row in sources if row['Category'] != None]
 
         sourcestodelete = nvivocon.execute(select([nvivoSource.c.Item_Id]))
@@ -1157,7 +1156,7 @@ existing project or stock empty project.
                                 sourceattribute['Length'] = int(property.getAttribute('Value'))
                     else:
                         sourceattribute['Type'] = 'Text'
-                    
+
                 if sourceattribute['AttributeId'] == None:
                     print("Creating attribute '" + sourceattribute['PlainTextName'] + "' for source '" + sourceattribute['PlainTextSourceName'] + "'")
                     sourceattribute['AttributeId'] = uuid.uuid4()
@@ -1348,11 +1347,11 @@ existing project or stock empty project.
                 normTagging.c.ModifiedBy,
                 normTagging.c.ModifiedDate]).where(
                 normTagging.c.Node != None))]
-            
+
         for tagging in taggings:
             matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
             if matchfragment == None:
-                raise RuntimeError, "ERROR: Unrecognised tagging fragment: " + tagging['Fragment']
+                raise RuntimeError("ERROR: Unrecognised tagging fragment: " + tagging['Fragment'])
 
             tagging['StartX'] = int(matchfragment.group(1))
             tagging['LengthX'] = int(matchfragment.group(2)) - tagging['StartX'] + 1
@@ -1367,7 +1366,7 @@ existing project or stock empty project.
                     tagging['OfX'] = tagging['StartX']
 
             tagging['Id'] = uuid.uuid4()  # Not clear what purpose this field serves
-            
+
             if tagging['Memo'] != None:
                 print("Warning - Tagging contains memo - memo will be lost.")
 
@@ -1393,12 +1392,12 @@ existing project or stock empty project.
                 normTagging.c.ModifiedBy,
                 normTagging.c.ModifiedDate]).where(
                 normTagging.c.Node == None))]
-            
+
         for annotation in annotations:
             matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", annotation['Fragment'])
             if matchfragment == None:
-                raise RuntimeError, "ERROR: Unrecognised annotation fragment: " + annotation['Fragment']
-            
+                raise RuntimeError("ERROR: Unrecognised annotation fragment: " + annotation['Fragment'])
+
             annotation['StartX'] = int(matchfragment.group(1))
             annotation['LengthX'] = int(matchfragment.group(2)) - annotation['StartX'] + 1
             annotation['StartY'] = None
@@ -1421,7 +1420,7 @@ existing project or stock empty project.
                 }), annotations)
 
 # All done.
-    
+
     nvivotr.commit()
 
 except exc.SQLAlchemyError:
