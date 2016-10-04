@@ -96,6 +96,7 @@ You should use 'pip', even under Linux, as at least one of the libraries (SQLAlc
 Using a command window, type
 
 `pip install --upgrade pip`
+
 `pip install future pdfminer Pillow pymssql sqlalchemy`
 
 ## And you are ready to go
