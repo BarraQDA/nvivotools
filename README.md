@@ -1,33 +1,107 @@
 # nvivotools
-A range of tools to help you get more out of NVivo(tm)
 
-The python scripts NormaliseNVP and DenormaliseNVP do much as their names imply. They take two arguments in sqlalchemy format (eg sqlite:///filename.db or mssql+pymssql://user:password@sqlservername/database) and convert the former to the latter.
+A range of tools to help you get more out of NVivo(tm).
 
-They should both work equally well with python2.x or python3.x, but do require the following modules to be installed (use pip): future, pymssql, sqlalchemy.
+## Background
 
-# Setting up SQL Server for NVivo 10
-- Enable TCP/IP connections in SQL Server configuration manager
-- Set port for SQL Server - default is 1433
-- Set access to SQL Server: https://blogs.technet.microsoft.com/sqlman/2011/06/14/tips-tricks-you-have-lost-access-to-sql-server-now-what/
- https://www.mssqltips.com/sqlservertip/2538/enabling-dedicated-administrator-connection-in-sql-server-2008-express-edition/
-- Firewall: Allow C:\Program Files\Microsoft SQL Server\MSSQL10_50.QSRNVIVO10\MSSQL\Binn\sqlservr.exe
+NVivo stores its projects in the form of a relational database. The Windows version uses
+Microsoft SQL Server while the Mac version uses SQL Anywhere. NVivotools currently only works with
+Microsoft Windows NVivo files though a Mac version should be fairly simple to write using
+[https://github.com/sqlanywhere/sqlalchemy-sqlany](sqlalchemy-sqlany).
+
+NVivo files for Windows (with extension .nvp) are simply Microsoft SQL Server files. NVivotools
+works with them just as NVivo does, by attaching them to SQL Server. Unlike NVivo, NVivotools
+uses something called [https://en.wikipedia.org/wiki/Tabular_Data_Stream](Tabular Data Stream) (TDS)
+to communicate with SQL server. This approach has the advantage of abstracting the database
+access so that NVivotools does not need to know too much about the messy details of SQL Server. It
+does, however, mean that SQL Server needs to be set up to allow TDS connections.
+
+I hope this file will be comprehensible not only to those who know more than I do about Windows,
+SQL Server and the like, but to relative newcomers. I assume that these operations are being performed on a computer with NVivo 10 already installed, but very little else. I also give some pointers for working with NVivo 11.
+
+## Setting up SQL Server
+
+This is the most difficult part of the process, so I describe it in the greatest detail.
+
+### Install Microsoft SQL Server
+
+Start by accepting that SQL Server, like pretty much everything Microsoft creates, is awful.
+Each version differs, often in subtle and undocumented ways, that make it incompatible with
+previous versions. Installation and configuration often requires using a GUI, making it impossible
+(or very difficult) to automate. However, SQL Server does have many enthusiastic users who write
+prolifically about their experiences. So if you have trouble with any of this, the
+first place to look for help is on the web by googling the text of any error message you need
+to investigate or concise description of a problem you encounter.
+
+The version of SQL Server that NVivo 10 uses is called Microsoft SQL Server 2008 R2. This program is installed as part of the NVivo installation process. If you want to use NVivotools without having NVivo installed, you'll need to download and install [https://www.microsoft.com/en-au/download/details.aspx?id=30438](Microsoft SQL Server 2008 R2 Express) (free). NVivo 11 uses Microsoft SQL Server 2014, but only installs a stripped-down 'LocalDB' version. To use NVivotools with NVivo 11, you'll need to download and install [https://www.microsoft.com/en-au/download/details.aspx?id=42299](Microsoft SQL Server 2014 Express) (free) yourself.
+
+### Set up SQL Server
+
+NVivotools accesses SQL Server using TDS, which operates over TCP/IP. This means that you need to configure SQL Server to allow access over TCP/IP. It may be possible to do this using the command
+line, but I found it simpler to use the SQL Server Configuration Manager, which you'll find from
+the Start Menu in the folder for the relevant version of SQL Server. When you find it you need to:
+
+- Enable TCP/IP connections
+
+In the left panel of the SQL Server Configuration Manager click on 'Protocol for QSRNVIVO10' under 'SQL Server Network Configuration' or 'SQL Server Network Configuration (32bit)' and find a list of protocol names. The one you want is 'TCP/IP'. Right-click on this one, then click on 'Properties'. Under the 'Protocol' tab you need to change the value of 'Enabled' to 'Yes'. Then go to the 'IP Addresses' tab, scroll to the bottom of the list of values until you find a header 'IPAll'. Expand this heading by clicking on it until you see the value 'TCP Port' underneath it. Change this value to the TDS default of '1433'. Then click 'OK' to accept the TCP/IP configuration.
+
+If you are using either NVivo 11 or a system without NVivo 10 installed, you'll need to select the network protocol for a different server instance. Whichever instance you select is the one you will need to use later on, so note the name.
+
+If you know what you are doing you can of course set the TCP port for just the IP devices you are going to use and/or use a port other than 1433. Just beware that the instructions below assume you
+have used the default values.
+
+Don't close the Configuration Manager just yet, as you'll need to use it to restart the server a few steps further on.
+
+- Configure SQL Server authentication
+
+Microsoft SQL Server is able to use two different kinds of authentication to control access to its databases. The default setting is to only allow 'Windows authentication'. And you guessed it, we need the other kind 'SQL Server authentication'. To configure the server to allow both kinds of authentication, you need to make a small change to the Windows registry. There are a variety of ways of doing this; I will only describe the most standard way of doing so using the registry editor regedit.
+
+Run regedit.exe from the Start Menu by typing 'regedit' into the Search box. You will need to authorise changes to the system - don't be too alarmed, you are in total control of any changes so as long as you are careful and/or follow these instructions closely no harm will result. That said, no guarantees!
+
+Using the left pane in the regedit window, navigate to HKEY_LOCAL_MACHINE -> SOFTWARE -> Microsoft -> Microsoft SQL Server -> MSSQL10_50.QSRNVIVO10 -> MSSQLServer Once again if you are using a different version of NVivo or Microsoft SQL Server these names (especially 'MSSQL10_50.QSRNVIVO10' may vary). When you get there, you will see a list of values in the right pane. Look for 'LoginMode'; right-click on it, select 'Modify' and change the value to '2'.
+
+- Restart server
+
+Another piece of Microsoft brilliance - you can't request that the server simply read a new network configuration - you have to restart the whole thing. Back at the SQL Server Configuration Manager window, click on 'SQL Server Services' in the left frame, then right-click on 'SQL Server (QSRNVIVO10)' and select 'Restart'.
+
+As in the previous section, if you are using a server instance other than 'QSRNVIVO10', that will be the server you need to restart.
+
+- (Optional) Punch a hole in the Windows firewall
+
+If you want to use NVivotools from a different computer than the one running SQL Server (I do this so that I can keep as far away from Windows as possible, but you may find other reasons to do so) you'll need to tell the firewall to allow incoming network connections to SQL Server. You'll need to find the SQL Server executable (something like C:\Program Files\Microsoft SQL Server\MSSQL10_50.QSRNVIVO10\MSSQL\Binn\sqlservr.exe) and configure the Microsoft Firewall to allow connections to that program.
+
+### More Information
+
+Here are a few links that describe other ways of configuring the SQL Server authentication.
+
+- [https://blogs.technet.microsoft.com/sqlman/2011/06/14/tips-tricks-you-have-lost-access-to-sql-server-now-what/](https://blogs.technet.microsoft.com/sqlman/2011/06/14/tips-tricks-you-have-lost-access-to-sql-server-now-what/)
+- [https://www.mssqltips.com/sqlservertip/2538/enabling-dedicated-administrator-connection-in-sql-server-2008-express-edition/](https://www.mssqltips.com/sqlservertip/2538/enabling-dedicated-administrator-connection-in-sql-server-2008-express-edition/)
+
+## Install Python
+
+Although I have done my best to make NVivotools work with both Python versions 2 and 3, one of the libraries on which it depends (PDFMiner) currently only supports Python version 2. So for now you will need to install Python 2.
+
+### Windows
+
+Install a recent version of Python from [https://www.python.org/downloads/windows/](Python Releases for Windows). During the installation process you will be asked whether to add Python to the path - say 'Yes' to keep things simple.
+
+### Linux
+
+Use your distro package manager to install Python 2.
+
+## Installing Python libraries
+
+You should use 'pip', even under Linux, as at least one of the libraries (SQLAlchemy) is not sufficiently recent, at least on Debian/sid.
+
+Using a command window, type
+
+`pip install --upgrade pip`
+`pip install future pdfminer Pillow pymssql sqlalchemy`
+
+## And you are ready to go
+
+Until I write a GUI front end for NVivotools, you'll need to use a command line. The python scripts NormaliseNVP.py and DenormaliseNVP.py do much as their names imply. They take two arguments in sqlalchemy format (eg sqlite:///filename.db or mssql+pymssql://user:password@sqlservername/database) and convert the former to the latter.
+
+### Examples
 
 
-			  
-FROM SCRATCH with NVivo10
-
-- Install python 2.7.11 from MSI
-   - select 'Add to Path' to make life easier
-
-- python -m pip install --upgrade pip
-- python -m pip install future sqlalchemy pymssql
-
-Using SQL Server Configuration Manager:
-    Enable TCP/IP for QSRNVIVO10
-    Set port to 1433
-    Restart server
-
-sqlcmd -S <machinename/localhost>\QSRNVIVO10 -q "EXEC xp_instance_regwrite N'HKEY_LOCAL_MACHINE', N'Software\Microsoft\MSSQLServer\MSSQLServer', N'LoginMode', REG_DWORD, 2"
-    - [1 for Windows only, 2 for SQL Server + Windows]
-    
-Network must be operating.
