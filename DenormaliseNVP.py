@@ -30,6 +30,8 @@ try:
                         help='Correct NVivo for Windows string coding. Use if offloaded file will be used with Windows version of NVivo.')
     parser.add_argument('-s', '--structure', action='store_true',
                         help='Replace existing table structures.')
+    
+    parser.add_argument('-v', '--verbosity', type=int, default=1)
 
     table_choices = ["", "skip", "replace", "merge"]
     parser.add_argument('-p', '--project', choices=table_choices, default="merge",
@@ -183,7 +185,8 @@ try:
 
 # Users
     if args.users != 'skip':
-        print("Denormalising users")
+        if args.verbosity > 0:
+            print("Denormalising users")
 
         normUser = normmd.tables['User']
         sel = select([normUser.c.Id,
@@ -244,7 +247,8 @@ existing project or stock empty project.
 
 # Node Categories
     if args.node_categories != 'skip':
-        print("Denormalising node categories")
+        if args.verbosity > 0:
+            print("Denormalising node categories")
 
         # Look up head node category, fudge it if it doesn't exist.
         sel = select([nvivoItem.c.Id])
@@ -342,7 +346,8 @@ existing project or stock empty project.
 
 #Nodes
     if args.nodes != 'skip':
-        print("Denormalising nodes")
+        if args.verbosity > 0:
+            print("Denormalising nodes")
 
         # Look up head node, fudge it if it doesn't exist.
         sel = select([nvivoItem.c.Id])
@@ -472,7 +477,8 @@ existing project or stock empty project.
 
 # Node attributes
     if args.node_attributes != 'skip':
-        print("Denormalising node attributes")
+        if args.verbosity > 0:
+            print("Denormalising node attributes")
 
         normNodeAttribute = normmd.tables['NodeAttribute']
         sel = select([normNodeAttribute.c.Node,
@@ -582,7 +588,8 @@ existing project or stock empty project.
                         nodeattribute['Type'] = 'Text'
 
                 if nodeattribute['AttributeId'] == None:
-                    print("Creating attribute '" + nodeattribute['PlainTextName'] + "/" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
+                    if args.verbosity > 1:
+                        print("Creating attribute '" + nodeattribute['PlainTextName'] + "/" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                     nodeattribute['AttributeId'] = uuid.uuid4()
                     if nodeattribute['MaxAttributeTag'] == None:
                         nodeattribute['NewAttributeTag'] = 0
@@ -665,7 +672,8 @@ existing project or stock empty project.
                     nodeattribute['MaxValueTag'] = 1
 
                 if nodeattribute['NewValueId'] == None:
-                    print("Creating value '" + nodeattribute['PlainTextValue'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
+                    if args.verbosity > 1:
+                        print("Creating value '" + nodeattribute['PlainTextValue'] + "' for attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                     nodeattribute['NewValueId']  = uuid.uuid4()
                     nodeattribute['NewValueTag'] = nodeattribute['MaxValueTag'] + 1
                     nvivocon.execute(nvivoItem.insert().values({
@@ -690,7 +698,8 @@ existing project or stock empty project.
 
                 if nodeattribute['NewValueId'] != nodeattribute['ExistingValueId']:
                     if nodeattribute['ExistingValueId'] != None:
-                        print("Removing existing value of attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
+                        if args.verbosity > 1:
+                            print("Removing existing value of attribute '" + nodeattribute['PlainTextName'] + "' for node '" + nodeattribute['PlainTextNodeName'] + "'")
                         nvivocon.execute(nvivoRole.delete().values({
                                 'Item1_Id': bindparam('Node'),
                                 'Item2_Id': bindparam('ExistingValueId'),
@@ -758,7 +767,8 @@ existing project or stock empty project.
 
 # Source categories
     if args.source_categories != 'skip':
-        print("Denormalising source categories")
+        if args.verbosity > 0:
+            print("Denormalising source categories")
 
         # Look up head source category, fudge it if it doesn't exist.
         sel = select([nvivoItem.c.Id])
@@ -840,7 +850,8 @@ existing project or stock empty project.
 
 # Sources
     if args.sources != 'skip':
-        print("Denormalising sources")
+        if args.verbosity > 0:
+            print("Denormalising sources")
 
         # Look up head source, fudge it if it doesn't exist.
         sel = select([nvivoItem.c.Id])
@@ -861,7 +872,7 @@ existing project or stock empty project.
                       normSource.c.Color,
                       normSource.c.Content,
                       normSource.c.ObjectType.label('ObjectTypeName'),
-                      #normSource.c.SourceType,
+                      normSource.c.SourceType,
                       normSource.c.Object,
                       normSource.c.Thumbnail,
                       normSource.c.CreatedBy,
@@ -885,10 +896,8 @@ existing project or stock empty project.
             else:
                 source['ObjectType'] = int(source['ObjectTypeName'])
 
-            #if source['Content'] != None:
-                #source['PlainText'] = source['Content']
-            #else:
-                #source['PlainText'] = None
+            source['PlainText'] = None
+            source['MetaData']  = None
 
             if source['ObjectTypeName'] == 'PDF':
                 source['SourceType'] = 34
@@ -922,7 +931,8 @@ existing project or stock empty project.
                     pageelement.setAttribute("PageWidth",  str(int(mediabox[2] - mediabox[0])))
                     pageelement.setAttribute("PageHeight", str(int(mediabox[3] - mediabox[1])))
 
-                    pagestr = unicode(retstr.getvalue().replace('\n\n', '\l').replace('\n', ' ').replace('\l','\n'), 'utf-8')
+                    pagestr = unicode(retstr.getvalue(), 'utf-8')
+                    pagestr = re.sub('(?<!\n)\n(?!\n)', ' ', pagestr).replace('\n\n', '\n')
                     retstr.truncate(0)
                     pdfstr += pagestr
                     pageoffset += len(pagestr)
@@ -950,10 +960,11 @@ existing project or stock empty project.
                 settings = doc.createElement("DisplaySettings")
                 settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
                 settings.setAttribute("InputPosition", "0")
-                source['MetaData'] += settings.toxml()
+                source['MetaData'] = settings.toxml()
                 # Compress object using zlib without header
                 if int(args.compress_level) != 0:
-                    print ("Compressing with level " + args.compress_level)
+                    if args.verbosity > 1:
+                        print ("Compressing with level " + args.compress_level)
                     compressor = zlib.compressobj(int(args.compress_level), zlib.DEFLATED, -15)
                     source['Object'] = compressor.compress(source['Object']) + compressor.flush()
 
@@ -973,7 +984,7 @@ existing project or stock empty project.
 
                 source['MetaData'] = paragraphs.toxml() + pages.toxml()
             elif source['ObjectTypeName'] == 'JPEG':
-                image = Image.open(StringIO.StringIO(source['Object']))
+                image = Image.open(StringIO(source['Object']))
                 source['LengthX'], source['LengthY'] = image.size
             #elif source['ObjectTypeName'] == 'MP3':
                 #source['LengthX'] = length of recording in milliseconds
@@ -983,6 +994,11 @@ existing project or stock empty project.
                 #source['Waveform'] = waveform of recording, one byte per centisecond
             else:
                 source['LengthX'] = 0
+                
+            #if source['Object']:
+                #source['Object'] = bytearray(source['Object'])
+            #if source['Thumbnail']:
+                #source['Thumbnail'] = bytearray(source['Thumbnail'])
 
         sourceswithcategory = [dict(row) for row in sources if row['Category'] != None]
 
@@ -1013,6 +1029,8 @@ existing project or stock empty project.
                 }), sources)
             nvivocon.execute(nvivoSource.insert().values({
                     'TypeId':   bindparam('ObjectType'),
+                    #'Object':   bindparam('Object'),
+                    #'Thumbnail': bindparam('Thumbnail'),
                     # This work-around is specific to MSSQL
                     'Object':   func.CONVERT(literal_column('VARBINARY(MAX)'),
                                              bindparam('Object')),
@@ -1043,7 +1061,8 @@ existing project or stock empty project.
 
 # Source attributes
     if args.source_attributes != 'skip':
-        print("Denormalising source attributes")
+        if args.verbosity > 0:
+            print("Denormalising source attributes")
 
         sources = [dict(row) for row in nvivocon.execute(select([nvivoSource.c.Item_Id,
                                                                  nvivoItem.  c.Name]).
@@ -1158,7 +1177,8 @@ existing project or stock empty project.
                         sourceattribute['Type'] = 'Text'
 
                 if sourceattribute['AttributeId'] == None:
-                    print("Creating attribute '" + sourceattribute['PlainTextName'] + "' for source '" + sourceattribute['PlainTextSourceName'] + "'")
+                    if args.verbosity > 1:
+                        print("Creating attribute '" + sourceattribute['PlainTextName'] + "' for source '" + sourceattribute['PlainTextSourceName'] + "'")
                     sourceattribute['AttributeId'] = uuid.uuid4()
                     if sourceattribute['MaxAttributeTag'] == None:
                         sourceattribute['NewAttributeTag'] = 0
@@ -1241,7 +1261,8 @@ existing project or stock empty project.
                     sourceattribute['MaxValueTag'] = 1
 
                 if sourceattribute['NewValueId'] == None:
-                    print("Creating value '" + sourceattribute['PlainTextValue'] + "' for attribute '" + sourceattribute['PlainTextName'] + "' for source '" + sourceattribute['PlainTextSourceName'] + "'")
+                    if args.verbosity > 1:
+                        print("Creating value '" + sourceattribute['PlainTextValue'] + "' for attribute '" + sourceattribute['PlainTextName'] + "' for source '" + sourceattribute['PlainTextSourceName'] + "'")
                     sourceattribute['NewValueId']  = uuid.uuid4()
                     sourceattribute['NewValueTag'] = sourceattribute['MaxValueTag'] + 1
                     nvivocon.execute(nvivoItem.insert().values({
@@ -1266,7 +1287,8 @@ existing project or stock empty project.
 
                 if sourceattribute['NewValueId'] != sourceattribute['ExistingValueId']:
                     if sourceattribute['ExistingValueId'] != None:
-                        print("Removing existing value of attribute '" + sourceattribute['PlainTextName'] + "' for source '" + sourceattribute['PlainTextSourceName'] + "'")
+                        if args.verbosity > 1:
+                            print("Removing existing value of attribute '" + sourceattribute['PlainTextName'] + "' for source '" + sourceattribute['PlainTextSourceName'] + "'")
                         nvivocon.execute(nvivoRole.delete().values({
                                 'Item1_Id': bindparam('Source'),
                                 'Item2_Id': bindparam('ExistingValueId'),
@@ -1334,7 +1356,8 @@ existing project or stock empty project.
 
 # Taggings
     if args.taggings != 'skip':
-        print("Denormalising taggings")
+        if args.verbosity > 0:
+            print("Denormalising taggings")
 
         normTagging = normmd.tables['Tagging']
         taggings = [dict(row) for row in normdb.execute(select([
@@ -1379,7 +1402,8 @@ existing project or stock empty project.
 
 # Annotations
     if args.annotations != 'skip':
-        print("Denormalising annotations")
+        if args.verbosity > 0:
+            print("Denormalising annotations")
 
         normTagging = normmd.tables['Tagging']
         annotations = [dict(row) for row in normdb.execute(select([
