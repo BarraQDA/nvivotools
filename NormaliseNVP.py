@@ -46,15 +46,18 @@ try:
                         help='User action.')
 
     parser.add_argument('infile', type=str,
-                        help='SQLAlchemy path of input NVivo database.')
+                        help='SQLAlchemy path of input NVivo database or "-" to create empty project.')
     parser.add_argument('outfile', type=str, nargs='?',
                         help='SQLAlchemy path of output normalised database.')
 
     args = parser.parse_args()
 
-    nvivodb = create_engine(args.infile)
-    nvivomd = MetaData(bind=nvivodb)
-    nvivomd.reflect(nvivodb)
+    if args.infile != '-':
+        nvivodb = create_engine(args.infile)
+        nvivomd = MetaData(bind=nvivodb)
+        nvivomd.reflect(nvivodb)
+    else:
+        nvivodb = None
 
     if args.outfile is None:
         args.outfile = args.infile.rsplit('.',1)[0] + '.norm'
@@ -179,6 +182,9 @@ try:
             Column('ModifiedDate',  DateTime))
 
     normmd.create_all(normdb)
+    
+    if nvivodb == None:
+        sys.exit()
 
 # Users
     if args.users != 'skip':
