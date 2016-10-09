@@ -46,14 +46,14 @@ Using the left pane in the regedit window, navigate to HKEY_LOCAL_MACHINE -> SOF
 
 Start the SQLCMD program from the command line as follows:
 
->sqlcmd -S LOCALHOST\QSRNVIVO10
+    sqlcmd -S LOCALHOST\QSRNVIVO10
 
-Then type enter the following commands:
+Then enter the following commands:
 
->create login nvivotools with password='nvivotools'
->go
->sp_addsrvrolemember login_name,sysadmin
->go
+    create login nvivotools with password='nvivotools'
+    go
+    sp_addsrvrolemember login_name,sysadmin
+    go
 
 [Some sources](https://www.mssqltips.com/sqlservertip/2538/enabling-dedicated-administrator-connection-in-sql-server-2008-express-edition/) suggest that you may need to restart the server with ';-T7806' appended to the command line. (And some people still take Microsoft seriously?) I haven't always found this necessary but if you have trouble then it may be worth trying.
 
@@ -94,9 +94,9 @@ You should use 'pip', even under Linux, as at least one of the libraries (SQLAlc
 
 Using a command window, type
 
-`pip install --upgrade pip`
+    pip install --upgrade pip
 
-`pip install future pdfminer Pillow pymssql sqlalchemy`
+    pip install future pdfminer Pillow pymssql sqlalchemy
 
 User [abers](https://github.com/abers) [found](https://github.com/BarraQDA/nvivotools/issues/1#issue-181693962) a problem on Raspberry Pi (possibly other ARM systems) where the pymssql library requires other packages (freetds-common, libsybdb5) to be installed. This problem was resolved by installing those packages using the package manager (eg apt-get for Debian-based systems) before using pip to install pymssql.
 
