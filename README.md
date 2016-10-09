@@ -24,7 +24,7 @@ The version of SQL Server that NVivo 10 uses is called Microsoft SQL Server 2008
 
 NVivotools accesses SQL Server using TDS, which operates over TCP/IP. This means that you need to configure SQL Server to allow access over TCP/IP. It may be possible to do this using the command line, but I found it simpler to use the SQL Server Configuration Manager, which you'll find from the Start Menu in the folder for the relevant version of SQL Server. When you find it you need to:
 
-- Enable TCP/IP connections
+#### Enable TCP/IP connections
 
 In the left panel of the SQL Server Configuration Manager click on 'Protocol for QSRNVIVO10' under 'SQL Server Network Configuration' or 'SQL Server Network Configuration (32bit)' and find a list of protocol names. The one you want is 'TCP/IP'. Right-click on this one, then click on 'Properties'. Under the 'Protocol' tab you need to change the value of 'Enabled' to 'Yes'. Then go to the 'IP Addresses' tab, scroll to the bottom of the list of values until you find a header 'IPAll'. Expand this heading by clicking on it until you see the value 'TCP Port' underneath it. Change this value to the TDS default of '1433'. Then click 'OK' to accept the TCP/IP configuration.
 
@@ -34,7 +34,7 @@ If you know what you are doing you can of course set the TCP port for just the I
 
 Don't close the Configuration Manager just yet, as you'll need to use it to restart the server a few steps further on.
 
-- Configure SQL Server authentication
+#### Configure SQL Server authentication
 
 Microsoft SQL Server is able to use two different kinds of authentication to control access to its databases. The default setting is to only allow 'Windows authentication'. And you guessed it, we need the other kind 'SQL Server authentication'. To configure the server to allow both kinds of authentication, you need to make a small change to the Windows registry. There are a variety of ways of doing this; I will only describe the most standard way of doing so using the registry editor regedit.
 
@@ -59,13 +59,13 @@ Then enter the following commands:
 
 create login nvivotools with password='password'
 
-- Restart server
+#### Restart server
 
 Another piece of Microsoft brilliance - you can't request that the server simply read a new network configuration - you have to restart the whole thing. Back at the SQL Server Configuration Manager window, click on 'SQL Server Services' in the left frame, then right-click on 'SQL Server (QSRNVIVO10)' and select 'Restart'.
 
 As in the previous section, if you are using a server instance other than 'QSRNVIVO10', that will be the server you need to restart.
 
-- (Optional) Punch a hole in the Windows firewall
+#### (Optional) Punch a hole in the Windows firewall
 
 If you want to use NVivotools from a different computer than the one running SQL Server (I do this so that I can keep as far away from Windows as possible, but you may find other reasons to do so) you'll need to tell the firewall to allow incoming network connections to SQL Server. You'll need to find the SQL Server executable (something like C:\Program Files\Microsoft SQL Server\MSSQL10_50.QSRNVIVO10\MSSQL\Binn\sqlservr.exe) and configure the Microsoft Firewall to allow connections to that program.
 
