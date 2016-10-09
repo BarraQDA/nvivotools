@@ -100,7 +100,7 @@ User [abers](https://github.com/abers) [found](https://github.com/BarraQDA/nvivo
 
 ## And you are ready to go
 
-Until I write a GUI front end for NVivotools, you'll need to use a command line. The main work is done in the two Python scripts NormaliseNVP.py and DenormaliseNVP.py, together with one included script NVivoTypes.py  They take two arguments (in sqlalchemy format, eg sqlite:///filename.db or mssql+pymssql://user:password@sqlservername/database) and convert the former to the latter. A useful switch is -w/--windows, which instructs the scripts to convert certain text fields to or from a strangely garbled format that NVivo for Windows (but not for Mac) uses.
+Until I write a GUI front end for NVivotools, you'll need to use a command line. The main work is done in the two Python scripts [NormaliseNVP.py](NormaliseNVP.py) and [DenormaliseNVP.py](DenormaliseNVP.py), together with one included script [NVivoTypes.py](NVivoTypes.py)  They take two arguments (in sqlalchemy format, eg sqlite:///filename.db or mssql+pymssql://user:password@sqlservername/database) and convert the former to the latter. A useful switch is -w/--windows, which instructs the scripts to convert certain text fields to or from a strangely garbled format that NVivo for Windows (but not for Mac) uses.
 
 Before you can use these scripts you'll need to get your NVivo file attached to an instance of Microsoft SQL Server. The helper batch scripts in the subdirectory 'Windows' should be of some help. You'll need to put both directories into your PATH to make them work.
 
