@@ -65,7 +65,7 @@ As in the previous section, if you are using a server instance other than 'QSRNV
 
 #### (Optional) Punch a hole in the Windows firewall
 
-If you want to use NVivotools from a different computer than the one running SQL Server (I do this so that I can keep as far away from Windows as possible, but you may find other reasons to do so) you'll need to tell the firewall to allow incoming network connections to SQL Server. You'll need to find the SQL Server executable (something like C:\Program Files\Microsoft SQL Server\MSSQL10_50.QSRNVIVO10\MSSQL\Binn\sqlservr.exe) and configure the Microsoft Firewall to allow connections to that program.
+If you want to use NVivotools from a different computer than the one running SQL Server (I do this so that I can keep as far away from Windows as possible, but you may find other reasons to do so) you'll need to tell the firewall to allow incoming network connections to SQL Server. You'll need to find the SQL Server executable (something like `C:\Program Files\Microsoft SQL Server\MSSQL10_50.QSRNVIVO10\MSSQL\Binn\sqlservr.exe`) and configure the Microsoft Firewall to allow connections to that program.
 
 ### More Information
 
@@ -100,14 +100,14 @@ User [abers](https://github.com/abers) [found](https://github.com/BarraQDA/nvivo
 
 ## And you are ready to go
 
-Until I write a GUI front end for NVivotools, you'll need to use a command line. The main work is done in the two Python scripts [NormaliseNVP.py](NormaliseNVP.py) and [DenormaliseNVP.py](DenormaliseNVP.py), together with one included script [NVivoTypes.py](NVivoTypes.py)  They take two arguments (in sqlalchemy format, eg sqlite:///filename.db or mssql+pymssql://user:password@sqlservername/database) and convert the former to the latter. A useful switch is -w/--windows, which instructs the scripts to convert certain text fields to or from a strangely garbled format that NVivo for Windows (but not for Mac) uses.
+Until I write a GUI front end for NVivotools, you'll need to use a command line. The main work is done in the two Python scripts [`NormaliseNVP.py`](NormaliseNVP.py) and [`DenormaliseNVP.py`](DenormaliseNVP.py), together with one included script [`NVivoTypes.py`](NVivoTypes.py)  They take two arguments (in sqlalchemy format, eg sqlite:///filename.db or mssql+pymssql://user:password@sqlservername/database) and convert the former to the latter. A useful switch is -w/--windows, which instructs the scripts to convert certain text fields to or from a strangely garbled format that NVivo for Windows (but not for Mac) uses.
 
 Before you can use these scripts you'll need to get your NVivo file attached to an instance of Microsoft SQL Server. The helper batch scripts in the subdirectory 'Windows' should be of some help. You'll need to put both directories into your PATH to make them work.
 
-- [attach.bat](Windows/attach.bat) attaches a file to an SQL Server instance and allows access to the user 'nvivotools' with password 'nvivotools'. It takes as its first argument the name of the file to attach, a second optional argument is the name to assign the database (the default is 'nvivo') and the third is the name of the SQL Server instance to use (default QSRNVIVO10).
-- [save.bat](Windows/save.bat) drops a database and saves it to the given filename. It takes the same arguments as attach.bat  WARNING: This script will overwrite the file if it already exists. Make a backup and/or use a different filename.
-- [list.bat](Windows/list.bat) lists databases on a given SQL Server instance.
-- [drop.bat](Windows/drop.bat) drops a database without saving it.
-- [create.bat](Windows/create.bat) creates an empty database.
-- [normalise.bat](Windows/normalise.bat)/[denormalise.bat](Windows/denormalise.bat) put the whole lot together. They take two arguments: an NVivo filename and a SQLite filename (respectively in the case of normalise and in the opposite order in the case of denormalise) and call the other scripts to make everything happen.
+- [`attach.bat`](Windows/attach.bat) attaches a file to an SQL Server instance and allows access to the user 'nvivotools' with password 'nvivotools'. It takes as its first argument the name of the file to attach, a second optional argument is the name to assign the database (the default is 'nvivo') and the third is the name of the SQL Server instance to use (default QSRNVIVO10).
+- [`save.bat`](Windows/save.bat) drops a database and saves it to the given filename. It takes the same arguments as attach.bat  WARNING: This script will overwrite the file if it already exists. Make a backup and/or use a different filename.
+- [`list.bat`](Windows/list.bat) lists databases on a given SQL Server instance.
+- [`drop.bat`](Windows/drop.bat) drops a database without saving it.
+- [`create.bat`](Windows/create.bat) creates an empty database.
+- [`normalise.bat`](Windows/normalise.bat)/[`denormalise.bat`](Windows/denormalise.bat) put the whole lot together. They take two arguments: an NVivo filename and a SQLite filename (respectively in the case of normalise and in the opposite order in the case of denormalise) and call the other scripts to make everything happen.
 
