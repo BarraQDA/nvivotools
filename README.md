@@ -52,12 +52,10 @@ Then enter the following commands:
 
     create login nvivotools with password='nvivotools'
     go
-    sp_addsrvrolemember login_name,sysadmin
+    sp_addsrvrolemember nvivotools,sysadmin
     go
 
 [Some sources](https://www.mssqltips.com/sqlservertip/2538/enabling-dedicated-administrator-connection-in-sql-server-2008-express-edition/) suggest that you may need to restart the server with ';-T7806' appended to the command line. (And some people still take Microsoft seriously?) I haven't always found this necessary but if you have trouble then it may be worth trying.
-
-create login nvivotools with password='password'
 
 #### Restart server
 
