@@ -42,7 +42,7 @@ Run regedit.exe from the Start Menu by typing 'regedit' into the Search box. You
 
 Using the left pane in the regedit window, navigate to HKEY_LOCAL_MACHINE -> SOFTWARE -> Microsoft -> Microsoft SQL Server -> MSSQL10_50.QSRNVIVO10 -> MSSQLServer Once again if you are using a different version of NVivo or Microsoft SQL Server these names (especially 'MSSQL10_50.QSRNVIVO10' may vary). When you get there, you will see a list of values in the right pane. Look for 'LoginMode'; right-click on it, select 'Modify' and change the value to '2'.
 
-- Create an account ('login' in MSSQL parlance)
+#### Create an account ('login' in MSSQL parlance)
 
 Start the SQLCMD program from the command line as follows:
 
