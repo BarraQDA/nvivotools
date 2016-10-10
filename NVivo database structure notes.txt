@@ -63,7 +63,7 @@ TypeID: 0=???;
         11 = PDF;
         5=video;
         8=image;
-        14=dataset (spreadsheet); 
+        14=dataset (spreadsheet);
         18=Twitter feed
 
 SourceType: 2,3,4 - DOC
@@ -73,10 +73,15 @@ SourceType: 2,3,4 - DOC
    34 - PDF
    48 - ?
    34 - PDF
-   
+
 CompoundSourceRegion:
 
 ItemId refers to source
+
+NodeReference
+
+TypeId: 0 for text
+        2 for image
 
 Noderefernce.startX/lengthX refer to transcript (?), compoundsourceregion.start{X,Y}/length{X,Y}
 refer to media.

@@ -182,14 +182,14 @@ try:
             Column('ModifiedDate',  DateTime))
 
     normmd.create_all(normdb)
-    
+
     if nvivodb == None:
         sys.exit()
 
 # Users
     if args.users != 'skip':
         print("Normalising users")
-        
+
         nvivoUserProfile = nvivomd.tables['UserProfile']
 
         sel = select([nvivoUserProfile.c.Id,
@@ -209,7 +209,7 @@ try:
 # Project
     if args.project != 'skip':
         print("Normalising project")
-        
+
         nvivoProject = nvivomd.tables['Project']
         sel = select([nvivoProject.c.Title,
                       nvivoProject.c.Description,
@@ -230,7 +230,7 @@ try:
 # Node Categories
     if args.node_categories != 'skip':
         print("Normalising node categories")
-        
+
         nvivoItem       = nvivomd.tables['Item']
         nvivoRole       = nvivomd.tables['Role']
 
@@ -260,7 +260,7 @@ try:
 # Nodes
     if args.nodes != 'skip':
         print("Normalising nodes")
-        
+
         nvivoItem         = nvivomd.tables['Item']
         nvivoCategoryRole = nvivomd.tables['Role'].alias(name='CategoryRole')
         nvivoParentRole   = nvivomd.tables['Role'].alias(name='ParentRole')
@@ -307,7 +307,7 @@ try:
 # Node attributes
     if args.node_attributes != 'skip':
         print("Normalising node attributes")
-        
+
         nvivoNodeItem     = nvivomd.tables['Item'].alias(name='NodeItem')
         nvivoNameItem     = nvivomd.tables['Item'].alias(name='NameItem')
         nvivoNameRole     = nvivomd.tables['Role'].alias(name='NameRole')
@@ -364,7 +364,7 @@ try:
 # Source categories
     if args.source_categories != 'skip':
         print("Normalising source categories")
-        
+
         nvivoItem       = nvivomd.tables['Item']
         nvivoRole       = nvivomd.tables['Role']
 
@@ -394,7 +394,7 @@ try:
 # Sources
     if args.sources != 'skip':
         print("Normalising sources")
-        
+
         nvivoSource       = nvivomd.tables['Source']
         nvivoItem         = nvivomd.tables['Item']
         nvivoCategoryRole = nvivomd.tables['Role'].alias(name='CategoryRole')
@@ -424,19 +424,19 @@ try:
                     nvivoCategoryRole.c.TypeId == literal_column('14'),
                     nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id)
             ))
-                
+
         sources = [dict(row) for row in nvivodb.execute(sel)]
         for source in sources:
             if args.windows:
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Name']))
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description']))
-                
+
             if source['PlainText'] != None:
                 #source['Content'] = source['PlainText'].replace ('\\n', os.linesep * int(2 / len(os.linesep)))
                 source['Content'] = source['PlainText']
             else:
                 source['Content'] = None
-                
+
             source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
 
             if (not args.no_decompress) and source['ObjectType'] == 'DOC':
@@ -455,7 +455,7 @@ try:
 # Source attributes
     if args.source_attributes != 'skip':
         print("Normalising source attributes")
-        
+
         nvivoItem         = nvivomd.tables['Item']
         nvivoRole         = nvivomd.tables['Role']
         nvivoSource       = nvivomd.tables['Source']
@@ -491,7 +491,7 @@ try:
                     sourceattr['Type'] = DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
                 elif property.getAttribute('Key') == 'Length':
                     sourceattr['Length'] = int(property.getAttribute('Value'))
-        
+
         if args.windows:
             for sourceattr in sourceattrs:
                 sourceattr['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Name']))
@@ -511,7 +511,7 @@ try:
 # Tagging
     if args.taggings != 'skip':
         print("Normalising taggings")
-        
+
         nvivoNodeReference = nvivomd.tables['NodeReference']
 
         sel = select([nvivoNodeReference.c.Source_Item_Id.label('Source'),
@@ -527,7 +527,7 @@ try:
                       nvivoNodeReference.c.ModifiedDate,
                       nvivoItem.c.TypeId])
         sel = sel.where(and_(
-                      nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
+                      #nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
                       nvivoItem.c.Id == nvivoNodeReference.c.Node_Item_Id,
                       or_(
                         nvivoItem.c.TypeId == literal_column('16'),
@@ -535,6 +535,7 @@ try:
 
         taggings  = [dict(row) for row in nvivodb.execute(sel)]
         for tagging in taggings:
+            print tagging
             # JS: Should be able to do this in select statement - figure out how!
             if tagging['StartZ'] != None:
                 next
@@ -546,7 +547,7 @@ try:
 
         if args.taggings == 'replace':
             normdb.execute(normTagging.delete(
-                                normTagging.c.Node   != None))                                
+                                normTagging.c.Node   != None))
         elif args.taggings == 'merge':
             normdb.execute(normTagging.delete(
                            and_(normSource.c.Source  == bindparam('Source'),
@@ -561,7 +562,7 @@ try:
 # Annotations
     if args.annotations != 'skip':
         print("Normalising annotations")
-        
+
         nvivoAnnotation = nvivomd.tables['Annotation']
 
         sel = select([nvivoAnnotation.c.Item_Id.label('Source'),
@@ -585,7 +586,7 @@ try:
 
         if args.annotations == 'replace':
             normdb.execute(normTagging.delete(
-                                normTagging.c.Node   == None))                                
+                                normTagging.c.Node   == None))
         elif args.annotations == 'merge':
             normdb.execute(normTagging.delete(
                            and_(normSource.c.Source  == bindparam('Source'),

@@ -30,7 +30,7 @@ try:
                         help='Correct NVivo for Windows string coding. Use if offloaded file will be used with Windows version of NVivo.')
     parser.add_argument('-s', '--structure', action='store_true',
                         help='Replace existing table structures.')
-    
+
     parser.add_argument('-v', '--verbosity', type=int, default=1)
 
     table_choices = ["", "skip", "replace", "merge"]
@@ -880,6 +880,7 @@ existing project or stock empty project.
                       normSource.c.ModifiedBy,
                       normSource.c.ModifiedDate])
         sources = [dict(row) for row in normdb.execute(sel)]
+        extendeditems = []
 
         for source in sources:
 
@@ -955,7 +956,11 @@ existing project or stock empty project.
                     start = end + 1
 
                 source['MetaData'] = paragraphs.toxml() + pages.toxml()
+
+                extendeditems.append({'Item_Id':    source['Item_Id'],
+                                      'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>'})
             elif source['ObjectTypeName'] == 'DOC':
+                source['SourceType'] = 2  # or 3 or 4?
                 source['LengthX'] = 0
                 settings = doc.createElement("DisplaySettings")
                 settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
@@ -984,8 +989,17 @@ existing project or stock empty project.
 
                 source['MetaData'] = paragraphs.toxml() + pages.toxml()
             elif source['ObjectTypeName'] == 'JPEG':
+                source['SourceType'] = 33
                 image = Image.open(StringIO(source['Object']))
                 source['LengthX'], source['LengthY'] = image.size
+                image.thumbnail((200,200))
+                thumbnail = StringIO()
+                image.save(thumbnail, format='JPEG')
+                source['Thumbnail'] = thumbnail.getvalue()
+                source['Properties'] = '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"/>'
+
+                extendeditems.append({'Item_Id':source['Item_Id'],
+                                      'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PictureRotation" Value="0"/><Property Key="PictureBrightness" Value="0"/><Property Key="PictureContrast" Value="0"/><Property Key="PictureQuality" Value="0"/></Properties>'})
             #elif source['ObjectTypeName'] == 'MP3':
                 #source['LengthX'] = length of recording in milliseconds
                 #source['Waveform'] = waveform of recording, one byte per centisecond
@@ -994,11 +1008,6 @@ existing project or stock empty project.
                 #source['Waveform'] = waveform of recording, one byte per centisecond
             else:
                 source['LengthX'] = 0
-                
-            #if source['Object']:
-                #source['Object'] = bytearray(source['Object'])
-            #if source['Thumbnail']:
-                #source['Thumbnail'] = bytearray(source['Thumbnail'])
 
         sourceswithcategory = [dict(row) for row in sources if row['Category'] != None]
 
@@ -1042,15 +1051,9 @@ existing project or stock empty project.
                     'Item2_Id': bindparam('Item_Id'),
                     'TypeId':   literal_column('0')
                 }), sources)
-            if source['ObjectTypeName'] == 'PDF':
-                nvivocon.execute(nvivoExtendedItem.insert().values({
-                        # Need to work out how to calculate PDF checksum!
-                        'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>\'')
-                    }), sources)
-            else:
-                nvivocon.execute(nvivoExtendedItem.insert().values({
-                        'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"/>\'')
-                    }), sources)
+
+        if len(extendeditems) > 0:
+            nvivocon.execute(nvivoExtendedItem.insert(), extendeditems)
 
         if len(sourceswithcategory) > 0:
             nvivocon.execute(nvivoRole.insert().values({
@@ -1362,14 +1365,16 @@ existing project or stock empty project.
         normTagging = normmd.tables['Tagging']
         taggings = [dict(row) for row in normdb.execute(select([
                 normTagging.c.Source,
+                normSource.c.ObjectType,
                 normTagging.c.Node,
                 normTagging.c.Memo,
                 normTagging.c.Fragment,
                 normTagging.c.CreatedBy,
                 normTagging.c.CreatedDate,
                 normTagging.c.ModifiedBy,
-                normTagging.c.ModifiedDate]).where(
-                normTagging.c.Node != None))]
+                normTagging.c.ModifiedDate]).where(and_(
+                normTagging.c.Node != None,
+                normSource.c.Id == normTagging.c.Source)))]
 
         for tagging in taggings:
             matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
@@ -1386,7 +1391,12 @@ existing project or stock empty project.
                 endY = matchfragment.group(4)
                 if endY != None:
                     tagging['LengthY'] = int(endY) - tagging['StartY'] + 1
-                    tagging['OfX'] = tagging['StartX']
+
+            if tagging['ObjectType'] == 'JPEG':
+                tagging['ReferenceTypeId'] = 2
+                tagging['ClusterId']       = 0
+            else:
+                tagging['ReferenceTypeId'] = 0
 
             tagging['Id'] = uuid.uuid4()  # Not clear what purpose this field serves
 
@@ -1396,8 +1406,7 @@ existing project or stock empty project.
         if len(taggings) > 0:
             nvivocon.execute(nvivoNodeReference.insert().values({
                         'Node_Item_Id':     bindparam('Node'),
-                        'Source_Item_Id':   bindparam('Source'),
-                        'ReferenceTypeId':  literal_column('0')
+                        'Source_Item_Id':   bindparam('Source')
                 }), taggings)
 
 # Annotations
@@ -1408,14 +1417,16 @@ existing project or stock empty project.
         normTagging = normmd.tables['Tagging']
         annotations = [dict(row) for row in normdb.execute(select([
                 normTagging.c.Source,
+                normSource.c.ObjectType,
                 normTagging.c.Node,
                 normTagging.c.Memo,
                 normTagging.c.Fragment,
                 normTagging.c.CreatedBy,
                 normTagging.c.CreatedDate,
                 normTagging.c.ModifiedBy,
-                normTagging.c.ModifiedDate]).where(
-                normTagging.c.Node == None))]
+                normTagging.c.ModifiedDate]).where(and_(
+                normTagging.c.Node == None,
+                normSource.c.Id == normTagging.c.Source)))]
 
         for annotation in annotations:
             matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", annotation['Fragment'])
@@ -1433,14 +1444,17 @@ existing project or stock empty project.
                 if endY != None:
                     annotation['LengthY'] = int(endY) - annotation['StartY'] + 1
 
+            if annotation['ObjectType'] == 'JPEG':
+                annotation['ReferenceTypeId'] = 2
+            else:
+                annotation['ReferenceTypeId'] = 0
+
             annotation['Id'] = uuid.uuid4()  # Not clear what purpose this field serves
 
         if len(annotations) > 0:
             nvivocon.execute(nvivoAnnotation.insert().values({
                         'Item_Id':          bindparam('Source'),
-                        'Text':             bindparam('Memo'),
-                        # JS: Need to figure out ReferenceTypeId column
-                        'ReferenceTypeId':  literal_column('0')
+                        'Text':             bindparam('Memo')
                 }), annotations)
 
 # All done.
