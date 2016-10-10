@@ -16,15 +16,15 @@ This is the most difficult part of the process, so I describe it in the greatest
 
 ### Install Microsoft SQL Server
 
-Start by accepting that SQL Server, like pretty much everything Microsoft creates, is awful. Each version differs, often in subtle and undocumented ways, that make it incompatible with previous versions. Installation and configuration often requires using a GUI, making it impossible (or very difficult) to automate. However, SQL Server does have many enthusiastic users who write prolifically about their experiences. So if you have trouble with any of this, the first place to look for help is on the web by googling the text of any error message you need to investigate or concise description of a problem you encounter.
+Start by accepting that SQL Server, like pretty much everything Microsoft creates, is awful. Each version differs, often in subtle and undocumented ways, that make it incompatible with previous versions. Installation and configuration often require a GUI, making them impossible (or very difficult) to automate. However, SQL Server does have many enthusiastic users who write prolifically about their experiences. So if you have trouble with any of this, the first place to look for help is on the web by googling the text of any error message you need to investigate or concise description of a problem you encounter.
 
 The version of SQL Server that NVivo 10 uses is called Microsoft SQL Server 2008 R2. This program is installed as part of the NVivo installation process. If you want to use NVivotools without having NVivo installed, you'll need to download and install [Microsoft SQL Server 2008 R2 Express](https://www.microsoft.com/en-au/download/details.aspx?id=30438) (free). NVivo 11 uses Microsoft SQL Server 2014, but only installs a stripped-down 'LocalDB' version. To use NVivotools with NVivo 11, you'll need to download and install [Microsoft SQL Server 2014 Express](https://www.microsoft.com/en-au/download/details.aspx?id=42299) (free) yourself.
 
 ### Set up SQL Server
 
-NVivotools accesses SQL Server using TDS, which operates over TCP/IP. This means that you need to configure SQL Server to allow access over TCP/IP. It may be possible to do this using the command line, but I found it simpler to use the SQL Server Configuration Manager, which you'll find from the Start Menu in the folder for the relevant version of SQL Server. When you find it you need to:
+NVivotools accesses SQL Server using TDS, which operates over the network protocol TCP/IP. This means that you need to configure SQL Server to allow access over TCP/IP. It may be possible to do this using the command line, but I found it simpler to use the SQL Server Configuration Manager, which you'll find from the Start Menu in the folder for the relevant version of SQL Server. When you find it you need to:
 
-#### Enable TCP/IP connections
+#### 1. Enable TCP/IP connections
 
 In the left panel of the SQL Server Configuration Manager click on 'Protocol for QSRNVIVO10' under 'SQL Server Network Configuration' or 'SQL Server Network Configuration (32bit)' and find a list of protocol names. The one you want is 'TCP/IP'. Right-click on this one, then click on 'Properties'. Under the 'Protocol' tab you need to change the value of 'Enabled' to 'Yes'. Then go to the 'IP Addresses' tab, scroll to the bottom of the list of values until you find a header 'IPAll'. Expand this heading by clicking on it until you see the value 'TCP Port' underneath it. Change this value to the TDS default of '1433'. Then click 'OK' to accept the TCP/IP configuration.
 
@@ -34,15 +34,15 @@ If you know what you are doing you can of course set the TCP port for just the I
 
 Don't close the Configuration Manager just yet, as you'll need to use it to restart the server a few steps further on.
 
-#### Configure SQL Server authentication
+#### 2. Configure SQL Server authentication
 
 Microsoft SQL Server is able to use two different kinds of authentication to control access to its databases. The default setting is to only allow 'Windows authentication'. And you guessed it, we need the other kind 'SQL Server authentication'. To configure the server to allow both kinds of authentication, you need to make a small change to the Windows registry. There are a variety of ways of doing this; I will only describe the most standard way of doing so using the registry editor regedit.
 
 Run regedit.exe from the Start Menu by typing 'regedit' into the Search box. You will need to authorise changes to the system - don't be too alarmed, you are in total control of any changes so as long as you are careful and/or follow these instructions closely no harm will result. That said, no guarantees!
 
-Using the left pane in the regedit window, navigate to HKEY_LOCAL_MACHINE -> SOFTWARE -> Microsoft -> Microsoft SQL Server -> MSSQL10_50.QSRNVIVO10 -> MSSQLServer Once again if you are using a different version of NVivo or Microsoft SQL Server these names (especially 'MSSQL10_50.QSRNVIVO10' may vary). When you get there, you will see a list of values in the right pane. Look for 'LoginMode'; right-click on it, select 'Modify' and change the value to '2'.
+Using the left pane in the regedit window, navigate to HKEY_LOCAL_MACHINE -> SOFTWARE -> Microsoft -> Microsoft SQL Server -> MSSQL10_50.QSRNVIVO10 -> MSSQLServer. Once again if you are using a different version of NVivo or Microsoft SQL Server these names (especially `MSSQL10_50.QSRNVIVO10` may vary). When you get there, you will see a list of values in the right pane. Look for 'LoginMode'; right-click on it, select 'Modify' and change the value to '2'.
 
-#### Create an account ('login' in MSSQL parlance)
+#### 3. Create an account ('login' in MSSQL parlance)
 
 Start the SQLCMD program from the command line as follows:
 
@@ -55,19 +55,19 @@ Then enter the following commands:
     sp_addsrvrolemember nvivotools,sysadmin
     go
 
-[Some sources](https://www.mssqltips.com/sqlservertip/2538/enabling-dedicated-administrator-connection-in-sql-server-2008-express-edition/) suggest that you may need to restart the server with ';-T7806' appended to the command line. (And some people still take Microsoft seriously?) I haven't always found this necessary but if you have trouble then it may be worth trying.
+[Some sources](https://www.mssqltips.com/sqlservertip/2538/enabling-dedicated-administrator-connection-in-sql-server-2008-express-edition/) suggest that you may need to restart the server with `;-T7806` appended to the command line. (And some people still take Microsoft seriously?) I haven't always found this necessary but if you have trouble then it may be worth trying.
 
-#### Restart server
+#### 4. Restart server
 
 Another piece of Microsoft brilliance - you can't request that the server simply read a new network configuration - you have to restart the whole thing. Back at the SQL Server Configuration Manager window, click on 'SQL Server Services' in the left frame, then right-click on 'SQL Server (QSRNVIVO10)' and select 'Restart'.
 
 As in the previous section, if you are using a server instance other than 'QSRNVIVO10', that will be the server you need to restart.
 
-#### (Optional) Punch a hole in the Windows firewall
+#### 5. (Optional) Punch a hole in the Windows firewall
 
 If you want to use NVivotools from a different computer than the one running SQL Server (I do this so that I can keep as far away from Windows as possible, but you may find other reasons to do so) you'll need to tell the firewall to allow incoming network connections to SQL Server. You'll need to find the SQL Server executable (something like `C:\Program Files\Microsoft SQL Server\MSSQL10_50.QSRNVIVO10\MSSQL\Binn\sqlservr.exe`) and configure the Microsoft Firewall to allow connections to that program.
 
-### More Information
+#### More Information
 
 Here are a few links that describe other ways of configuring the SQL Server authentication.
 
@@ -96,11 +96,11 @@ Using a command window, type
 
     pip install future pdfminer Pillow pymssql sqlalchemy
 
-User [abers](https://github.com/abers) [found](https://github.com/BarraQDA/nvivotools/issues/1#issue-181693962) a problem on Raspberry Pi (possibly other ARM systems) where the pymssql library requires other packages (freetds-common, libsybdb5) to be installed. This problem was resolved by installing those packages using the package manager (eg apt-get for Debian-based systems) before using pip to install pymssql.
+User [abers](https://github.com/abers) [found](https://github.com/BarraQDA/nvivotools/issues/1#issue-181693962) a problem on Raspberry Pi (possibly other ARM systems) where the `pymssql` library requires other packages (`freetds-common`, `libsybdb5`) to be installed. This problem was resolved by installing those packages using the package manager (eg `apt-get` for Debian-based systems) before using pip to install pymssql.
 
 ## And you are ready to go
 
-Until I write a GUI front end for NVivotools, you'll need to use a command line. The main work is done in the two Python scripts [`NormaliseNVP.py`](NormaliseNVP.py) and [`DenormaliseNVP.py`](DenormaliseNVP.py), together with one included script [`NVivoTypes.py`](NVivoTypes.py)  They take two arguments (in sqlalchemy format, eg sqlite:///filename.db or mssql+pymssql://user:password@sqlservername/database) and convert the former to the latter. A useful switch is -w/--windows, which instructs the scripts to convert certain text fields to or from a strangely garbled format that NVivo for Windows (but not for Mac) uses.
+Until I write a GUI front end for NVivotools, you'll need to use a command line. The main work is done in the two Python scripts [`NormaliseNVP.py`](NormaliseNVP.py) and [`DenormaliseNVP.py`](DenormaliseNVP.py), together with one included script [`NVivoTypes.py`](NVivoTypes.py)  They take two arguments (in sqlalchemy format, eg `sqlite:///filename.db` or `mssql+pymssql://user:password@sqlservername/database`) and convert the former to the latter. A useful switch is `-w`/`--windows`, which instructs the scripts to convert certain text fields to or from a strangely garbled format that NVivo for Windows (but not for Mac) uses.
 
 Before you can use these scripts you'll need to get your NVivo file attached to an instance of Microsoft SQL Server. The helper batch scripts in the subdirectory 'Windows' should be of some help. You'll need to put both directories into your PATH to make them work.
 
