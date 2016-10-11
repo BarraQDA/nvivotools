@@ -8,6 +8,8 @@ from xml.dom.minidom import *
 import warnings
 import sys
 import os
+import codecs
+from subprocess import Popen, PIPE
 import argparse
 import uuid
 import re
@@ -889,12 +891,6 @@ existing project or stock empty project.
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description']))
 
-            # Lookup object type from name
-            if source['ObjectTypeName'] in ObjectTypeName.values():
-                source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])]
-            else:
-                source['ObjectType'] = int(source['ObjectTypeName'])
-
             source['PlainText'] = None
             source['MetaData']  = None
 
@@ -957,26 +953,54 @@ existing project or stock empty project.
 
                 extendeditems.append({'Item_Id':    source['Item_Id'],
                                       'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>'})
-            elif source['ObjectTypeName'] == 'DOC':
+            elif source['ObjectTypeName'] in {'DOC', 'ODT', 'TXT'}:
                 source['SourceType'] = 2  # or 3 or 4?
                 source['LengthX'] = 0
+
+                tempfilename = tempfile.mktemp()
+                tempfile = file(tempfilename + '.' + source['ObjectTypeName'], 'wb')
+                tempfile.write(source['Object'])
+                tempfile.close()
+
+                p = Popen(['/usr/bin/unoconv', '--format=text', tempfilename + '.' + source['ObjectTypeName']], stderr=PIPE, close_fds=True)
+                err = p.stderr.read()
+                if err != '':
+                    raise RuntimeError(err)
+                else:
+                    source['PlainText'] = codecs.open(tempfilename + '.txt', 'r', 'utf-8').read()
+
+                # Convert object to DOC if isn't already
+                if source['ObjectTypeName'] != 'DOC':
+                    p = Popen(['/usr/bin/unoconv', '--format=doc', tempfilename + '.' + source['ObjectTypeName']], stderr=PIPE, close_fds=True)
+                    err = p.stderr.read()
+                    if err != '':
+                        raise RuntimeError(err)
+                    else:
+                        source['Object'] = file(tempfilename + '.doc', 'rb').read()
+
+                    os.remove(tempfilename + '.doc')
+
+                # Compress doc object without header using compression level 6
+                compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
+                source['Object'] = compressor.compress(source['Object']) + compressor.flush()
+
+                os.remove(tempfilename + '.' + source['ObjectTypeName'])
+                os.remove(tempfilename + '.txt')
+                source['ObjectTypeName'] = 'DOC'
 
                 doc = Document()
                 settings = doc.createElement("DisplaySettings")
                 settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
                 settings.setAttribute("InputPosition", "0")
                 source['MetaData'] = settings.toxml()
-                # Compress object without header using compression level 6
-                compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
-                source['Object'] = compressor.compress(source['Object']) + compressor.flush()
 
                 paragraphs = doc.createElement("Paragraphs")
                 paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
                 start = 0
-                while start < len(source['Content']):
-                    end = source['Content'].find('\n', start)
+                while start < len(source['PlainText']):
+                    end = source['PlainText'].find('\n', start)
                     if end == -1:
-                        end = len(source['Content']) - 1
+                        end = len(source['PlainText']) - 1
                     para = paragraphs.appendChild(doc.createElement("Para"))
                     para.setAttribute("Pos", str(start))
                     para.setAttribute("Len", str(end - start + 1))
@@ -1004,6 +1028,13 @@ existing project or stock empty project.
                 #source['Waveform'] = waveform of recording, one byte per centisecond
             else:
                 source['LengthX'] = 0
+
+            # Lookup object type from name
+            if source['ObjectTypeName'] in ObjectTypeName.values():
+                source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])]
+            else:
+                source['ObjectType'] = int(source['ObjectTypeName'])
+
 
         sourceswithcategory = [dict(row) for row in sources if row['Category'] != None]
 
