@@ -34,8 +34,6 @@ try:
                         help='Source category action.')
     parser.add_argument('--sources', choices=table_choices, default="replace",
                         help='Source action.')
-    parser.add_argument('--no-decompress', action='store_true',
-                        help='Don\'t decompress source objects')
     parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="replace",
                         help='Source attribute action.')
     parser.add_argument('-t', '--taggings', choices=table_choices, default="replace",
@@ -439,7 +437,7 @@ try:
 
             source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
 
-            if (not args.no_decompress) and source['ObjectType'] == 'DOC':
+            if source['ObjectType'] == 'DOC':
                 # Object is zlib-compressed without header
                 source['Object'] = zlib.decompress(source['Object'], -15)
 

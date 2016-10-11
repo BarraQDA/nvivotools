@@ -46,8 +46,6 @@ try:
                         help='Source category action.')
     parser.add_argument('--sources', choices=table_choices, default="merge",
                         help='Source action.')
-    parser.add_argument('-z', '--compress-level', default='9',
-                        help='Compress level for source objects.')
     parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="merge",
                         help='Source attribute action.')
     parser.add_argument('-t', '--taggings', choices=table_choices, default="merge",
@@ -962,18 +960,16 @@ existing project or stock empty project.
             elif source['ObjectTypeName'] == 'DOC':
                 source['SourceType'] = 2  # or 3 or 4?
                 source['LengthX'] = 0
+
+                doc = Document()
                 settings = doc.createElement("DisplaySettings")
                 settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
                 settings.setAttribute("InputPosition", "0")
                 source['MetaData'] = settings.toxml()
-                # Compress object using zlib without header
-                if int(args.compress_level) != 0:
-                    if args.verbosity > 1:
-                        print ("Compressing with level " + args.compress_level)
-                    compressor = zlib.compressobj(int(args.compress_level), zlib.DEFLATED, -15)
-                    source['Object'] = compressor.compress(source['Object']) + compressor.flush()
+                # Compress object without header using compression level 6
+                compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
+                source['Object'] = compressor.compress(source['Object']) + compressor.flush()
 
-                doc = Document()
                 paragraphs = doc.createElement("Paragraphs")
                 paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
                 start = 0
@@ -987,14 +983,14 @@ existing project or stock empty project.
                     para.setAttribute("Style", "Normal")
                     start = end + 1
 
-                source['MetaData'] = paragraphs.toxml() + pages.toxml()
+                source['MetaData'] = paragraphs.toxml() + settings.toxml()
             elif source['ObjectTypeName'] == 'JPEG':
                 source['SourceType'] = 33
                 image = Image.open(StringIO(source['Object']))
                 source['LengthX'], source['LengthY'] = image.size
                 image.thumbnail((200,200))
                 thumbnail = StringIO()
-                image.save(thumbnail, format='JPEG')
+                image.save(thumbnail, format='BMP')
                 source['Thumbnail'] = thumbnail.getvalue()
                 source['Properties'] = '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"/>'
 
