@@ -1,6 +1,6 @@
 # NVivotools
 
-A range of tools to help you get more out of NVivo^(tm)^.
+A range of tools to help you get more out of NVivo(tm).
 
 ## Background
 
