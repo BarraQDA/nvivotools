@@ -96,7 +96,27 @@ Using a command window, type
 
     pip install future pdfminer Pillow pymssql sqlalchemy
 
-User [abers](https://github.com/abers) [found](https://github.com/BarraQDA/nvivotools/issues/1#issue-181693962) a problem on Raspberry Pi (possibly other ARM systems) where the `pymssql` library requires other packages (`freetds-common`, `libsybdb5`) to be installed. This problem was resolved by installing those packages using the package manager (eg `apt-get` for Debian-based systems) before using pip to install pymssql.
+User [abers](https://github.com/abers) [found](https:/sre/github.com/BarraQDA/nvivotools/issues/1#issue-181693962) a problem on Raspberry Pi (possibly other ARM systems) where the `pymssql` library requires other packages (`freetds-common`, `libsybdb5`) to be installed. This problem was resolved by installing those packages using the package manager (eg `apt-get` for Debian-based systems) before using pip to install pymssql.
+
+## Optional extras
+
+In order to convert data among various formats, NVivotools uses a number of helper applications. Depending on the use you plan to make of NVivotools you may or may not need these applications.
+
+These packages are typically trivial to install on Linux systems, but require a little more work under Windows.
+
+### LibreOffice/OpenOffice and unoconv
+
+If you are going to import textual data into NVivo, you will need either [LibreOffice](http://www.libreoffice.org) or [OpenOffice](http://www.openoffice.org), plus the [unoconv](http://dag.wiee.rs/home-made/unoconv/) package.
+
+### Linux
+
+Simply install the packages using your usual package manager, whether a GUI like `synaptic` on Ubuntu, or command line such as `apt-get` on Debian-based systems.
+
+### Windows
+
+1. Install one of [LibreOffice](http://www.libreoffice.org) or [OpenOffice](http://www.openoffice.org) by following the links from the website.
+
+2. Download [unoconv](http://dag.wiee.rs/home-made/unoconv/) from its [github release](https://github.com/dagwieers/unoconv/archive/0.7.zip). From this zip file, extract `unoconv-0.7/unoconv` and copy it to the folder where the NVivotools scripts.
 
 ## And you are ready to go
 
