@@ -533,7 +533,6 @@ try:
 
         taggings  = [dict(row) for row in nvivodb.execute(sel)]
         for tagging in taggings:
-            print tagging
             # JS: Should be able to do this in select statement - figure out how!
             if tagging['StartZ'] != None:
                 next
