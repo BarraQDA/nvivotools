@@ -2,6 +2,16 @@
 
 A range of tools to help you get more out of NVivo(tm).
 
+## Introduction
+
+The core of NVivotools its ability to convert qualitative research data (sources, nodes, coding, etc.) into and out of NVivo's proprietary format. Some reasons why you might want to do this include:
+
+1. Freeing your work. Make your research data available to whomever your want (including your future self), not only those with their own current NVivo licence.
+
+2. Choose the tools you want to manipulate your data. NVivo's GUI isn't bad, but sometimes you'd prefer to be able to automate. Use some of the plethora of data management tools or your own coding skills to take charge of your data.
+
+3. Interface with the rest of your IT world. Make NVivo part of your tookit, not your whole world.
+
 ## Background
 
 NVivo stores its projects in the form of a relational database. The Windows version uses Microsoft SQL Server while the Mac version uses SQL Anywhere. NVivotools currently only works with Microsoft Windows NVivo files though a Mac version should be fairly simple to write using [sqlalchemy-sqlany](https://github.com/sqlanywhere/sqlalchemy-sqlany).
