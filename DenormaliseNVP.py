@@ -962,12 +962,31 @@ existing project or stock empty project.
                 tempfile.write(source['Object'])
                 tempfile.close()
 
-                p = Popen(['/usr/bin/unoconv', '--format=text', tempfilename + '.' + source['ObjectTypeName']], stderr=PIPE, close_fds=True)
+                # Look for unoconv script or executable. Could this be made simpler?
+                unoconvcmd = None
+                for path in os.environ["PATH"].split(os.pathsep):
+                    unoconvpath = os.path.join(path, 'unoconv')
+                    if os.path.exists(unoconvpath):
+                        if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
+                            unoconvcmd = [unoconvpath]
+                        else:
+                            unoconvcmd = ['python', unoconvpath]
+                        break
+                if unoconvcmd == None:
+                    raise RuntimeError("""
+Can't find unoconv on path. Please refer to the NVivotools README file.
+""")
+                p = Popen(unoconvcmd + ['--format=text', tempfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
                 err = p.stderr.read()
                 if err != '':
                     raise RuntimeError(err)
-                else:
-                    source['PlainText'] = codecs.open(tempfilename + '.txt', 'r', 'utf-8').read()
+
+                # Read text output from unocode, then massage it by first dropping a final line
+                # terminator, then changing to Windows (CRLF) line terminators
+                source['PlainText'] = codecs.open(tempfilename + '.txt', 'r', 'utf-8-sig').read()
+                if source['PlainText'].endswith('\n'):
+                    source['PlainText'] = source['PlainText'][:-1]
+                source['PlainText'] = source['PlainText'].replace('\n', '\r\n')
 
                 # Convert object to DOC if isn't already
                 if source['ObjectTypeName'] != 'DOC':
@@ -1004,7 +1023,7 @@ existing project or stock empty project.
                     para = paragraphs.appendChild(doc.createElement("Para"))
                     para.setAttribute("Pos", str(start))
                     para.setAttribute("Len", str(end - start + 1))
-                    para.setAttribute("Style", "Normal")
+                    para.setAttribute("Style", "Text Body")
                     start = end + 1
 
                 source['MetaData'] = paragraphs.toxml() + settings.toxml()
