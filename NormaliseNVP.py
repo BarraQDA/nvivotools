@@ -79,7 +79,7 @@ try:
     if normProject == None:
         normProject = Table('Project', normmd,
             Column('Title',         String(256),                            nullable=False),
-            Column('Description',   String(2048),                           nullable=False),
+            Column('Description',   String(2048)),
             Column('CreatedBy',     UUID(),         ForeignKey("User.Id"),  nullable=False),
             Column('CreatedDate',   DateTime,                               nullable=False),
             Column('ModifiedBy',    UUID(),         ForeignKey("User.Id"),  nullable=False),
