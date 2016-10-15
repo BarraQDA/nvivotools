@@ -28,10 +28,17 @@ try:
                         help='Source action.')
     parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="replace",
                         help='Source attribute action.')
-    parser.add_argument('-t', '--codings', choices=table_choices, default="replace",
+    parser.add_argument('-t', '--taggings', choices=table_choices, default="replace",
                         help='Tagging action.')
     parser.add_argument('-u', '--users', choices=table_choices, default="replace",
                         help='User action.')
+
+    parser.add_argument('-U', '--user', type=str,
+                        help='Username for fetching images')
+    parser.add_argument('-P', '--password', type=str,
+                        help='Password for fetching images')
+    parser.add_argument('--url', type=str, default='http://localhost/images/',
+                        help='URL for fetching images')
 
     parser.add_argument('infile', type=str,
                         help='SQLAlchemy path of input OpenQDA database or "-" to create empty project.')
@@ -251,11 +258,12 @@ try:
                       oqdaimages.c.memo])
 
         # Prepare http voodoo
-        password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
-        top_level_url = "http://www.mais.mat.br/webQDA/"
-        password_mgr.add_password(None, top_level_url, 'leo', 'research1717')
-        handler = urllib2.HTTPBasicAuthHandler(password_mgr)
-        opener = urllib2.build_opener(handler)
+        if args.user != None:
+            password_mgr = urllib2.HTTPPasswordMgrWithDefaultRealm()
+            top_level_url = args.url
+            password_mgr.add_password(None, top_level_url, args.user, args.password)
+            handler = urllib2.HTTPBasicAuthHandler(password_mgr)
+            opener = urllib2.build_opener(handler)
 
         sources = [dict(row) for row in oqdadb.execute(sel)]
         sourceuuid = {}
@@ -263,10 +271,12 @@ try:
             source['uuid'] = uuid.uuid4()
             source['Type'] = 'JPEG'
             print("Downloading " + source['name'])
-            opener.open('http://www.mais.mat.br/webQDA/images/' + source['name'])
-            urllib2.install_opener(opener)
-            response = urllib2.urlopen('http://www.mais.mat.br/webQDA/images/' + source['name'])
+            if args.user != None:
+                opener.open(args.url + source['name'])
+                urllib2.install_opener(opener)
+            response = urllib2.urlopen(args.url + source['name'])
             source['Object'] = response.read()
+            source['Thumbnail'] = ''
             source['CreatedBy']    = users[source['owner']]
             source['CreatedDate']  = source['date']
             source['ModifiedBy']   = users[source['owner']]
@@ -277,184 +287,63 @@ try:
             normdb.execute(normSource.insert().values({
                     'Id':bindparam('uuid'),
                     'Name': bindparam('name'),
-                    'Description': bindparam('memo'),
-                    'Color': bindparam('color'),
+                    'Description': bindparam('memo')
                 }), sources)
 
-        sys.exit()
+# Source attributes
+    if args.source_attributes != 'skip':
+        print("Normalising source attributes")
 
-
-    if args.node_attributes != 'skip':
-        print("Normalising node attributes")
-
-        sel = select([oqdaattributes.c.id,
+        sel = select([oqdaimageAttributes.c.images_id,
+                      oqdaimageAttributes.c.value,
                       oqdaattributes.c.name,
-                      oqdaattributes.c.memo])
+                      oqdaattributes.c.memo]).where(
+                      oqdaattributes.c.id == oqdaimageAttributes.c.attributes_id)
 
         attributes = [dict(row) for row in oqdadb.execute(sel)]
         for attribute in attributes:
-            attribute['uuid']         = codeuuid[attribute['id']]
-            attribute['Length']       = len(attribute['memo'])
+            attribute['Source']       = sourceuuid[attribute['images_id']]
+            attribute['Type']         = 'Text'
+            attribute['Length']       = len(attribute['value'])
             attribute['CreatedBy']    = defaultuserid
             attribute['CreatedDate']  = min(dateset)
             attribute['ModifiedBy']   = defaultuserid
             attribute['ModifiedDate'] = max(dateset)
 
         if len(attributes) > 0:
-            normdb.execute(normNodeAttribute.insert().values({
-                    'Node': bindparam('uuid'),
+            normdb.execute(normSourceAttribute.insert().values({
                     'Name': bindparam('name'),
-                    'Value':bindparam('memo'),
-                    'Type': literal_column('Text'),
-                }), nodeattrs)
-
-        sys.exit()
-
-
-# Source attributes
-    if args.source_attributes != 'skip':
-        print("Normalising source attributes")
-
-        oqdaItem         = oqdamd.tables['Item']
-        oqdaRole         = oqdamd.tables['Role']
-        oqdaSource       = oqdamd.tables['Source']
-        oqdaNameItem     = oqdaItem.alias(name='NameItem')
-        oqdaNameRole     = oqdaRole.alias(name='NameRole')
-        oqdaValueItem    = oqdaItem.alias(name='ValueItem')
-        oqdaValueRole    = oqdaRole.alias(name='ValueRole')
-        oqdaExtendedItem = oqdamd.tables['ExtendedItem'].alias(name='ExtendedNameItem')
-
-        sel = select([oqdaSource.c.Item_Id.label('Source'),
-                      oqdaNameItem.c.Name,
-                      oqdaValueItem.c.Name.label('Value'),
-                      oqdaValueItem.c.CreatedBy,
-                      oqdaValueItem.c.CreatedDate,
-                      oqdaValueItem.c.ModifiedBy,
-                      oqdaValueItem.c.ModifiedDate,
-                      oqdaExtendedItem.c.Properties])
-        sel = sel.where(and_(
-                      oqdaSource.c.Item_Id == oqdaValueRole.c.Item1_Id,
-                      oqdaValueRole.c.TypeId == literal_column('7'),
-                      oqdaValueItem.c.Id == oqdaValueRole.c.Item2_Id,
-                      oqdaNameRole.c.Item2_Id == oqdaValueRole.c.Item2_Id,
-                      oqdaNameRole.c.TypeId == literal_column('6'),
-                      oqdaNameItem.c.Id == oqdaNameRole.c.Item1_Id,
-                      oqdaValueItem.c.Name != literal_column('\'Unassigned\''),
-                      oqdaExtendedItem.c.Item_Id == oqdaNameItem.c.Id
-                    ))
-        sourceattrs  = [dict(row) for row in oqdadb.execute(sel)]
-        for sourceattr in sourceattrs:
-            properties = parseString(sourceattr['Properties'])
-            for property in properties.documentElement.getElementsByTagName('Property'):
-                if property.getAttribute('Key') == 'DataType':
-                    sourceattr['Type'] = DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
-                elif property.getAttribute('Key') == 'Length':
-                    sourceattr['Length'] = int(property.getAttribute('Value'))
-
-        if args.windows:
-            for sourceattr in sourceattrs:
-                sourceattr['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Name']))
-                sourceattr['Value'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Value']))
-
-        if args.source_attributes == 'replace':
-            normdb.execute(normSourceAttribute.delete())
-        elif args.source_attributes == 'merge':
-            normdb.execute(normSourceAttribute.delete(
-                           and_(normSourceAttribute.c.Source == bindparam('Source'),
-                                normSourceAttribute.c.Name == bindparam('Name'))),
-                           sourceattrs)
-
-        if len(sourceattrs) > 0:
-            normdb.execute(normSourceAttribute.insert(), sourceattrs)
+                    'Value':bindparam('value')\
+                }), attributes)
 
 # Tagging
     if args.taggings != 'skip':
         print("Normalising taggings")
 
-        oqdaNodeReference = oqdamd.tables['NodeReference']
-
-        sel = select([oqdaNodeReference.c.Source_Item_Id.label('Source'),
-                      oqdaNodeReference.c.Node_Item_Id.label('Node'),
-                      oqdaNodeReference.c.StartX,
-                      oqdaNodeReference.c.LengthX,
-                      oqdaNodeReference.c.StartY,
-                      oqdaNodeReference.c.LengthY,
-                      oqdaNodeReference.c.StartZ,
-                      oqdaNodeReference.c.CreatedBy,
-                      oqdaNodeReference.c.CreatedDate,
-                      oqdaNodeReference.c.ModifiedBy,
-                      oqdaNodeReference.c.ModifiedDate,
-                      oqdaItem.c.TypeId])
-        sel = sel.where(and_(
-                      #oqdaNodeReference.c.ReferenceTypeId == literal_column('0'),
-                      oqdaItem.c.Id == oqdaNodeReference.c.Node_Item_Id,
-                      or_(
-                        oqdaItem.c.TypeId == literal_column('16'),
-                        oqdaItem.c.TypeId == literal_column('62'))))
+        sel = select([oqdaimageCoding.c.images_id,
+                      oqdaimageCoding.c.codes_id,
+                      oqdaimageCoding.c.x1,
+                      oqdaimageCoding.c.y1,
+                      oqdaimageCoding.c.x2,
+                      oqdaimageCoding.c.y2,
+                      oqdaimageCoding.c.owner,
+                      oqdaimageCoding.c.date,
+                      oqdaimageCoding.c.memo])
 
         taggings  = [dict(row) for row in oqdadb.execute(sel)]
         for tagging in taggings:
-            # JS: Should be able to do this in select statement - figure out how!
-            if tagging['StartZ'] != None:
-                next
-            tagging['Fragment'] = str(tagging['StartX']) + ':' + str(tagging['StartX'] + tagging['LengthX'] - 1)
-            if tagging['StartY'] != None:
-                tagging['Fragment'] += ',' + str(tagging['StartY'])
-                if tagging['LengthY'] > 0:
-                    tagging['Fragment'] += ':' + str(tagging['StartY'] + tagging['LengthY'] - 1)
-
-        if args.taggings == 'replace':
-            normdb.execute(normTagging.delete(
-                                normTagging.c.Node   != None))
-        elif args.taggings == 'merge':
-            normdb.execute(normTagging.delete(
-                           and_(normSource.c.Source  == bindparam('Source'),
-                                normSource.c.Node    == bindparam('Node'),
-                                normSource.c.StartX  == bindparam('StartX'),
-                                normSource.c.LengthX == bindparam('LengthX'))),
-                           sources)
+            tagging['Fragment']     = str(tagging['x1']) + ':' + str(tagging['x2']) + ',' + str(tagging['y1']) + ':' + str(tagging['y2'])
+            tagging['Source']       = sourceuuid[tagging['images_id']]
+            tagging['Node']         = codeuuid[tagging['codes_id']]
+            tagging['CreatedBy']    = users[tagging['owner']]
+            tagging['CreatedDate']  = tagging['date']
+            tagging['ModifiedBy']   = users[tagging['owner']]
+            tagging['ModifiedDate'] = tagging['date']
 
         if len(taggings) > 0:
-            normdb.execute(normTagging.insert(), taggings)
-
-# Annotations
-    if args.annotations != 'skip':
-        print("Normalising annotations")
-
-        oqdaAnnotation = oqdamd.tables['Annotation']
-
-        sel = select([oqdaAnnotation.c.Item_Id.label('Source'),
-                      oqdaAnnotation.c.Text.label('Memo'),
-                      oqdaAnnotation.c.StartX,
-                      oqdaAnnotation.c.LengthX,
-                      oqdaAnnotation.c.StartY,
-                      oqdaAnnotation.c.LengthY,
-                      oqdaAnnotation.c.CreatedBy,
-                      oqdaAnnotation.c.CreatedDate,
-                      oqdaAnnotation.c.ModifiedBy,
-                      oqdaAnnotation.c.ModifiedDate])
-
-        annotations  = [dict(row) for row in oqdadb.execute(sel)]
-        for annotation in annotations:
-            annotation['Fragment'] = str(annotation['StartX']) + ':' + str(annotation['StartX'] + annotation['LengthX'] - 1);
-            if annotation['StartY'] != None:
-                annotation['Fragment'] += ',' + str(annotation['StartY'])
-                if annotation['LengthY'] > 0:
-                    annotation['Fragment'] += ':' + str(annotation['StartY'] + annotation['LengthY'] - 1)
-
-        if args.annotations == 'replace':
-            normdb.execute(normTagging.delete(
-                                normTagging.c.Node   == None))
-        elif args.annotations == 'merge':
-            normdb.execute(normTagging.delete(
-                           and_(normSource.c.Source  == bindparam('Source'),
-                                normSource.c.Node    == None,
-                                normSource.c.StartX  == bindparam('StartX'),
-                                normSource.c.LengthX == bindparam('LengthX'))),
-                           sources)
-
-        if len(annotations) > 0:
-            normdb.execute(normTagging.insert(), annotations)
+            normdb.execute(normTagging.insert().values({
+                    'Memo': bindparam('memo')
+                }), taggings)
 
 except exc.SQLAlchemyError:
     raise
