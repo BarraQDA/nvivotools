@@ -9,7 +9,9 @@ class UUID(TypeDecorator):
     CHAR(36), storing as stringified hex values.
 
     """
-    impl = CHAR
+    #impl = CHAR
+    #http://stackoverflow.com/questions/5849389/storing-uuids-in-sqlite-using-pylons-and-sqlalchemy
+    impl = Binary
 
     def load_dialect_impl(self, dialect):
         if dialect.name == 'postgresql':
