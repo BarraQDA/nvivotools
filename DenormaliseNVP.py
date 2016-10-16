@@ -254,7 +254,7 @@ existing project or stock empty project.
         sel = select([nvivoItem.c.Id])
         sel = sel.where(and_(
             nvivoItem.c.TypeId == literal_column('0'),
-            nvivoItem.c.Name   == literal_column('\'Node Classifications\''),  # Translate?
+            nvivoItem.c.Name   == literal_column("'Node Classifications'"),  # Translate?
             nvivoItem.c.System == True))
         headnodecategory = nvivocon.execute(sel).fetchone()
         if headnodecategory == None:
@@ -315,7 +315,7 @@ existing project or stock empty project.
                 }), nodecategories)
 
             nvivocon.execute(nvivoRole.insert().values({
-                        'Item1_Id': literal_column('\'' + str(headnodecategory['Id']) + '\''),
+                        'Item1_Id': literal_column("'" + str(headnodecategory['Id']) + "'"),
                         'Item2_Id': bindparam('Id'),
                         'TypeId':   literal_column('0')
                 }), nodecategories)
@@ -353,7 +353,7 @@ existing project or stock empty project.
         sel = select([nvivoItem.c.Id])
         sel = sel.where(and_(
             nvivoItem.c.TypeId == literal_column('0'),
-            nvivoItem.c.Name == literal_column('\'Nodes\''),
+            nvivoItem.c.Name == literal_column("'Nodes'"),
             nvivoItem.c.System == True))
         headnode = nvivocon.execute(sel).fetchone()
         if headnode == None:
@@ -445,7 +445,7 @@ existing project or stock empty project.
                 }), nodes)
 
             nvivocon.execute(nvivoRole.insert().values({
-                    'Item1_Id': literal_column('\'' + str(headnode['Id']) + '\''),
+                    'Item1_Id': literal_column("'" + str(headnode['Id']) + "'"),
                     'Item2_Id': bindparam('Id'),
                     'TypeId':   literal_column('0')
                 }), nodes)
@@ -573,7 +573,7 @@ existing project or stock empty project.
 
             newattributes = [dict(row) for row in nvivocon.execute(sel, nodeattribute)]
             if len(newattributes) == 0:    # Node has no category
-                print("WARNING: Node '" + nodeattribute['NodeName'] + "' has no category. NVivo cannot record attributes'")
+                print("WARNING: Node '" + nodeattribute['PlainTextNodeName'] + "' has no category. NVivo cannot record attributes'")
             else:
                 nodeattribute.update(newattributes[0])
                 if nodeattribute['Type'] == None:
@@ -598,7 +598,7 @@ existing project or stock empty project.
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('AttributeId'),
                             'Name':     bindparam('Name'),
-                            'Description': literal_column('\'\''),
+                            'Description': literal_column("''"),
                             'TypeId':   literal_column('20'),
                             'System':   literal_column('0'),
                             'ReadOnly': literal_column('0'),
@@ -630,7 +630,7 @@ existing project or stock empty project.
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
                             'Name':     bindparam('Unassigned'),
-                            'Description': literal_column('\'\''),
+                            'Description': literal_column("''"),
                             'TypeId':   literal_column('21'),
                             'System':   literal_column('1'),
                             'ReadOnly': literal_column('0'),
@@ -652,7 +652,7 @@ existing project or stock empty project.
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
                             'Name':     bindparam('NotApplicable'),
-                            'Description': literal_column('\'\''),
+                            'Description': literal_column("''"),
                             'TypeId':   literal_column('21'),
                             'System':   literal_column('1'),
                             'ReadOnly': literal_column('0'),
@@ -679,7 +679,7 @@ existing project or stock empty project.
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('NewValueId'),
                             'Name':     bindparam('Value'),
-                            'Description': literal_column('\'\''),
+                            'Description': literal_column("''"),
                             'TypeId':   literal_column('21'),
                             'System':   literal_column('0'),
                             'ReadOnly': literal_column('0'),
@@ -774,7 +774,7 @@ existing project or stock empty project.
         sel = select([nvivoItem.c.Id])
         sel = sel.where(and_(
             nvivoItem.c.TypeId == literal_column('0'),
-            nvivoItem.c.Name   == literal_column('\'Source Classifications\''),  # Translate?
+            nvivoItem.c.Name   == literal_column("'Source Classifications'"),  # Translate?
             nvivoItem.c.System == True))
         headsourcecategory = nvivocon.execute(sel).fetchone()
         if headsourcecategory == None:
@@ -795,7 +795,7 @@ existing project or stock empty project.
                 sourcecategory['Id'] = uuid.uuid4()
             if args.windows:
                 sourcecategory['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), sourcecategory['Name']))
-                sourcecategory['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), sourcecategory['Description']))
+                sourcecategory['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), sourcecategory['Description'] or ''))
 
         sel = select([nvivoItem.c.Id,
                       nvivoRole.c.Item1_Id,
@@ -835,7 +835,7 @@ existing project or stock empty project.
                 }), sourcecategories)
 
             nvivocon.execute(nvivoRole.insert().values({
-                        'Item1_Id': literal_column('\'' + str(headsourcecategory['Id']) + '\''),
+                        'Item1_Id': literal_column("'" + str(headsourcecategory['Id']) + "'"),
                         'Item2_Id': bindparam('Id'),
                         'TypeId':   literal_column('0')
                 }), sourcecategories)
@@ -857,7 +857,7 @@ existing project or stock empty project.
         sel = select([nvivoItem.c.Id])
         sel = sel.where(and_(
             nvivoItem.c.TypeId == literal_column('0'),
-            nvivoItem.c.Name == literal_column('\'Internals\''),
+            nvivoItem.c.Name == literal_column("'Internals'"),
             nvivoItem.c.System == True))
         headsource = nvivocon.execute(sel).fetchone()
         if headsource == None:
@@ -1093,7 +1093,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                                              bindparam('Thumbnail')),
                 }), sources)
             nvivocon.execute(nvivoRole.insert().values({
-                    'Item1_Id': literal_column('\'' + str(headsource['Id']) + '\''),
+                    'Item1_Id': literal_column("'" + str(headsource['Id']) + "'"),
                     'Item2_Id': bindparam('Item_Id'),
                     'TypeId':   literal_column('0')
                 }), sources)
@@ -1211,7 +1211,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
 
             newattributes = [dict(row) for row in nvivocon.execute(sel, sourceattribute)]
             if len(newattributes) == 0:    # Source has no category
-                print("WARNING: Source '" + sourceattribute['SourceName'] + "' has no category. NVivo cannot record attributes'")
+                print("WARNING: Source '" + sourceattribute['PlainTextSourceName'] + "' has no category. NVivo cannot record attributes'")
             else:
                 sourceattribute.update(newattributes[0])
                 if sourceattribute['Type'] == None:
@@ -1236,7 +1236,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('AttributeId'),
                             'Name':     bindparam('Name'),
-                            'Description': literal_column('\'\''),
+                            'Description': literal_column("''"),
                             'TypeId':   literal_column('20'),
                             'System':   literal_column('0'),
                             'ReadOnly': literal_column('0'),
@@ -1268,7 +1268,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
                             'Name':     bindparam('Unassigned'),
-                            'Description': literal_column('\'\''),
+                            'Description': literal_column("''"),
                             'TypeId':   literal_column('21'),
                             'System':   literal_column('1'),
                             'ReadOnly': literal_column('0'),
@@ -1290,7 +1290,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
                             'Name':     bindparam('NotApplicable'),
-                            'Description': literal_column('\'\''),
+                            'Description': literal_column("''"),
                             'TypeId':   literal_column('21'),
                             'System':   literal_column('1'),
                             'ReadOnly': literal_column('0'),
@@ -1317,7 +1317,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('NewValueId'),
                             'Name':     bindparam('Value'),
-                            'Description': literal_column('\'\''),
+                            'Description': literal_column("''"),
                             'TypeId':   literal_column('21'),
                             'System':   literal_column('0'),
                             'ReadOnly': literal_column('0'),

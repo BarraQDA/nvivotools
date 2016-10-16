@@ -331,7 +331,7 @@ try:
                       nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
                       nvivoNameRole.c.TypeId == literal_column('6'),
                       nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
-                      nvivoValueItem.c.Name != literal_column('\'Unassigned\''),
+                      nvivoValueItem.c.Name != literal_column("'Unassigned'"),
                       nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
                       ))
         nodeattrs = [dict(row) for row in nvivodb.execute(sel)]
@@ -478,7 +478,7 @@ try:
                       nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
                       nvivoNameRole.c.TypeId == literal_column('6'),
                       nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
-                      nvivoValueItem.c.Name != literal_column('\'Unassigned\''),
+                      nvivoValueItem.c.Name != literal_column("'Unassigned'"),
                       nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
                     ))
         sourceattrs  = [dict(row) for row in nvivodb.execute(sel)]
