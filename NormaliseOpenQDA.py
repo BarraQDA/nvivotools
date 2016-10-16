@@ -11,6 +11,7 @@ import argparse
 import uuid
 import datetime
 import urllib2
+import webcolors
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
 
@@ -199,7 +200,9 @@ try:
         for user in set(userlist):
             userid = uuid.uuid4()
             users[user] = userid
-            normdb.execute(normUser.insert(), {'Id':userid, 'Name':user})
+            normdb.execute(normUser.insert(), {
+                        'Id'  : userid,
+                        'Name': user})
 
         defaultuserid = users[userlist[1]]
 
@@ -212,12 +215,13 @@ try:
         dateset = set([row.date for row in oqdadb.execute(select([oqdaimageCoding.c.date]))] +
                       [row.date for row in oqdadb.execute(select([oqdaimages.c.date]))])
 
-        normdb.execute(normProject.insert(), {'Title'       : 'OpenQDA Project',
-                                              'Description' : 'Exported from ' + args.infile,
-                                              'CreatedBy'   : defaultuserid,
-                                              'CreatedDate' : min(dateset),
-                                              'ModifiedBy'  : defaultuserid,
-                                              'ModifiedDate': max(dateset)})
+        normdb.execute(normProject.insert(), {
+                        'Title'       : 'OpenQDA Project',
+                        'Description' : 'Exported from ' + args.infile,
+                        'CreatedBy'   : defaultuserid,
+                        'CreatedDate' : min(dateset),
+                        'ModifiedBy'  : defaultuserid,
+                        'ModifiedDate': max(dateset)})
 
 # Nodes
     if args.nodes != 'skip':
@@ -232,6 +236,7 @@ try:
         codeuuid = {}
         for code in codes:
             code['uuid']         = uuid.uuid4()
+            code['Color']        = int(webcolors.name_to_hex(code['color'])[1:], 16)
             code['CreatedBy']    = defaultuserid
             code['CreatedDate']  = min(dateset)
             code['ModifiedBy']   = defaultuserid
@@ -240,15 +245,25 @@ try:
 
         if len(codes) > 0:
             normdb.execute(normNode.insert().values({
-                    'Id':bindparam('uuid'),
-                    'Name': bindparam('name'),
-                    'Description': bindparam('memo'),
-                    'Color': bindparam('color'),
+                    'Id'         : bindparam('uuid'),
+                    'Name'       : bindparam('name'),
+                    'Description': bindparam('memo')
                 }), codes)
 
 # Sources
     if args.sources != 'skip':
         print("Normalising sources")
+
+        # Create dummy source category
+        sourcecatuuid = uuid.uuid4()
+        normdb.execute(normSourceCategory.insert(), {
+                    'Id'          : sourcecatuuid,
+                    'Name'        : 'OpenQDA image',
+                    'CreatedBy'   : defaultuserid,
+                    'CreatedDate' : min(dateset),
+                    'ModifiedBy'  : defaultuserid,
+                    'ModifiedDate': max(dateset)})
+
 
         sel = select([oqdaimages.c.id,
                       oqdaimages.c.name,
@@ -268,15 +283,16 @@ try:
         sources = [dict(row) for row in oqdadb.execute(sel)]
         sourceuuid = {}
         for source in sources:
-            source['uuid'] = uuid.uuid4()
-            source['Type'] = 'JPEG'
+            source['uuid']         = uuid.uuid4()
+            source['Category']     = sourcecatuuid
+            source['ObjectType']   = 'JPEG'
             print("Downloading " + source['name'])
             if args.user != None:
                 opener.open(args.url + source['name'])
                 urllib2.install_opener(opener)
             response = urllib2.urlopen(args.url + source['name'])
-            source['Object'] = response.read()
-            source['Thumbnail'] = ''
+            source['Object']       = response.read()
+            source['Thumbnail']    = ''
             source['CreatedBy']    = users[source['owner']]
             source['CreatedDate']  = source['date']
             source['ModifiedBy']   = users[source['owner']]
@@ -285,8 +301,8 @@ try:
 
         if len(sources) > 0:
             normdb.execute(normSource.insert().values({
-                    'Id':bindparam('uuid'),
-                    'Name': bindparam('name'),
+                    'Id'         : bindparam('uuid'),
+                    'Name'       : bindparam('name'),
                     'Description': bindparam('memo')
                 }), sources)
 
@@ -312,8 +328,8 @@ try:
 
         if len(attributes) > 0:
             normdb.execute(normSourceAttribute.insert().values({
-                    'Name': bindparam('name'),
-                    'Value':bindparam('value')\
+                    'Name' : bindparam('name'),
+                    'Value': bindparam('value')
                 }), attributes)
 
 # Tagging
