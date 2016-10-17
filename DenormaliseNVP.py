@@ -239,6 +239,7 @@ existing project or stock empty project.
                       normProject.c.ModifiedDate])
         projects = [dict(row) for row in normdb.execute(sel)]
         for project in projects:
+            project['Description'] = project['Description'] or u''
             if args.windows:
                 project['Title']       = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Title']))
                 project['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Description']))
@@ -271,8 +272,8 @@ existing project or stock empty project.
                       normNodeCategory.c.ModifiedDate])
         nodecategories = [dict(row) for row in normdb.execute(sel)]
         for nodecategory in nodecategories:
-            if nodecategory['Id'] == None:
-                nodecategory['Id'] = uuid.uuid4()
+            nodecategory['Id']          = nodecategory['Id']          or uuid.uuid4()
+            nodecategory['Description'] = nodecategory['Description'] or u''
             if args.windows:
                 nodecategory['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), nodecategory['Name']))
                 nodecategory['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), nodecategory['Description']))
@@ -376,8 +377,8 @@ existing project or stock empty project.
 
         tag = 0
         for node in nodes:
-            if node['Id'] == None:
-                node['Id'] = uuid.uuid4()
+            node['Id']            = node['Id']          or uuid.uuid4()
+            node['Description']   = node['Description'] or u''
             node['PlainTextName'] = node['Name']
             if args.windows:
                 node['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Name']))
@@ -394,6 +395,9 @@ existing project or stock empty project.
                         node['TopParent'] = node['Id']
                     else:
                         node['TopParent'] = TopParent
+
+                    if node['Aggregate'] == None:
+                        node['Aggregate'] = False
 
                     if node['Aggregate']:
                         tagchildnodes(node['TopParent'], node['Id'], node['AggregateList'], depth+1)
@@ -791,11 +795,11 @@ existing project or stock empty project.
                       normSourceCategory.c.ModifiedDate])
         sourcecategories = [dict(row) for row in normdb.execute(sel)]
         for sourcecategory in sourcecategories:
-            if sourcecategory['Id'] == None:
-                sourcecategory['Id'] = uuid.uuid4()
+            sourcecategory['Id']          = sourcecategory['Id']          or uuid.uuid4()
+            sourcecategory['Description'] = sourcecategory['Description'] or u''
             if args.windows:
                 sourcecategory['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), sourcecategory['Name']))
-                sourcecategory['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), sourcecategory['Description'] or ''))
+                sourcecategory['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), sourcecategory['Description']))
 
         sel = select([nvivoItem.c.Id,
                       nvivoRole.c.Item1_Id,
@@ -884,9 +888,9 @@ existing project or stock empty project.
 
         for source in sources:
 
-            if source['Item_Id'] == None:
-                source['Item_Id'] = uuid.uuid4()
-            source['PlainTextName'] = source['Name']
+            source['Item_Id']             = source['Item_Id']     or uuid.uuid4()
+            source['Description']         = source['Description'] or u''
+            source['PlainTextName']       = source['Name']
             if args.windows:
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description']))
@@ -1412,6 +1416,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
         taggings = [dict(row) for row in normdb.execute(select([
                 normTagging.c.Source,
                 normSource.c.ObjectType,
+                normSource.c.Name.label('SourceName'),
                 normTagging.c.Node,
                 normTagging.c.Memo,
                 normTagging.c.Fragment,
@@ -1425,7 +1430,8 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
         for tagging in taggings:
             matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
             if matchfragment == None:
-                raise RuntimeError("ERROR: Unrecognised tagging fragment: " + tagging['Fragment'])
+                raise RuntimeError("ERROR: Unrecognised tagging fragment: " + tagging['Fragment'] +
+                                   " for Source: " + tagging['SourceName'] )
 
             tagging['StartX'] = int(matchfragment.group(1))
             tagging['LengthX'] = int(matchfragment.group(2)) - tagging['StartX'] + 1
@@ -1446,9 +1452,6 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
 
             tagging['Id'] = uuid.uuid4()  # Not clear what purpose this field serves
 
-            if tagging['Memo'] != None:
-                print("Warning - Tagging contains memo - memo will be lost.")
-
         if len(taggings) > 0:
             nvivocon.execute(nvivoNodeReference.insert().values({
                         'Node_Item_Id':     bindparam('Node'),
@@ -1464,6 +1467,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
         annotations = [dict(row) for row in normdb.execute(select([
                 normTagging.c.Source,
                 normSource.c.ObjectType,
+                normSource.c.Name.label('SourceName'),
                 normTagging.c.Node,
                 normTagging.c.Memo,
                 normTagging.c.Fragment,
@@ -1471,13 +1475,14 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                 normTagging.c.CreatedDate,
                 normTagging.c.ModifiedBy,
                 normTagging.c.ModifiedDate]).where(and_(
-                normTagging.c.Node == None,
+                normTagging.c.Memo != None,
                 normSource.c.Id == normTagging.c.Source)))]
 
         for annotation in annotations:
             matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", annotation['Fragment'])
             if matchfragment == None:
-                raise RuntimeError("ERROR: Unrecognised annotation fragment: " + annotation['Fragment'])
+                raise RuntimeError("ERROR: Unrecognised tagging fragment: " + annotation['Fragment'] +
+                                   " for Source: " + annotation['SourceName'] )
 
             annotation['StartX'] = int(matchfragment.group(1))
             annotation['LengthX'] = int(matchfragment.group(2)) - annotation['StartX'] + 1
