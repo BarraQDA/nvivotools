@@ -11,6 +11,8 @@ import os
 import argparse
 import uuid
 import zlib
+import datetime
+from dateutil import parser as dateparser
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
 
@@ -54,6 +56,15 @@ try:
         nvivodb = create_engine(args.infile)
         nvivomd = MetaData(bind=nvivodb)
         nvivomd.reflect(nvivodb)
+
+        nvivoAnnotation    = nvivomd.tables['Annotation']
+        nvivoExtendedItem  = nvivomd.tables['ExtendedItem']
+        nvivoItem          = nvivomd.tables['Item']
+        nvivoNodeReference = nvivomd.tables['NodeReference']
+        nvivoProject       = nvivomd.tables['Project']
+        nvivoRole          = nvivomd.tables['Role']
+        nvivoSource        = nvivomd.tables['Source']
+        nvivoUserProfile   = nvivomd.tables['UserProfile']
     else:
         nvivodb = None
 
@@ -188,8 +199,6 @@ try:
     if args.users != 'skip':
         print("Normalising users")
 
-        nvivoUserProfile = nvivomd.tables['UserProfile']
-
         sel = select([nvivoUserProfile.c.Id,
                       nvivoUserProfile.c.Name])
 
@@ -208,7 +217,6 @@ try:
     if args.project != 'skip':
         print("Normalising project")
 
-        nvivoProject = nvivomd.tables['Project']
         sel = select([nvivoProject.c.Title,
                       nvivoProject.c.Description,
                       nvivoProject.c.CreatedBy,
@@ -216,11 +224,15 @@ try:
                       nvivoProject.c.ModifiedBy,
                       nvivoProject.c.ModifiedDate])
         projects = [dict(row) for row in nvivodb.execute(sel)]
-
-        if args.windows:
-            for project in projects:
+        for project in projects:
+            if args.windows:
                 project['Title']       = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Title']))
                 project['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Description']))
+
+            if not isinstance(project['CreatedDate'], datetime.datetime):
+                project['CreatedDate'] = dateparser.parse(project['CreatedDate'])
+            if not isinstance(project['ModifiedDate'], datetime.datetime):
+                project['ModifiedDate'] = dateparser.parse(project['ModifiedDate'])
 
         normdb.execute(normProject.delete())
         normdb.execute(normProject.insert(), projects)
@@ -228,9 +240,6 @@ try:
 # Node Categories
     if args.node_categories != 'skip':
         print("Normalising node categories")
-
-        nvivoItem       = nvivomd.tables['Item']
-        nvivoRole       = nvivomd.tables['Role']
 
         sel = select([nvivoItem.c.Id,
                       nvivoItem.c.Name,
@@ -246,6 +255,11 @@ try:
                 nodecategory['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Name']))
                 nodecategory['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Description']))
 
+            if not isinstance(nodecategory['CreatedDate'], datetime.datetime):
+                nodecategory['CreatedDate'] = dateparser.parse(nodecategory['CreatedDate'])
+            if not isinstance(nodecategory['ModifiedDate'], datetime.datetime):
+                nodecategory['ModifiedDate'] = dateparser.parse(nodecategory['ModifiedDate'])
+
         if args.node_categories == 'replace':
             normdb.execute(normNodeCategory.delete())
         elif args.node_categories == 'merge':
@@ -259,9 +273,8 @@ try:
     if args.nodes != 'skip':
         print("Normalising nodes")
 
-        nvivoItem         = nvivomd.tables['Item']
-        nvivoCategoryRole = nvivomd.tables['Role'].alias(name='CategoryRole')
-        nvivoParentRole   = nvivomd.tables['Role'].alias(name='ParentRole')
+        nvivoCategoryRole = nvivoRole.alias(name='CategoryRole')
+        nvivoParentRole   = nvivoRole.alias(name='ParentRole')
 
         sel = select([
                     nvivoItem.c.Id,
@@ -288,10 +301,15 @@ try:
                     nvivoParentRole.c.Item2_Id == nvivoItem.c.Id)))
 
         nodes = [dict(row) for row in nvivodb.execute(sel)]
-        if args.windows:
-            for node in nodes:
+        for node in nodes:
+            if args.windows:
                 node['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Name']))
                 node['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Description']))
+
+            if not isinstance(node['CreatedDate'], datetime.datetime):
+                node['CreatedDate'] = dateparser.parse(node['CreatedDate'])
+            if not isinstance(node['ModifiedDate'], datetime.datetime):
+                node['ModifiedDate'] = dateparser.parse(node['ModifiedDate'])
 
         if args.nodes == 'replace':
             normdb.execute(normNode.delete())
@@ -306,12 +324,11 @@ try:
     if args.node_attributes != 'skip':
         print("Normalising node attributes")
 
-        nvivoNodeItem     = nvivomd.tables['Item'].alias(name='NodeItem')
-        nvivoNameItem     = nvivomd.tables['Item'].alias(name='NameItem')
-        nvivoNameRole     = nvivomd.tables['Role'].alias(name='NameRole')
-        nvivoValueItem    = nvivomd.tables['Item'].alias(name='ValueItem')
-        nvivoValueRole    = nvivomd.tables['Role'].alias(name='ValueRole')
-        nvivoExtendedItem = nvivomd.tables['ExtendedItem'].alias(name='ExtendedNameItem')
+        nvivoNodeItem     = nvivoItem.alias(name='NodeItem')
+        nvivoNameItem     = nvivoItem.alias(name='NameItem')
+        nvivoNameRole     = nvivoRole.alias(name='NameRole')
+        nvivoValueItem    = nvivoItem.alias(name='ValueItem')
+        nvivoValueRole    = nvivoRole.alias(name='ValueRole')
 
         sel = select([nvivoNodeItem.c.Id.label('Node'),
                       nvivoNameItem.c.Name.label('Name'),
@@ -343,10 +360,15 @@ try:
                 elif property.getAttribute('Key') == 'Length':
                     nodeattr['Length'] = int(property.getAttribute('Value'))
 
-        if args.windows:
-            for nodeattr in nodeattrs:
+        for nodeattr in nodeattrs:
+            if args.windows:
                 nodeattr['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattr['Name']))
                 nodeattr['Value'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattr['Value']))
+
+            if not isinstance(nodeattr['CreatedDate'], datetime.datetime):
+                nodeattr['CreatedDate'] = dateparser.parse(nodeattr['CreatedDate'])
+            if not isinstance(nodeattr['ModifiedDate'], datetime.datetime):
+                nodeattr['ModifiedDate'] = dateparser.parse(nodeattr['ModifiedDate'])
 
         if args.node_attributes == 'replace':
             normdb.execute(normNodeAttribute.delete())
@@ -363,9 +385,6 @@ try:
     if args.source_categories != 'skip':
         print("Normalising source categories")
 
-        nvivoItem       = nvivomd.tables['Item']
-        nvivoRole       = nvivomd.tables['Role']
-
         sel = select([nvivoItem.c.Id,
                       nvivoItem.c.Name,
                       nvivoItem.c.Description,
@@ -380,6 +399,11 @@ try:
                 sourcecat['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Name']))
                 sourcecat['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Description']))
 
+            if not isinstance(sourcecat['CreatedDate'], datetime.datetime):
+                sourcecat['CreatedDate'] = dateparser.parse(sourcecat['CreatedDate'])
+            if not isinstance(sourcecat['ModifiedDate'], datetime.datetime):
+                sourcecat['ModifiedDate'] = dateparser.parse(sourcecat['ModifiedDate'])
+
         if args.source_categories == 'replace':
             normdb.execute(normSourceCategory.delete())
         elif args.source_categories == 'merge':
@@ -393,10 +417,8 @@ try:
     if args.sources != 'skip':
         print("Normalising sources")
 
-        nvivoSource       = nvivomd.tables['Source']
-        nvivoItem         = nvivomd.tables['Item']
-        nvivoCategoryRole = nvivomd.tables['Role'].alias(name='CategoryRole')
-        nvivoParentRole   = nvivomd.tables['Role'].alias(name='ParentRole')
+        nvivoCategoryRole = nvivoRole.alias(name='CategoryRole')
+        nvivoParentRole   = nvivoRole.alias(name='ParentRole')
 
         sel = select([
                     nvivoItem.c.Id,
@@ -438,8 +460,15 @@ try:
             source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
 
             if source['ObjectType'] == 'DOC':
-                # Object is zlib-compressed without header
-                source['Object'] = zlib.decompress(source['Object'], -15)
+                # Look for ODT signature
+                if source['Object'][0:4] != 'PK\x03\x04':
+                    ## Object is zlib-compressed without header
+                    source['Object'] = zlib.decompress(source['Object'], -15)
+
+            if not isinstance(source['CreatedDate'], datetime.datetime):
+                source['CreatedDate'] = dateparser.parse(source['CreatedDate'])
+            if not isinstance(source['ModifiedDate'], datetime.datetime):
+                source['ModifiedDate'] = dateparser.parse(source['ModifiedDate'])
 
         if args.sources == 'replace':
             normdb.execute(normSource.delete())
@@ -454,14 +483,10 @@ try:
     if args.source_attributes != 'skip':
         print("Normalising source attributes")
 
-        nvivoItem         = nvivomd.tables['Item']
-        nvivoRole         = nvivomd.tables['Role']
-        nvivoSource       = nvivomd.tables['Source']
         nvivoNameItem     = nvivoItem.alias(name='NameItem')
         nvivoNameRole     = nvivoRole.alias(name='NameRole')
         nvivoValueItem    = nvivoItem.alias(name='ValueItem')
         nvivoValueRole    = nvivoRole.alias(name='ValueRole')
-        nvivoExtendedItem = nvivomd.tables['ExtendedItem'].alias(name='ExtendedNameItem')
 
         sel = select([nvivoSource.c.Item_Id.label('Source'),
                       nvivoNameItem.c.Name,
@@ -490,10 +515,15 @@ try:
                 elif property.getAttribute('Key') == 'Length':
                     sourceattr['Length'] = int(property.getAttribute('Value'))
 
-        if args.windows:
-            for sourceattr in sourceattrs:
+        for sourceattr in sourceattrs:
+            if args.windows:
                 sourceattr['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Name']))
                 sourceattr['Value'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Value']))
+
+            if not isinstance(sourceattr['CreatedDate'], datetime.datetime):
+                sourceattr['CreatedDate'] = dateparser.parse(sourceattr['CreatedDate'])
+            if not isinstance(sourceattr['ModifiedDate'], datetime.datetime):
+                sourceattr['ModifiedDate'] = dateparser.parse(sourceattr['ModifiedDate'])
 
         if args.source_attributes == 'replace':
             normdb.execute(normSourceAttribute.delete())
@@ -509,8 +539,6 @@ try:
 # Tagging
     if args.taggings != 'skip':
         print("Normalising taggings")
-
-        nvivoNodeReference = nvivomd.tables['NodeReference']
 
         sel = select([nvivoNodeReference.c.Source_Item_Id.label('Source'),
                       nvivoNodeReference.c.Node_Item_Id.label('Node'),
@@ -542,6 +570,11 @@ try:
                 if tagging['LengthY'] > 0:
                     tagging['Fragment'] += ':' + str(tagging['StartY'] + tagging['LengthY'] - 1)
 
+            if not isinstance(tagging['CreatedDate'], datetime.datetime):
+                tagging['CreatedDate'] = dateparser.parse(tagging['CreatedDate'])
+            if not isinstance(tagging['ModifiedDate'], datetime.datetime):
+                tagging['ModifiedDate'] = dateparser.parse(tagging['ModifiedDate'])
+
         if args.taggings == 'replace':
             normdb.execute(normTagging.delete(
                                 normTagging.c.Node   != None))
@@ -560,18 +593,29 @@ try:
     if args.annotations != 'skip':
         print("Normalising annotations")
 
-        nvivoAnnotation = nvivomd.tables['Annotation']
-
-        sel = select([nvivoAnnotation.c.Item_Id.label('Source'),
-                      nvivoAnnotation.c.Text.label('Memo'),
-                      nvivoAnnotation.c.StartX,
-                      nvivoAnnotation.c.LengthX,
-                      nvivoAnnotation.c.StartY,
-                      nvivoAnnotation.c.LengthY,
-                      nvivoAnnotation.c.CreatedBy,
-                      nvivoAnnotation.c.CreatedDate,
-                      nvivoAnnotation.c.ModifiedBy,
-                      nvivoAnnotation.c.ModifiedDate])
+        # Mac versions label some columns a bit differently here. Go figure...
+        if 'StartX' in nvivoAnnotation.c.keys():
+            sel = select([nvivoAnnotation.c.Item_Id.label('Source'),
+                          nvivoAnnotation.c.Text.label('Memo'),
+                          nvivoAnnotation.c.StartX,
+                          nvivoAnnotation.c.LengthX,
+                          nvivoAnnotation.c.StartY,
+                          nvivoAnnotation.c.LengthY,
+                          nvivoAnnotation.c.CreatedBy,
+                          nvivoAnnotation.c.CreatedDate,
+                          nvivoAnnotation.c.ModifiedBy,
+                          nvivoAnnotation.c.ModifiedDate])
+        else:
+            sel = select([nvivoAnnotation.c.Item_Id.label('Source'),
+                          nvivoAnnotation.c.Text.label('Memo'),
+                          nvivoAnnotation.c.StartText.label('StartX'),
+                          nvivoAnnotation.c.LengthText.label('LengthX'),
+                          nvivoAnnotation.c.StartY,
+                          nvivoAnnotation.c.LengthY,
+                          nvivoAnnotation.c.CreatedBy,
+                          nvivoAnnotation.c.CreatedDate,
+                          nvivoAnnotation.c.ModifiedBy,
+                          nvivoAnnotation.c.ModifiedDate])
 
         annotations  = [dict(row) for row in nvivodb.execute(sel)]
         for annotation in annotations:
@@ -580,6 +624,11 @@ try:
                 annotation['Fragment'] += ',' + str(annotation['StartY'])
                 if annotation['LengthY'] > 0:
                     annotation['Fragment'] += ':' + str(annotation['StartY'] + annotation['LengthY'] - 1)
+
+            if not isinstance(annotation['CreatedDate'], datetime.datetime):
+                annotation['CreatedDate'] = dateparser.parse(annotation['CreatedDate'])
+            if not isinstance(annotation['ModifiedDate'], datetime.datetime):
+                annotation['ModifiedDate'] = dateparser.parse(annotation['ModifiedDate'])
 
         if args.annotations == 'replace':
             normdb.execute(normTagging.delete(
