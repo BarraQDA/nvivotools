@@ -30,6 +30,8 @@ try:
     parser = argparse.ArgumentParser(description='Denormalise a normalised NVivo project.')
     parser.add_argument('-w', '--windows', action='store_true',
                         help='Correct NVivo for Windows string coding. Use if offloaded file will be used with Windows version of NVivo.')
+    parser.add_argument('-m', '--mac',  action='store_true',
+                        help='Use NVivo for Mac database format.')
     parser.add_argument('-s', '--structure', action='store_true',
                         help='Replace existing table structures.')
 
@@ -70,11 +72,13 @@ try:
 
     if args.outfile is None:
         args.outfile = args.infile.rsplit('.',1)[0] + '.nvivo'
-    nvivodb = create_engine(args.outfile, deprecate_large_types=True)
+    #nvivodb = create_engine(args.outfile, deprecate_large_types=True)
+    nvivodb = create_engine(args.outfile)
     nvivomd = MetaData(bind=nvivodb)
     nvivomd.reflect(nvivodb)
     nvivocon = nvivodb.connect()
     nvivotr = nvivocon.begin()
+    mssql = nvivodb.dialect.name == 'mssql'
 
     if args.structure:
         nvivomd.drop_all(nvivocon)
@@ -164,8 +168,10 @@ try:
             Column('CompoundSourceRegion_Id', UUID()),
             Column('Text',          String(1024), nullable=False),
             Column('ReferenceTypeId', Integer,      nullable=False),
-            Column('StartX',        Integer,        nullable=False),
-            Column('LengthX',       Integer,        nullable=False),
+            Column('StartText' if args.mac else 'StartX',
+                                    Integer,        nullable=False),
+            Column('LengthText' if args.mac else 'LengthX',
+                                    Integer,        nullable=False),
             Column('StartY',        Integer),
             Column('LengthY',       Integer),
             Column('CreatedDate',   DateTime,       nullable=False),
@@ -196,18 +202,19 @@ try:
         for user in users:
             user['Initials'] = u''.join(word[0].upper() for word in user['Name'].split())
 
-        userstodelete = nvivocon.execute(select([nvivoUserProfile.c.Id]))
         if args.users == 'replace':
-            userstodelete = [dict(row) for row in userstodelete]
+            userstodelete = [dict(row) for row in nvivocon.execute(select([nvivoUserProfile.c.Id]))]
         elif args.users == 'merge':
             newusers = [user['Id'] for user in users]
-            userstodelete = [dict(row) for row in userstodelete
+            userstodelete = [dict(row) for row in nvivocon.execute(select([nvivoUserProfile.c.Id]))
                              if row['Id'] in newusers]
 
-        if len(userstodelete) > 0:
-            nvivocon.execute(nvivoItem.delete(nvivoItem.c.Id == bindparam('Id')), userstodelete)
+
+        #if len(userstodelete) > 0:
+            #nvivocon.execute(nvivoUserProfile.delete(), userstodelete)
 
         if len(users) > 0:
+            print users
             nvivocon.execute(nvivoUserProfile.insert(), users)
 
 # Project
@@ -513,7 +520,9 @@ existing project or stock empty project.
         sel = select([
                 nvivoNodeCategoryRole.c.Item2_Id.label('CategoryId'),
                 nvivoCategoryAttributeItem.c.Id.label('AttributeId'),
-                func.CONVERT(literal_column('VARCHAR(MAX)'),nvivoCategoryAttributeExtendedItem.c.Properties),
+                func.CONVERT(literal_column('VARCHAR(MAX)'),nvivoCategoryAttributeExtendedItem.c.Properties)
+                    if mssql
+                    else nvivoCategoryAttributeExtendedItem.c.Properties,
                 nvivoNewValueItem.c.Id.label('NewValueId'),
                 nvivoNodeValueRole.c.Item2_Id.label('ExistingValueId'),
                 func.max(nvivoCountAttributeRole.c.Tag).label('MaxAttributeTag'),
@@ -523,7 +532,10 @@ existing project or stock empty project.
                 nvivoNodeCategoryRole.c.Item1_Id == bindparam('Node')
             )).group_by(nvivoNodeCategoryRole.c.Item2_Id) \
             .group_by(nvivoCategoryAttributeItem.c.Id) \
-            .group_by(func.CONVERT(literal_column('VARCHAR(MAX)'),nvivoCategoryAttributeExtendedItem.c.Properties)) \
+            .group_by(
+                func.CONVERT(literal_column('VARCHAR(MAX)'),nvivoCategoryAttributeExtendedItem.c.Properties)
+                if mssql
+                else nvivoCategoryAttributeExtendedItem.c.Properties) \
             .group_by(nvivoNewValueItem.c.Id) \
             .group_by(nvivoNodeValueRole.c.Item2_Id) \
             .select_from(nvivoNodeCategoryRole.outerjoin(
@@ -567,8 +579,9 @@ existing project or stock empty project.
 
         addedattributes = []
         for nodeattribute in nodeattributes:
-            nodeattribute['NodeName']          = next(node['Name']          for node in nodes if node['Id'] == nodeattribute['Node'])
-            nodeattribute['PlainTextNodeName'] = next(node['PlainTextName'] for node in nodes if node['Id'] == nodeattribute['Node'])
+            node = next(node for node in nodes if uuid.UUID(node['Id']) == uuid.UUID(nodeattribute['Node']))
+            nodeattribute['NodeName']          = node['Name']
+            nodeattribute['PlainTextNodeName'] = node['PlainTextName']
             nodeattribute['PlainTextName']     = nodeattribute['Name']
             nodeattribute['PlainTextValue']    = nodeattribute['Value']
             if args.windows:
@@ -961,10 +974,10 @@ existing project or stock empty project.
                 source['SourceType'] = 2  # or 3 or 4?
                 source['LengthX'] = 0
 
-                tempfilename = tempfile.mktemp()
-                tempfile = file(tempfilename + '.' + source['ObjectTypeName'], 'wb')
-                tempfile.write(source['Object'])
-                tempfile.close()
+                tmpfilename = tempfile.mktemp()
+                tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
+                tmpfile.write(source['Object'])
+                tmpfile.close()
 
                 # Look for unoconv script or executable. Could this be made simpler?
                 unoconvcmd = None
@@ -980,36 +993,38 @@ existing project or stock empty project.
                     raise RuntimeError("""
 Can't find unoconv on path. Please refer to the NVivotools README file.
 """)
-                p = Popen(unoconvcmd + ['--format=text', tempfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
+                p = Popen(unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
                 err = p.stderr.read()
                 if err != '':
                     raise RuntimeError(err)
 
                 # Read text output from unocode, then massage it by first dropping a final line
                 # terminator, then changing to Windows (CRLF) line terminators
-                source['PlainText'] = codecs.open(tempfilename + '.txt', 'r', 'utf-8-sig').read()
+                source['PlainText'] = codecs.open(tmpfilename + '.txt', 'r', 'utf-8-sig').read()
                 if source['PlainText'].endswith('\n'):
                     source['PlainText'] = source['PlainText'][:-1]
                 source['PlainText'] = source['PlainText'].replace('\n', '\r\n')
 
-                # Convert object to DOC if isn't already
-                if source['ObjectTypeName'] != 'DOC':
-                    p = Popen(['/usr/bin/unoconv', '--format=doc', tempfilename + '.' + source['ObjectTypeName']], stderr=PIPE, close_fds=True)
+                # Convert object to DOC/ODT if isn't already
+                if source['ObjectTypeName'] != 'ODT' if args.mac else 'DOC':
+                    destformat = 'odt' if args.mac else 'doc'
+                    p = Popen(['/usr/bin/unoconv', '--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE, close_fds=True)
                     err = p.stderr.read()
                     if err != '':
                         raise RuntimeError(err)
                     else:
-                        source['Object'] = file(tempfilename + '.doc', 'rb').read()
+                        source['Object'] = file(tmpfilename + '.' + destformat, 'rb').read()
 
-                    os.remove(tempfilename + '.doc')
+                    os.remove(tmpfilename + '.' + destformat)
 
-                # Compress doc object without header using compression level 6
-                compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
-                source['Object'] = compressor.compress(source['Object']) + compressor.flush()
+                if not args.mac:
+                    # Compress doc object without header using compression level 6
+                    compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
+                    source['Object'] = compressor.compress(source['Object']) + compressor.flush()
 
-                os.remove(tempfilename + '.' + source['ObjectTypeName'])
-                os.remove(tempfilename + '.txt')
-                source['ObjectTypeName'] = 'DOC'
+                os.remove(tmpfilename + '.' + source['ObjectTypeName'])
+                os.remove(tmpfilename + '.txt')
+                source['ObjectTypeName'] = 'DOC'    # Hack so that right object type code is found later
 
                 doc = Document()
                 settings = doc.createElement("DisplaySettings")
@@ -1092,9 +1107,13 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                     #'Thumbnail': bindparam('Thumbnail'),
                     # This work-around is specific to MSSQL
                     'Object':   func.CONVERT(literal_column('VARBINARY(MAX)'),
-                                             bindparam('Object')),
+                                             bindparam('Object'))
+                                if mssql
+                                else bindparam('Object'),
                     'Thumbnail': func.CONVERT(literal_column('VARBINARY(MAX)'),
-                                             bindparam('Thumbnail')),
+                                             bindparam('Thumbnail'))
+                                 if mssql
+                                 else bindparam('Thumbnail'),
                 }), sources)
             nvivocon.execute(nvivoRole.insert().values({
                     'Item1_Id': literal_column("'" + str(headsource['Id']) + "'"),
@@ -1150,7 +1169,9 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
         sel = select([
                 nvivoSourceCategoryRole.c.Item2_Id.label('CategoryId'),
                 nvivoCategoryAttributeItem.c.Id.label('AttributeId'),
-                func.CONVERT(literal_column('VARCHAR(MAX)'),nvivoCategoryAttributeExtendedItem.c.Properties),
+                func.CONVERT(literal_column('VARCHAR(MAX)'),nvivoCategoryAttributeExtendedItem.c.Properties)
+                if mssql
+                else nvivoCategoryAttributeExtendedItem.c.Properties,
                 nvivoNewValueItem.c.Id.label('NewValueId'),
                 nvivoSourceValueRole.c.Item2_Id.label('ExistingValueId'),
                 func.max(nvivoCountAttributeRole.c.Tag).label('MaxAttributeTag'),
@@ -1160,7 +1181,10 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                 nvivoSourceCategoryRole.c.Item1_Id == bindparam('Source')
             )).group_by(nvivoSourceCategoryRole.c.Item2_Id) \
             .group_by(nvivoCategoryAttributeItem.c.Id) \
-            .group_by(func.CONVERT(literal_column('VARCHAR(MAX)'),nvivoCategoryAttributeExtendedItem.c.Properties)) \
+            .group_by(
+                func.CONVERT(literal_column('VARCHAR(MAX)'),nvivoCategoryAttributeExtendedItem.c.Properties)
+                if mssql
+                else nvivoCategoryAttributeExtendedItem.c.Properties) \
             .group_by(nvivoNewValueItem.c.Id) \
             .group_by(nvivoSourceValueRole.c.Item2_Id) \
             .select_from(nvivoSourceCategoryRole.outerjoin(
@@ -1204,7 +1228,8 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
 
         addedattributes = []
         for sourceattribute in sourceattributes:
-            sourceattribute['SourceName']          = next(source['Name']          for source in sources if source['Item_Id'] == uuid.UUID(sourceattribute['Source']))
+            source = next(source for source in sources if uuid.UUID(source['Item_Id']) == uuid.UUID(sourceattribute['Source']))
+            sourceattribute['SourceName']          = source['Name']
             sourceattribute['PlainTextSourceName'] = sourceattribute['SourceName']
             sourceattribute['PlainTextName']       = sourceattribute['Name']
             sourceattribute['PlainTextValue']      = sourceattribute['Value']
@@ -1427,15 +1452,16 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                 normTagging.c.Node != None,
                 normSource.c.Id == normTagging.c.Source)))]
 
-        for tagging in taggings:
+        for tagging in taggings[:]:
             matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
             if matchfragment == None:
-                raise RuntimeError("ERROR: Unrecognised tagging fragment: " + tagging['Fragment'] +
-                                   " for Source: " + tagging['SourceName'] )
+                print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + tagging['SourceName'] )
+                taggings.remove(tagging)
+                continue
 
-            tagging['StartX'] = int(matchfragment.group(1))
-            tagging['LengthX'] = int(matchfragment.group(2)) - tagging['StartX'] + 1
-            tagging['StartY'] = None
+            tagging['StartX']  = int(matchfragment.group(1))
+            tagging['LengthX'] = int(matchfragment.group(2)) - int(matchfragment.group(1)) + 1
+            tagging['StartY']  = None
             tagging['LengthY'] = None
             startY = matchfragment.group(3)
             if startY != None:
@@ -1481,11 +1507,12 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
         for annotation in annotations:
             matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", annotation['Fragment'])
             if matchfragment == None:
-                raise RuntimeError("ERROR: Unrecognised tagging fragment: " + annotation['Fragment'] +
-                                   " for Source: " + annotation['SourceName'] )
+                print("ERROR: Unrecognised tagging fragment: " + annotation['Fragment'] + " for Source: " + annotation['SourceName'])
+                annotations.remove(annotation)
+                continue
 
-            annotation['StartX'] = int(matchfragment.group(1))
-            annotation['LengthX'] = int(matchfragment.group(2)) - annotation['StartX'] + 1
+            annotation['StartText'  if args.mac else 'StartX']  = int(matchfragment.group(1))
+            annotation['LengthText' if args.mac else 'LengthX'] = int(matchfragment.group(2)) - int(matchfragment.group(1)) + 1
             annotation['StartY'] = None
             annotation['LengthY'] = None
             startY = matchfragment.group(3)

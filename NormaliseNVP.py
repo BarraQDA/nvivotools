@@ -20,6 +20,8 @@ try:
     parser = argparse.ArgumentParser(description='Normalise an offloaded NVivo project.')
     parser.add_argument('-w', '--windows', action='store_true',
                         help='Correct NVivo for Windows string coding. Use if names and descriptions appear wierd.')
+    parser.add_argument('-m', '--mac',  action='store_true',
+                        help='Use NVivo for Mac database format.')
     parser.add_argument('-s', '--structure', action='store_true',
                         help='Replace existing table structures.')
 
@@ -72,7 +74,6 @@ try:
         args.outfile = args.infile.rsplit('.',1)[0] + '.norm'
     normdb = create_engine(args.outfile)
     normmd = MetaData(bind=normdb)
-    normmd.reflect(normdb)
 
     if args.structure:
         normmd.drop_all(normdb)
@@ -80,115 +81,97 @@ try:
             normmd.remove(table)
 
     # Create the normalised database structure
-    normUser = normmd.tables.get('User')
-    if normUser == None:
-        normUser = Table('User', normmd,
-            Column('Id',            UUID(),         primary_key=True),
-            Column('Name',          String(256)))
+    normUser = Table('User', normmd,
+        Column('Id',            UUID(),         primary_key=True),
+        Column('Name',          String(256)))
 
-    normProject = normmd.tables.get('Project')
-    if normProject == None:
-        normProject = Table('Project', normmd,
-            Column('Title',         String(256),                            nullable=False),
-            Column('Description',   String(2048)),
-            Column('CreatedBy',     UUID(),         ForeignKey("User.Id"),  nullable=False),
-            Column('CreatedDate',   DateTime,                               nullable=False),
-            Column('ModifiedBy',    UUID(),         ForeignKey("User.Id"),  nullable=False),
-            Column('ModifiedDate',  DateTime,                               nullable=False))
+    normProject = Table('Project', normmd,
+        Column('Title',         String(256),                            nullable=False),
+        Column('Description',   String(2048)),
+        Column('CreatedBy',     UUID(),         ForeignKey("User.Id"),  nullable=False),
+        Column('CreatedDate',   DateTime,                               nullable=False),
+        Column('ModifiedBy',    UUID(),         ForeignKey("User.Id"),  nullable=False),
+        Column('ModifiedDate',  DateTime,                               nullable=False))
 
-    normSource = normmd.tables.get('Source')
-    if normSource == None:
-        normSource = Table('Source', normmd,
-            Column('Id',            UUID(),         primary_key=True),
-            Column('Category',      UUID()),
-            Column('Name',          String(256)),
-            Column('Description',   String(512)),
-            Column('Color',         Integer),
-            Column('Content',       String(16384)),
-            Column('ObjectType',    String(256)),
-            Column('SourceType',    Integer),
-            Column('Object',        LargeBinary,    nullable=False),
-            Column('Thumbnail',     LargeBinary,    nullable=False),
-            #Column('Waveform',      LargeBinary,    nullable=False),
-            Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-            Column('CreatedDate',   DateTime),
-            Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-            Column('ModifiedDate',  DateTime))
+    normSource = Table('Source', normmd,
+        Column('Id',            UUID(),         primary_key=True),
+        Column('Category',      UUID()),
+        Column('Name',          String(256)),
+        Column('Description',   String(512)),
+        Column('Color',         Integer),
+        Column('Content',       String(16384)),
+        Column('ObjectType',    String(256)),
+        Column('SourceType',    Integer),
+        Column('Object',        LargeBinary,    nullable=False),
+        Column('Thumbnail',     LargeBinary,    nullable=False),
+        #Column('Waveform',      LargeBinary,    nullable=False),
+        Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+        Column('CreatedDate',   DateTime),
+        Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+        Column('ModifiedDate',  DateTime))
 
-    normSourceCategory = normmd.tables.get('SourceCategory')
-    if normSourceCategory == None:
-        normSourceCategory = Table('SourceCategory', normmd,
-            Column('Id',            UUID(),         primary_key=True),
-            Column('Name',          String(256)),
-            Column('Description',   String(512)),
-            Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-            Column('CreatedDate',   DateTime),
-            Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-            Column('ModifiedDate',  DateTime))
+    normSourceCategory = Table('SourceCategory', normmd,
+        Column('Id',            UUID(),         primary_key=True),
+        Column('Name',          String(256)),
+        Column('Description',   String(512)),
+        Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+        Column('CreatedDate',   DateTime),
+        Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+        Column('ModifiedDate',  DateTime))
 
-    normTagging = normmd.tables.get('Tagging')
-    if normTagging == None:
-        normTagging = Table('Tagging', normmd,
-            Column('Source',        UUID(),         ForeignKey("Source.Id")),
-            Column('Node',          UUID(),         ForeignKey("Node.Id")),
-            Column('Fragment',      String(256)),
-            Column('Memo',          String(256)),
-            Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-            Column('CreatedDate',   DateTime),
-            Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-            Column('ModifiedDate',  DateTime))
+    normTagging = Table('Tagging', normmd,
+        Column('Source',        UUID(),         ForeignKey("Source.Id")),
+        Column('Node',          UUID(),         ForeignKey("Node.Id")),
+        Column('Fragment',      String(256)),
+        Column('Memo',          String(256)),
+        Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+        Column('CreatedDate',   DateTime),
+        Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+        Column('ModifiedDate',  DateTime))
 
-    normNode = normmd.tables.get('Node')
-    if normNode == None:
-        normNode = Table('Node', normmd,
-            Column('Id',            UUID(),         primary_key=True),
-            Column('Parent',        UUID(),         ForeignKey("Node.Id")),
-            Column('Category',      UUID(),         ForeignKey("NodeCategory.Id")),
-            Column('Name',          String(256)),
-            Column('Description',   String(512)),
-            Column('Color',         Integer),
-            Column('Aggregate',     Boolean),
-            Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-            Column('CreatedDate',   DateTime),
-            Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-            Column('ModifiedDate',  DateTime))
+    normNode = Table('Node', normmd,
+        Column('Id',            UUID(),         primary_key=True),
+        Column('Parent',        UUID(),         ForeignKey("Node.Id")),
+        Column('Category',      UUID(),         ForeignKey("NodeCategory.Id")),
+        Column('Name',          String(256)),
+        Column('Description',   String(512)),
+        Column('Color',         Integer),
+        Column('Aggregate',     Boolean),
+        Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+        Column('CreatedDate',   DateTime),
+        Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+        Column('ModifiedDate',  DateTime))
 
-    normNodeCategory = normmd.tables.get('NodeCategory')
-    if normNodeCategory == None:
-        normNodeCategory = Table('NodeCategory', normmd,
-            Column('Id',            UUID(),         primary_key=True),
-            Column('Name',          String(256)),
-            Column('Description',   String(512)),
-            Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-            Column('CreatedDate',   DateTime),
-            Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-            Column('ModifiedDate',  DateTime))
+    normNodeCategory = Table('NodeCategory', normmd,
+        Column('Id',            UUID(),         primary_key=True),
+        Column('Name',          String(256)),
+        Column('Description',   String(512)),
+        Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+        Column('CreatedDate',   DateTime),
+        Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+        Column('ModifiedDate',  DateTime))
 
-    normSourceAttribute = normmd.tables.get('SourceAttribute')
-    if normSourceAttribute == None:
-        normSourceAttribute = Table('SourceAttribute', normmd,
-            Column('Source',        UUID(),         ForeignKey("Source.Id"),    primary_key=True),
-            Column('Name',          String(256),                                primary_key=True),
-            Column('Value',         String(256)),
-            Column('Type',          String(16)),
-            Column('Length',        Integer),
-            Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-            Column('CreatedDate',   DateTime),
-            Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-            Column('ModifiedDate',  DateTime))
+    normSourceAttribute = Table('SourceAttribute', normmd,
+        Column('Source',        UUID(),         ForeignKey("Source.Id"),    primary_key=True),
+        Column('Name',          String(256),                                primary_key=True),
+        Column('Value',         String(256)),
+        Column('Type',          String(16)),
+        Column('Length',        Integer),
+        Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+        Column('CreatedDate',   DateTime),
+        Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+        Column('ModifiedDate',  DateTime))
 
-    normNodeAttribute = normmd.tables.get('NodeAttribute')
-    if normNodeAttribute == None:
-        normNodeAttribute = Table('NodeAttribute', normmd,
-            Column('Node',          UUID(),         ForeignKey("Node.Id"),      primary_key=True),
-            Column('Name',          String(256),                                primary_key=True),
-            Column('Value',         String(256)),
-            Column('Type',          String(16)),
-            Column('Length',        Integer),
-            Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-            Column('CreatedDate',   DateTime),
-            Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-            Column('ModifiedDate',  DateTime))
+    normNodeAttribute = Table('NodeAttribute', normmd,
+        Column('Node',          UUID(),         ForeignKey("Node.Id"),      primary_key=True),
+        Column('Name',          String(256),                                primary_key=True),
+        Column('Value',         String(256)),
+        Column('Type',          String(16)),
+        Column('Length',        Integer),
+        Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+        Column('CreatedDate',   DateTime),
+        Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+        Column('ModifiedDate',  DateTime))
 
     normmd.create_all(normdb)
 
@@ -207,7 +190,7 @@ try:
         if args.users == 'replace':
             normdb.execute(normUser.delete())
         elif args.users == 'merge':
-            normdb.execute(normUser.delete(normSource.c.Id == bindparam('Id')),
+            normdb.execute(normUser.delete(),
                            users)
 
         if len(users) > 0:
@@ -229,6 +212,7 @@ try:
                 project['Title']       = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Title']))
                 project['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Description']))
 
+            # SQLAlchemy should probably handle this...
             if not isinstance(project['CreatedDate'], datetime.datetime):
                 project['CreatedDate'] = dateparser.parse(project['CreatedDate'])
             if not isinstance(project['ModifiedDate'], datetime.datetime):
@@ -460,10 +444,15 @@ try:
             source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
 
             if source['ObjectType'] == 'DOC':
-                # Look for ODT signature
+                # Look for ODT signature from NVivo for Mac files
                 if source['Object'][0:4] != 'PK\x03\x04':
-                    ## Object is zlib-compressed without header
-                    source['Object'] = zlib.decompress(source['Object'], -15)
+                    source['ObjectType'] = 'ODT'
+                else
+                    try:
+                        ## Try zlib decompression without header
+                        source['Object'] = zlib.decompress(source['Object'], -15)
+                    except Exception:
+                        pass
 
             if not isinstance(source['CreatedDate'], datetime.datetime):
                 source['CreatedDate'] = dateparser.parse(source['CreatedDate'])
@@ -594,28 +583,16 @@ try:
         print("Normalising annotations")
 
         # Mac versions label some columns a bit differently here. Go figure...
-        if 'StartX' in nvivoAnnotation.c.keys():
-            sel = select([nvivoAnnotation.c.Item_Id.label('Source'),
-                          nvivoAnnotation.c.Text.label('Memo'),
-                          nvivoAnnotation.c.StartX,
-                          nvivoAnnotation.c.LengthX,
-                          nvivoAnnotation.c.StartY,
-                          nvivoAnnotation.c.LengthY,
-                          nvivoAnnotation.c.CreatedBy,
-                          nvivoAnnotation.c.CreatedDate,
-                          nvivoAnnotation.c.ModifiedBy,
-                          nvivoAnnotation.c.ModifiedDate])
-        else:
-            sel = select([nvivoAnnotation.c.Item_Id.label('Source'),
-                          nvivoAnnotation.c.Text.label('Memo'),
-                          nvivoAnnotation.c.StartText.label('StartX'),
-                          nvivoAnnotation.c.LengthText.label('LengthX'),
-                          nvivoAnnotation.c.StartY,
-                          nvivoAnnotation.c.LengthY,
-                          nvivoAnnotation.c.CreatedBy,
-                          nvivoAnnotation.c.CreatedDate,
-                          nvivoAnnotation.c.ModifiedBy,
-                          nvivoAnnotation.c.ModifiedDate])
+        sel = select([nvivoAnnotation.c.Item_Id.label('Source'),
+                        nvivoAnnotation.c.Text.label('Memo'),
+                        nvivoAnnotation.c.StartText.label('StartX')   if args.mac else nvivoAnnotation.c.StartX,
+                        nvivoAnnotation.c.LengthText.label('LengthX') if args.mac else nvivoAnnotation.c.LengthX,
+                        nvivoAnnotation.c.StartY,
+                        nvivoAnnotation.c.LengthY,
+                        nvivoAnnotation.c.CreatedBy,
+                        nvivoAnnotation.c.CreatedDate,
+                        nvivoAnnotation.c.ModifiedBy,
+                        nvivoAnnotation.c.ModifiedDate])
 
         annotations  = [dict(row) for row in nvivodb.execute(sel)]
         for annotation in annotations:

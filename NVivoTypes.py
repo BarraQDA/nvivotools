@@ -1,6 +1,7 @@
 from sqlalchemy.databases import mssql, sqlite
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
+import sqlalchemy_sqlany
 
 class UUID(TypeDecorator):
     """Platform-independent UUID type.
@@ -37,26 +38,45 @@ class UUID(TypeDecorator):
             return uuid.UUID(value)
 
 
-@compiles(UNIQUEIDENTIFIER, 'sqlite')
-def compile_UNIQUEIDENTIFIER_mssql_sqlite(element, compiler, **kw):
-    """ Handles mssql UNIQUEIDENTIFIER datatype as UUID in SQLite """
-    try:
-        length = element.length
-    except:
-        length = None
-    element.length = 64 # @note: 36 should be enough, but see the link below
+#@compiles(UNIQUEIDENTIFIER, 'sqlite')
+#def compile_UNIQUEIDENTIFIER_mssql_sqlite(element, compiler, **kw):
+    #""" Handles mssql UNIQUEIDENTIFIER datatype as UUID in SQLite """
+    #try:
+        #length = element.length
+    #except:
+        #length = None
+    #element.length = 64 # @note: 36 should be enough, but see the link below
 
-    # @note: since SA-0.9 all string types have collation, which are not
-    # really compatible between databases, so use default one
-    element.collation = None
+    ## @note: since SA-0.9 all string types have collation, which are not
+    ## really compatible between databases, so use default one
+    #element.collation = None
 
-    res = "UUID"
-    if length:
-        element.length = length
-    return res
+    #res = "UUID"
+    #if length:
+        #element.length = length
+    #return res
+#def compile_UNIQUEIDENTIFIER_sqlalchemy_sqlany_sqlite(element, compiler, **kw):
+    #""" Handles sqlalchemy_sqlany UNIQUEIDENTIFIER datatype as UUID in SQLite """
+    #try:
+        #length = element.length
+    #except:
+        #length = None
+    #element.length = 64 # @note: 36 should be enough, but see the link below
+
+    ## @note: since SA-0.9 all string types have collation, which are not
+    ## really compatible between databases, so use default one
+    #element.collation = None
+
+    #res = "UUID"
+    #if length:
+        #element.length = length
+    #return res
 
 mssql.ischema_names['xml'] = String
 sqlite.ischema_names['UNIQUEIDENTIFIER'] = UUID
+
+sqlalchemy_sqlany.dialect.ischema_names['xml'] = String
+sqlalchemy_sqlany.dialect.ischema_names['long nvarchar'] = TEXT
 
 DataTypeName = { 0: 'Text',
                  1: 'Integer',
