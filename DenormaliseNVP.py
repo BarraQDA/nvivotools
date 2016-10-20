@@ -195,27 +195,30 @@ try:
             print("Denormalising users")
 
         normUser = normmd.tables['User']
-        sel = select([normUser.c.Id,
+        sel = select([normUser.c.Id.label('UserId'),    # Relabel so can be used for delete/update
                       normUser.c.Name])
 
         users = [dict(row) for row in normdb.execute(sel)]
         for user in users:
             user['Initials'] = u''.join(word[0].upper() for word in user['Name'].split())
 
+        newusers      = [user['UserId'] for user in users]
+        existingusers = [user['Id']     for user in nvivocon.execute(select([nvivoUserProfile.c.Id]))]
+        userstoinsert = [user for user in users if not user['UserId'] in existingusers]
+        userstoupdate = [user for user in users if     user['UserId'] in existingusers]
         if args.users == 'replace':
-            userstodelete = [dict(row) for row in nvivocon.execute(select([nvivoUserProfile.c.Id]))]
-        elif args.users == 'merge':
-            newusers = [user['Id'] for user in users]
-            userstodelete = [dict(row) for row in nvivocon.execute(select([nvivoUserProfile.c.Id]))
-                             if row['Id'] in newusers]
+            userstodelete = [{'UserId':Id} for Id in existingusers if not Id in newusers]
+            if len(userstodelete) > 0:
+                nvivocon.execute(nvivoUserProfile.
+                                    delete(nvivoUserProfile.c.Id == bindparam('UserId')), userstodelete)
 
+        if len(userstoupdate) > 0:
+            nvivocon.execute(nvivoUserProfile.
+                                update(nvivoUserProfile.c.Id == bindparam('UserId')), userstoupdate)
 
-        #if len(userstodelete) > 0:
-            #nvivocon.execute(nvivoUserProfile.delete(), userstodelete)
-
-        if len(users) > 0:
-            print users
-            nvivocon.execute(nvivoUserProfile.insert(), users)
+        if len(userstoinsert) > 0:
+            nvivocon.execute(nvivoUserProfile.
+                                insert().values({'Id': bindparam('UserId')}), userstoinsert)
 
 # Project
     # First read existing NVivo project record to test that it is there and extract
@@ -972,7 +975,6 @@ existing project or stock empty project.
                                       'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>'})
             elif source['ObjectTypeName'] in {'DOC', 'ODT', 'TXT'}:
                 source['SourceType'] = 2  # or 3 or 4?
-                source['LengthX'] = 0
 
                 tmpfilename = tempfile.mktemp()
                 tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
@@ -1003,10 +1005,10 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                 source['PlainText'] = codecs.open(tmpfilename + '.txt', 'r', 'utf-8-sig').read()
                 if source['PlainText'].endswith('\n'):
                     source['PlainText'] = source['PlainText'][:-1]
-                source['PlainText'] = source['PlainText'].replace('\n', '\r\n')
+                source['PlainText'] = source['PlainText'].replace('\n', '\n\n' if args.mac else '\r\n')
 
                 # Convert object to DOC/ODT if isn't already
-                if source['ObjectTypeName'] != 'ODT' if args.mac else 'DOC':
+                if source['ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
                     destformat = 'odt' if args.mac else 'doc'
                     p = Popen(['/usr/bin/unoconv', '--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE, close_fds=True)
                     err = p.stderr.read()
@@ -1017,35 +1019,41 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
 
                     os.remove(tmpfilename + '.' + destformat)
 
-                if not args.mac:
-                    # Compress doc object without header using compression level 6
-                    compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
-                    source['Object'] = compressor.compress(source['Object']) + compressor.flush()
-
                 os.remove(tmpfilename + '.' + source['ObjectTypeName'])
                 os.remove(tmpfilename + '.txt')
                 source['ObjectTypeName'] = 'DOC'    # Hack so that right object type code is found later
 
-                doc = Document()
-                settings = doc.createElement("DisplaySettings")
-                settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-                settings.setAttribute("InputPosition", "0")
-                source['MetaData'] = settings.toxml()
+                if args.mac:
+                    source['LengthX'] = len(source['PlainText'].replace(u' ', u''))
+                else:
+                    # Compress doc object without header using compression level 6
+                    compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
+                    source['Object'] = compressor.compress(source['Object']) + compressor.flush()
 
-                paragraphs = doc.createElement("Paragraphs")
-                paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-                start = 0
-                while start < len(source['PlainText']):
-                    end = source['PlainText'].find('\n', start)
-                    if end == -1:
-                        end = len(source['PlainText']) - 1
-                    para = paragraphs.appendChild(doc.createElement("Para"))
-                    para.setAttribute("Pos", str(start))
-                    para.setAttribute("Len", str(end - start + 1))
-                    para.setAttribute("Style", "Text Body")
-                    start = end + 1
+                    source['LengthX'] = 0
 
-                source['MetaData'] = paragraphs.toxml() + settings.toxml()
+                    doc = Document()
+                    settings = doc.createElement("DisplaySettings")
+                    settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                    settings.setAttribute("InputPosition", "0")
+                    source['MetaData'] = settings.toxml()
+
+                    paragraphs = doc.createElement("Paragraphs")
+                    paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                    start = 0
+                    while start < len(source['PlainText']):
+                        end = source['PlainText'].find('\n', start)
+                        if end == -1:
+                            end = len(source['PlainText']) - 1
+                        para = paragraphs.appendChild(doc.createElement("Para"))
+                        para.setAttribute("Pos", str(start))
+                        para.setAttribute("Len", str(end - start + 1))
+                        para.setAttribute("Style", "Text Body")
+                        start = end + 1
+
+                    source['MetaData'] = paragraphs.toxml() + settings.toxml()
+
+
             elif source['ObjectTypeName'] == 'JPEG':
                 source['SourceType'] = 33
                 image = Image.open(StringIO(source['Object']))
@@ -1437,6 +1445,9 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
         if args.verbosity > 0:
             print("Denormalising taggings")
 
+        sources = [dict(row) for row in nvivocon.execute(select([nvivoSource.c.Item_Id,
+                                                                 nvivoSource.c.PlainText]))]
+
         normTagging = normmd.tables['Tagging']
         taggings = [dict(row) for row in normdb.execute(select([
                 normTagging.c.Source,
@@ -1470,6 +1481,12 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                 if endY != None:
                     tagging['LengthY'] = int(endY) - tagging['StartY'] + 1
 
+            if args.mac:
+                source = next(source for source in sources if uuid.UUID(source['Item_Id']) == uuid.UUID(tagging['Source']))
+                if source['PlainText'] != None:
+                    tagging['StartText']  = tagging['StartX']  - source['PlainText'][0:tagging['StartX']].count(' ')
+                    tagging['LengthText'] = tagging['LengthX'] - source['PlainText'][tagging['StartX']:tagging['StartX']+tagging['LengthX']+1].count(' ')
+
             if tagging['ObjectType'] == 'JPEG':
                 tagging['ReferenceTypeId'] = 2
                 tagging['ClusterId']       = 0
@@ -1488,6 +1505,9 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
     if args.annotations != 'skip':
         if args.verbosity > 0:
             print("Denormalising annotations")
+
+        sources = [dict(row) for row in nvivocon.execute(select([nvivoSource.c.Item_Id,
+                                                                 nvivoSource.c.PlainText]))]
 
         normTagging = normmd.tables['Tagging']
         annotations = [dict(row) for row in normdb.execute(select([
@@ -1511,8 +1531,8 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                 annotations.remove(annotation)
                 continue
 
-            annotation['StartText'  if args.mac else 'StartX']  = int(matchfragment.group(1))
-            annotation['LengthText' if args.mac else 'LengthX'] = int(matchfragment.group(2)) - int(matchfragment.group(1)) + 1
+            annotation['StartX']  = int(matchfragment.group(1))
+            annotation['LengthX'] = int(matchfragment.group(2)) - int(matchfragment.group(1)) + 1
             annotation['StartY'] = None
             annotation['LengthY'] = None
             startY = matchfragment.group(3)
@@ -1521,6 +1541,15 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                 endY = matchfragment.group(4)
                 if endY != None:
                     annotation['LengthY'] = int(endY) - annotation['StartY'] + 1
+
+            if args.mac:
+                source = next(source for source in sources if uuid.UUID(source['Item_Id']) == uuid.UUID(annotation['Source']))
+                if source['PlainText'] != None:
+                    annotation['StartText']  = annotation['StartX']  - source['PlainText'][0:annotation['StartX']].count(' ')
+                    annotation['LengthText'] = annotation['LengthX'] - source['PlainText'][annotation['StartX']:annotation['StartX']+annotation['LengthX']+1].count(' ')
+                else:
+                    annotation['StartText']  = annotation['StartX']
+                    annotation['LengthText'] = annotation['LengthX']
 
             if annotation['ObjectType'] == 'JPEG':
                 annotation['ReferenceTypeId'] = 2
