@@ -17,8 +17,6 @@
 import argparse
 
 parser = argparse.ArgumentParser(description='Normalise an offloaded NVivo project.')
-parser.add_argument('-w', '--windows', action='store_true',
-                    help='Correct NVivo for Windows string coding. Use if names and descriptions appear wierd.')
 
 table_choices = ["", "skip", "replace", "merge"]
 parser.add_argument('-p', '--project', choices=table_choices, default="replace",
@@ -52,6 +50,7 @@ args = parser.parse_args()
 # Fill in extra arguments that NVivo module expects
 args.mac       = True
 args.structure = True
+args.windows   = False
 
 import NVivo
 import os
