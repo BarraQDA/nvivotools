@@ -29,44 +29,44 @@ from dateutil import parser as dateparser
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
 
+parser = argparse.ArgumentParser(description='Normalise an offloaded NVivo project.')
+parser.add_argument('-w', '--windows', action='store_true',
+                    help='Correct NVivo for Windows string coding. Use if names and descriptions appear wierd.')
+parser.add_argument('-m', '--mac',  action='store_true',
+                    help='Use NVivo for Mac database format.')
+parser.add_argument('-s', '--structure', action='store_true',
+                    help='Replace existing table structures.')
+
+table_choices = ["", "skip", "replace", "merge"]
+parser.add_argument('-p', '--project', choices=table_choices, default="replace",
+                    help='Project action.')
+parser.add_argument('-nc', '--node-categories', choices=table_choices, default="replace",
+                    help='Node category action.')
+parser.add_argument('-n', '--nodes', choices=table_choices, default="replace",
+                    help='Node action.')
+parser.add_argument('-na', '--node-attributes', choices=table_choices, default="replace",
+                    help='Node attribute table action.')
+parser.add_argument('-sc', '--source-categories', choices=table_choices, default="replace",
+                    help='Source category action.')
+parser.add_argument('--sources', choices=table_choices, default="replace",
+                    help='Source action.')
+parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="replace",
+                    help='Source attribute action.')
+parser.add_argument('-t', '--taggings', choices=table_choices, default="replace",
+                    help='Tagging action.')
+parser.add_argument('-a', '--annotations', choices=table_choices, default="replace",
+                    help='Annotation action.')
+parser.add_argument('-u', '--users', choices=table_choices, default="replace",
+                    help='User action.')
+
+parser.add_argument('infile', type=str,
+                    help='SQLAlchemy path of input NVivo database or "-" to create empty project.')
+parser.add_argument('outfile', type=str, nargs='?',
+                    help='SQLAlchemy path of output normalised database.')
+
+args = parser.parse_args()
+
 try:
-    parser = argparse.ArgumentParser(description='Normalise an offloaded NVivo project.')
-    parser.add_argument('-w', '--windows', action='store_true',
-                        help='Correct NVivo for Windows string coding. Use if names and descriptions appear wierd.')
-    parser.add_argument('-m', '--mac',  action='store_true',
-                        help='Use NVivo for Mac database format.')
-    parser.add_argument('-s', '--structure', action='store_true',
-                        help='Replace existing table structures.')
-
-    table_choices = ["", "skip", "replace", "merge"]
-    parser.add_argument('-p', '--project', choices=table_choices, default="replace",
-                        help='Project action.')
-    parser.add_argument('-nc', '--node-categories', choices=table_choices, default="replace",
-                        help='Node category action.')
-    parser.add_argument('-n', '--nodes', choices=table_choices, default="replace",
-                        help='Node action.')
-    parser.add_argument('-na', '--node-attributes', choices=table_choices, default="replace",
-                        help='Node attribute table action.')
-    parser.add_argument('-sc', '--source-categories', choices=table_choices, default="replace",
-                        help='Source category action.')
-    parser.add_argument('--sources', choices=table_choices, default="replace",
-                        help='Source action.')
-    parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="replace",
-                        help='Source attribute action.')
-    parser.add_argument('-t', '--taggings', choices=table_choices, default="replace",
-                        help='Tagging action.')
-    parser.add_argument('-a', '--annotations', choices=table_choices, default="replace",
-                        help='Annotation action.')
-    parser.add_argument('-u', '--users', choices=table_choices, default="replace",
-                        help='User action.')
-
-    parser.add_argument('infile', type=str,
-                        help='SQLAlchemy path of input NVivo database or "-" to create empty project.')
-    parser.add_argument('outfile', type=str, nargs='?',
-                        help='SQLAlchemy path of output normalised database.')
-
-    args = parser.parse_args()
-
     if args.infile != '-':
         nvivodb = create_engine(args.infile)
         nvivomd = MetaData(bind=nvivodb)
@@ -116,7 +116,7 @@ try:
         Column('ObjectType',    String(256)),
         Column('SourceType',    Integer),
         Column('Object',        LargeBinary,    nullable=False),
-        Column('Thumbnail',     LargeBinary,    nullable=False),
+        Column('Thumbnail',     LargeBinary),
         #Column('Waveform',      LargeBinary,    nullable=False),
         Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
         Column('CreatedDate',   DateTime),
@@ -460,7 +460,7 @@ try:
                 # Look for ODT signature from NVivo for Mac files
                 if source['Object'][0:4] != 'PK\x03\x04':
                     source['ObjectType'] = 'ODT'
-                else
+                else:
                     try:
                         ## Try zlib decompression without header
                         source['Object'] = zlib.decompress(source['Object'], -15)
