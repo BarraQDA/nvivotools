@@ -47,9 +47,9 @@ parser.add_argument('-a', '--annotations', choices=table_choices, default="repla
 parser.add_argument('-u', '--users', choices=table_choices, default="replace",
                     help='User action.')
 
-parser.add_argument('infile', type=str,
+parser.add_argument('indb', type=str,
                     help='SQLAlchemy path of input NVivo database or "-" to create empty project.')
-parser.add_argument('outfile', type=str, nargs='?',
+parser.add_argument('outdb', type=str, nargs='?',
                     help='SQLAlchemy path of output normalised database.')
 
 args = parser.parse_args()

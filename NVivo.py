@@ -40,8 +40,8 @@ from cStringIO import StringIO
 exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'DataTypes.py').read())
 
 def Normalise(args):
-    if args.infile != '-':
-        nvivodb = create_engine(args.infile)
+    if args.indb != '-':
+        nvivodb = create_engine(args.indb)
         nvivomd = MetaData(bind=nvivodb)
         nvivomd.reflect(nvivodb)
 
@@ -56,9 +56,9 @@ def Normalise(args):
     else:
         nvivodb = None
 
-    if args.outfile is None:
-        args.outfile = args.infile.rsplit('.',1)[0] + '.norm'
-    normdb = create_engine(args.outfile)
+    if args.outdb is None:
+        args.outdb = args.indb.rsplit('.',1)[0] + '.norm'
+    normdb = create_engine(args.outdb)
     normmd = MetaData(bind=normdb)
 
     if args.structure:
@@ -610,14 +610,14 @@ def Normalise(args):
 ######################################################################################
 
 def Denormalise(args):
-    normdb = create_engine(args.infile)
+    normdb = create_engine(args.indb)
     normmd = MetaData(bind=normdb)
     normmd.reflect(normdb)
 
-    if args.outfile is None:
-        args.outfile = args.infile.rsplit('.',1)[0] + '.nvivo'
-    #nvivodb = create_engine(args.outfile, deprecate_large_types=True)
-    nvivodb = create_engine(args.outfile)
+    if args.outdb is None:
+        args.outdb = args.indb.rsplit('.',1)[0] + '.nvivo'
+    #nvivodb = create_engine(args.outdb, deprecate_large_types=True)
+    nvivodb = create_engine(args.outdb)
     nvivomd = MetaData(bind=nvivodb)
     nvivomd.reflect(nvivodb)
     nvivocon = nvivodb.connect()

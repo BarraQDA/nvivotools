@@ -49,9 +49,9 @@ parser.add_argument('-a', '--annotations', choices=table_choices, default="merge
 parser.add_argument('-u', '--users', choices=table_choices, default="merge",
                     help='User action.')
 
-parser.add_argument('infile', type=str,
+parser.add_argument('indb', type=str,
                     help='SQLAlchemy path of input normalised database.')
-parser.add_argument('outfile', type=str, nargs='?',
+parser.add_argument('outdb', type=str, nargs='?',
                     help='SQLAlchemy path of input output NVivo database.')
 
 args = parser.parse_args()
