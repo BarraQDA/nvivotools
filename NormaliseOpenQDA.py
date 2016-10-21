@@ -26,7 +26,7 @@ import datetime
 import urllib2
 import webcolors
 
-exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
+exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'DataTypes.py').read())
 
 try:
     parser = argparse.ArgumentParser(description='Normalise an offloaded NVivo project.')
