@@ -16,7 +16,7 @@
 
 import argparse
 
-parser = argparse.ArgumentParser(description='Normalise an NVivo for Mac file.')
+parser = argparse.ArgumentParser(description='Create an NVivo for Mac file from a normalised SQLite file.')
 
 table_choices = ["", "skip", "replace", "merge"]
 parser.add_argument('-p', '--project', choices=table_choices, default="replace",
@@ -41,15 +41,15 @@ parser.add_argument('-u', '--users', choices=table_choices, default="replace",
                     help='User action.')
 
 parser.add_argument('infile', type=argparse.FileType('rb'),
-                    help="Input NVivo for Mac file (extension .nvpx)")
-parser.add_argument('outfilename', type=str, nargs='?',
-                    help="Output normalised SQLite file")
+                    help="Input normalised SQLite file (extension .norm)")
+parser.add_argument('outfile', type=argparse.FileType('rb'),
+                    help="NVivo for Mac file to insert into")
 
 args = parser.parse_args()
 
 # Fill in extra arguments that NVivo module expects
 args.mac       = True
-args.structure = True
+args.structure = False
 args.windows   = False
 args.verbosity = 1
 
@@ -68,9 +68,10 @@ args.infile.close()
 tmpinfileptr.close()
 
 tmpoutfilename = tempfile.mktemp()
-
-if args.outfilename is None:
-    args.outfilename = os.path.basename(args.infile.name.rsplit('.',1)[0] + '.norm')
+tmpoutfileptr  = file(tmpoutfilename, 'wb')
+tmpoutfileptr.write(args.outfile.read())
+args.outfile.close()
+tmpoutfileptr.close()
 
 import socket
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -79,17 +80,17 @@ freeport = str(s.getsockname()[1])
 s.close()
 
 DEVNULL = open(os.devnull, 'wb')
-dbproc = Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + '/sqlany.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport], stdout=PIPE, stdin=DEVNULL)
+dbproc = Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + '/sqlany.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpoutfilename, '-n', 'NVivo'+freeport], stdout=PIPE, stdin=DEVNULL)
 
 # Wait until SQL Anywhere engine starts...
 while dbproc.poll() is None:
     line = dbproc.stdout.readline()
     if line == 'Now accepting requests\n':
         break
-args.indb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' + freeport + '/NVivo' + freeport
-args.outdb = 'sqlite:///' + tmpoutfilename
+args.indb = 'sqlite:///' + tmpinfilename
+args.outdb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' + freeport + '/NVivo' + freeport
 
-NVivo.Normalise(args)
+NVivo.Denormalise(args)
 
-shutil.move(tmpoutfilename, args.outfilename)
+shutil.move(tmpoutfilename, os.path.basename(args.outfilename))
 os.remove(tmpinfilename)

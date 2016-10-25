@@ -616,6 +616,7 @@ def Denormalise(args):
 
     if args.outdb is None:
         args.outdb = args.indb.rsplit('.',1)[0] + '.nvivo'
+
     #nvivodb = create_engine(args.outdb, deprecate_large_types=True)
     nvivodb = create_engine(args.outdb)
     nvivomd = MetaData(bind=nvivodb)
