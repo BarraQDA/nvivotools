@@ -67,11 +67,11 @@ def Normalise(args):
             normmd.remove(table)
 
     # Create the normalised database structure
-    normUser = Table('User', normmd,
+    normUser = normmd.tables.get('User') or Table('User', normmd,
         Column('Id',            UUID(),         primary_key=True),
         Column('Name',          String(256)))
 
-    normProject = Table('Project', normmd,
+    normProject = normmd.tables.get('Project') or Table('Project', normmd,
         Column('Title',         String(256),                            nullable=False),
         Column('Description',   String(2048)),
         Column('CreatedBy',     UUID(),         ForeignKey("User.Id"),  nullable=False),
@@ -79,7 +79,7 @@ def Normalise(args):
         Column('ModifiedBy',    UUID(),         ForeignKey("User.Id"),  nullable=False),
         Column('ModifiedDate',  DateTime,                               nullable=False))
 
-    normSource = Table('Source', normmd,
+    normSource = normmd.tables.get('Source') or Table('Source', normmd,
         Column('Id',            UUID(),         primary_key=True),
         Column('Category',      UUID()),
         Column('Name',          String(256)),
@@ -96,7 +96,7 @@ def Normalise(args):
         Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
         Column('ModifiedDate',  DateTime))
 
-    normSourceCategory = Table('SourceCategory', normmd,
+    normSourceCategory = normmd.tables.get('SourceCategory') or Table('SourceCategory', normmd,
         Column('Id',            UUID(),         primary_key=True),
         Column('Name',          String(256)),
         Column('Description',   String(512)),
@@ -105,7 +105,7 @@ def Normalise(args):
         Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
         Column('ModifiedDate',  DateTime))
 
-    normTagging = Table('Tagging', normmd,
+    normTagging = normmd.tables.get('Tagging') or Table('Tagging', normmd,
         Column('Source',        UUID(),         ForeignKey("Source.Id")),
         Column('Node',          UUID(),         ForeignKey("Node.Id")),
         Column('Fragment',      String(256)),
@@ -115,7 +115,7 @@ def Normalise(args):
         Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
         Column('ModifiedDate',  DateTime))
 
-    normNode = Table('Node', normmd,
+    normNode = normmd.tables.get('Node') or Table('Node', normmd,
         Column('Id',            UUID(),         primary_key=True),
         Column('Parent',        UUID(),         ForeignKey("Node.Id")),
         Column('Category',      UUID(),         ForeignKey("NodeCategory.Id")),
@@ -128,7 +128,7 @@ def Normalise(args):
         Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
         Column('ModifiedDate',  DateTime))
 
-    normNodeCategory = Table('NodeCategory', normmd,
+    normNodeCategory = normmd.tables.get('NodeCategory') or Table('NodeCategory', normmd,
         Column('Id',            UUID(),         primary_key=True),
         Column('Name',          String(256)),
         Column('Description',   String(512)),
@@ -137,7 +137,7 @@ def Normalise(args):
         Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
         Column('ModifiedDate',  DateTime))
 
-    normSourceAttribute = Table('SourceAttribute', normmd,
+    normSourceAttribute = normmd.tables.get('SourceAttribute') or Table('SourceAttribute', normmd,
         Column('Source',        UUID(),         ForeignKey("Source.Id"),    primary_key=True),
         Column('Name',          String(256),                                primary_key=True),
         Column('Value',         String(256)),
@@ -148,7 +148,7 @@ def Normalise(args):
         Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
         Column('ModifiedDate',  DateTime))
 
-    normNodeAttribute = Table('NodeAttribute', normmd,
+    normNodeAttribute = normmd.tables.get('NodeAttribute') or Table('NodeAttribute', normmd,
         Column('Node',          UUID(),         ForeignKey("Node.Id"),      primary_key=True),
         Column('Name',          String(256),                                primary_key=True),
         Column('Value',         String(256)),
@@ -159,40 +159,87 @@ def Normalise(args):
         Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
         Column('ModifiedDate',  DateTime))
 
-    normmd.create_all(normdb)
+    if args.structure:
+        normmd.create_all(normdb)
 
-    if nvivodb == None:
-        sys.exit()
+    if nvivodb == None:     # that is, if all we are doing is making an empty norm file
+        return
+
+    normcon = normdb.connect()
+    normtr = normcon.begin()
+
+# Generic merge/overwrite/replace function
+    def merge_overwrite_or_replace(table, columns, data, operation):
+        if args.verbosity > 1:
+            print("merge_overwrite_or_replace('" + table.name + "'," + repr(columns) + "," + repr(data) + ",'" + operation + "')")
+        newids = [{column:row[column] for column in columns} for row in data]
+        curids = [{column:row[column] for column in columns}
+                  for row in normcon.execute(select([table.c[column] for column in columns]))]
+        if args.verbosity > 1:
+            print("newids " + repr(newids))
+            print("curids " + repr(curids))
+
+        if operation == 'replace':
+            idstodelete = [id for id in curids if not id in newids]
+            if len(idstodelete) > 0:
+                if args.verbosity > 1:
+                    print("    deleting " + repr(idstodelete))
+                delete = table.delete()
+                for column in columns:
+                    if column == 'Id':  # Hack to catch reserved word disallowed in bindparam
+                        for id in idstodelete:
+                            id['_' + column] = id[column]
+                        delete = delete.where(table.c[column] == bindparam('_' + column))
+                    else:
+                        delete = delete.where(table.c[column] == bindparam(column))
+                normcon.execute(delete, idstodelete)
+
+        if operation == 'overwrite' or operation == 'replace':
+            rowstoupdate = [row for row in data if {column:row[column] for column in columns} in curids]
+            if len(rowstoupdate) > 0:
+                if args.verbosity > 1:
+                    print("    updating " + repr(rowstoupdate))
+                update = table.update()
+                for column in columns:
+                    if column == 'Id':  # Hack to catch reserved word disallowed in bindparam
+                        for id in rowstoupdate:
+                            id['_' + column] = id[column]
+                        update = update.where(table.c[column] == bindparam('_' + column))
+                    else:
+                        update = update.where(table.c[column] == bindparam(column))
+                normcon.execute(update, rowstoupdate)
+
+        rowstoinsert = [row for row in data if not {column:row[column] for column in columns} in curids]
+        if len(rowstoinsert) > 0:
+            if args.verbosity > 1:
+                print("    inserting " + repr(rowstoinsert))
+            normcon.execute(table.insert(), rowstoinsert)
 
 # Users
     if args.users != 'skip':
-        print("Normalising users")
+        if args.verbosity > 0:
+            print("Normalising users")
 
-        sel = select([nvivoUserProfile.c.Id,
-                      nvivoUserProfile.c.Name])
+        users = [dict(row) for row in nvivodb.execute(select([
+                nvivoUserProfile.c.Id,
+                nvivoUserProfile.c.Name]
+            ))]
 
-        users = [dict(row) for row in nvivodb.execute(sel)]
-
-        if args.users == 'replace':
-            normdb.execute(normUser.delete())
-        elif args.users == 'merge':
-            normdb.execute(normUser.delete(),
-                           users)
-
-        if len(users) > 0:
-            normdb.execute(normUser.insert(), users)
+        merge_overwrite_or_replace(normUser, ['Id'], users, args.users)
 
 # Project
     if args.project != 'skip':
-        print("Normalising project")
+        if args.verbosity > 0:
+            print("Normalising project")
 
-        sel = select([nvivoProject.c.Title,
-                      nvivoProject.c.Description,
-                      nvivoProject.c.CreatedBy,
-                      nvivoProject.c.CreatedDate,
-                      nvivoProject.c.ModifiedBy,
-                      nvivoProject.c.ModifiedDate])
-        projects = [dict(row) for row in nvivodb.execute(sel)]
+        projects = [dict(row) for row in nvivodb.execute(select([
+                nvivoProject.c.Title,
+                nvivoProject.c.Description,
+                nvivoProject.c.CreatedBy,
+                nvivoProject.c.CreatedDate,
+                nvivoProject.c.ModifiedBy,
+                nvivoProject.c.ModifiedDate
+            ]))]
         for project in projects:
             if args.windows:
                 project['Title']       = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Title']))
@@ -204,22 +251,27 @@ def Normalise(args):
             if not isinstance(project['ModifiedDate'], datetime.datetime):
                 project['ModifiedDate'] = dateparser.parse(project['ModifiedDate'])
 
-        normdb.execute(normProject.delete())
-        normdb.execute(normProject.insert(), projects)
+        if args.project == 'overwrite':
+            normcon.execute(normProject.delete())
+            normcon.execute(normProject.insert(), projects)
 
 # Node Categories
     if args.node_categories != 'skip':
-        print("Normalising node categories")
+        if args.verbosity > 0:
+            print("Normalising node categories")
 
-        sel = select([nvivoItem.c.Id,
-                      nvivoItem.c.Name,
-                      nvivoItem.c.Description,
-                      nvivoItem.c.CreatedBy,
-                      nvivoItem.c.CreatedDate,
-                      nvivoItem.c.ModifiedBy,
-                      nvivoItem.c.ModifiedDate])
-        sel = sel.where(nvivoItem.c.TypeId == literal_column('52'))
-        nodecategories = [dict(row) for row in nvivodb.execute(sel)]
+        nodecategories = [dict(row) for row in nvivodb.execute(select([
+                nvivoItem.c.Id,
+                nvivoItem.c.Name,
+                nvivoItem.c.Description,
+                nvivoItem.c.CreatedBy,
+                nvivoItem.c.CreatedDate,
+                nvivoItem.c.ModifiedBy,
+                nvivoItem.c.ModifiedDate]
+            ).where(
+                nvivoItem.c.TypeId == literal_column('52')
+            ))]
+
         for nodecategory in nodecategories:
             if args.windows:
                 nodecategory['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Name']))
@@ -230,47 +282,42 @@ def Normalise(args):
             if not isinstance(nodecategory['ModifiedDate'], datetime.datetime):
                 nodecategory['ModifiedDate'] = dateparser.parse(nodecategory['ModifiedDate'])
 
-        if args.node_categories == 'replace':
-            normdb.execute(normNodeCategory.delete())
-        elif args.node_categories == 'merge':
-            normdb.execute(normNodeCategory.delete(normNodeCategory.c.Id == bindparam('Id')),
-                           nodecategories)
-
-        if len(nodecategories) > 0:
-            normdb.execute(normNodeCategory.insert(), nodecategories)
+        merge_overwrite_or_replace(normNodeCategory, ['Id'], nodecategories, args.node_categories)
 
 # Nodes
     if args.nodes != 'skip':
-        print("Normalising nodes")
+        if args.verbosity > 0:
+            print("Normalising nodes")
 
         nvivoCategoryRole = nvivoRole.alias(name='CategoryRole')
         nvivoParentRole   = nvivoRole.alias(name='ParentRole')
 
-        sel = select([
-                    nvivoItem.c.Id,
-                    nvivoCategoryRole.c.Item2_Id.label('Category'),
-                    nvivoItem.c.Name,
-                    nvivoItem.c.Description,
-                    nvivoItem.c.ColorArgb.label('Color'),
-                    nvivoItem.c.Aggregate,
-                    nvivoItem.c.CreatedBy,
-                    nvivoItem.c.CreatedDate,
-                    nvivoItem.c.ModifiedBy,
-                    nvivoItem.c.ModifiedDate,
-                    nvivoParentRole.c.Item1_Id.label('Parent')]
-              ).where(or_(
-                    nvivoItem.c.TypeId == literal_column('16'),
-                    nvivoItem.c.TypeId == literal_column('62'))
-              ).select_from(nvivoItem.outerjoin(
-                    nvivoCategoryRole, and_(
-                    nvivoCategoryRole.c.TypeId == literal_column('14'),
-                    nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id)
-              ).outerjoin(
-                    nvivoParentRole, and_(
-                    nvivoParentRole.c.TypeId == literal_column('1'),
-                    nvivoParentRole.c.Item2_Id == nvivoItem.c.Id)))
-
-        nodes = [dict(row) for row in nvivodb.execute(sel)]
+        nodes = [dict(row) for row in nvivodb.execute(select([
+                nvivoItem.c.Id,
+                nvivoCategoryRole.c.Item2_Id.label('Category'),
+                nvivoItem.c.Name,
+                nvivoItem.c.Description,
+                nvivoItem.c.ColorArgb.label('Color'),
+                nvivoItem.c.Aggregate,
+                nvivoItem.c.CreatedBy,
+                nvivoItem.c.CreatedDate,
+                nvivoItem.c.ModifiedBy,
+                nvivoItem.c.ModifiedDate,
+                nvivoParentRole.c.Item1_Id.label('Parent')]
+            ).where(or_(
+                nvivoItem.c.TypeId == literal_column('16'),
+                nvivoItem.c.TypeId == literal_column('62'))
+            ).select_from(nvivoItem.outerjoin(
+                nvivoCategoryRole,
+            and_(
+                nvivoCategoryRole.c.TypeId == literal_column('14'),
+                nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id)
+            ).outerjoin(
+                nvivoParentRole,
+            and_(
+                nvivoParentRole.c.TypeId == literal_column('1'),
+                nvivoParentRole.c.Item2_Id == nvivoItem.c.Id
+            ))))]
         for node in nodes:
             if args.windows:
                 node['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Name']))
@@ -281,18 +328,12 @@ def Normalise(args):
             if not isinstance(node['ModifiedDate'], datetime.datetime):
                 node['ModifiedDate'] = dateparser.parse(node['ModifiedDate'])
 
-        if args.nodes == 'replace':
-            normdb.execute(normNode.delete())
-        elif args.nodes == 'merge':
-            normdb.execute(normNode.delete(normNode.c.Id == bindparam('Id')),
-                           nodes)
-
-        if len(nodes) > 0:
-            normdb.execute(normNode.insert(), nodes)
+        merge_overwrite_or_replace(normNode, ['Id'], nodes, args.nodes)
 
 # Node attributes
     if args.node_attributes != 'skip':
-        print("Normalising node attributes")
+        if args.verbosity > 0:
+            print("Normalising node attributes")
 
         nvivoNodeItem     = nvivoItem.alias(name='NodeItem')
         nvivoNameItem     = nvivoItem.alias(name='NameItem')
@@ -300,28 +341,29 @@ def Normalise(args):
         nvivoValueItem    = nvivoItem.alias(name='ValueItem')
         nvivoValueRole    = nvivoRole.alias(name='ValueRole')
 
-        sel = select([nvivoNodeItem.c.Id.label('Node'),
-                      nvivoNameItem.c.Name.label('Name'),
-                      nvivoValueItem.c.Name.label('Value'),
-                      nvivoValueItem.c.CreatedBy,
-                      nvivoValueItem.c.CreatedDate,
-                      nvivoValueItem.c.ModifiedBy,
-                      nvivoValueItem.c.ModifiedDate,
-                      nvivoNameRole.c.TypeId.label('NameRoleTypeId'),
-                      nvivoValueRole.c.TypeId.label('ValueRoleTypeId'),
-                      nvivoExtendedItem.c.Properties])
-        sel = sel.where(and_(
-                      or_(nvivoNodeItem.c.TypeId==literal_column('16'), nvivoNodeItem.c.TypeId==literal_column('62')),
-                      nvivoNodeItem.c.Id == nvivoValueRole.c.Item1_Id,
-                      nvivoValueRole.c.TypeId == literal_column('7'),
-                      nvivoValueItem.c.Id == nvivoValueRole.c.Item2_Id,
-                      nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
-                      nvivoNameRole.c.TypeId == literal_column('6'),
-                      nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
-                      nvivoValueItem.c.Name != literal_column("'Unassigned'"),
-                      nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
-                      ))
-        nodeattrs = [dict(row) for row in nvivodb.execute(sel)]
+        nodeattrs = [dict(row) for row in nvivodb.execute(select([
+                nvivoNodeItem.c.Id.label('Node'),
+                nvivoNameItem.c.Name.label('Name'),
+                nvivoValueItem.c.Name.label('Value'),
+                nvivoValueItem.c.CreatedBy,
+                nvivoValueItem.c.CreatedDate,
+                nvivoValueItem.c.ModifiedBy,
+                nvivoValueItem.c.ModifiedDate,
+                nvivoNameRole.c.TypeId.label('NameRoleTypeId'),
+                nvivoValueRole.c.TypeId.label('ValueRoleTypeId'),
+                nvivoExtendedItem.c.Properties]
+            ).where(and_(
+                or_(nvivoNodeItem.c.TypeId==literal_column('16'),
+                    nvivoNodeItem.c.TypeId==literal_column('62')),
+                nvivoNodeItem.c.Id == nvivoValueRole.c.Item1_Id,
+                nvivoValueRole.c.TypeId == literal_column('7'),
+                nvivoValueItem.c.Id == nvivoValueRole.c.Item2_Id,
+                nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
+                nvivoNameRole.c.TypeId == literal_column('6'),
+                nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
+                nvivoValueItem.c.Name != literal_column("'Unassigned'"),
+                nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
+            )))]
         for nodeattr in nodeattrs:
             properties = parseString(nodeattr['Properties'])
             for property in properties.documentElement.getElementsByTagName('Property'):
@@ -340,30 +382,24 @@ def Normalise(args):
             if not isinstance(nodeattr['ModifiedDate'], datetime.datetime):
                 nodeattr['ModifiedDate'] = dateparser.parse(nodeattr['ModifiedDate'])
 
-        if args.node_attributes == 'replace':
-            normdb.execute(normNodeAttribute.delete())
-        elif args.node_attributes == 'merge':
-            normdb.execute(normNodeAttribute.delete(
-                           and_(normNodeAttribute.c.Node == bindparam('Node'),
-                                normNodeAttribute.c.Name == bindparam('Name'))),
-                           nodeattrs)
-
-        if len(nodeattrs) > 0:
-            normdb.execute(normNodeAttribute.insert(), nodeattrs)
+        merge_overwrite_or_replace(normNodeAttribute, ['Node', 'Name'], nodeattrs, args.node_attributes)
 
 # Source categories
     if args.source_categories != 'skip':
-        print("Normalising source categories")
+        if args.verbosity > 0:
+            print("Normalising source categories")
 
-        sel = select([nvivoItem.c.Id,
-                      nvivoItem.c.Name,
-                      nvivoItem.c.Description,
-                      nvivoItem.c.CreatedBy,
-                      nvivoItem.c.CreatedDate,
-                      nvivoItem.c.ModifiedBy,
-                      nvivoItem.c.ModifiedDate])
-        sel = sel.where(nvivoItem.c.TypeId == literal_column('51'))
-        sourcecats  = [dict(row) for row in nvivodb.execute(sel)]
+        sourcecats  = [dict(row) for row in nvivodb.execute(select([
+                nvivoItem.c.Id,
+                nvivoItem.c.Name,
+                nvivoItem.c.Description,
+                nvivoItem.c.CreatedBy,
+                nvivoItem.c.CreatedDate,
+                nvivoItem.c.ModifiedBy,
+                nvivoItem.c.ModifiedDate]
+            ).where(
+                nvivoItem.c.TypeId == literal_column('51')
+            ))]
         for sourcecat in sourcecats:
             if args.windows:
                 sourcecat['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Name']))
@@ -374,48 +410,41 @@ def Normalise(args):
             if not isinstance(sourcecat['ModifiedDate'], datetime.datetime):
                 sourcecat['ModifiedDate'] = dateparser.parse(sourcecat['ModifiedDate'])
 
-        if args.source_categories == 'replace':
-            normdb.execute(normSourceCategory.delete())
-        elif args.source_categories == 'merge':
-            normdb.execute(normSourceCategory.delete(normSourceCategory.c.Id == bindparam('Id')),
-                           sourcecategories)
-
-        if len(sourcecats) > 0:
-            normdb.execute(normSourceCategory.insert(), sourcecats)
+        merge_overwrite_or_replace(normSourceCategory, ['Id'], sourcecats, args.source_categories)
 
 # Sources
     if args.sources != 'skip':
-        print("Normalising sources")
+        if args.verbosity > 0:
+            print("Normalising sources")
 
         nvivoCategoryRole = nvivoRole.alias(name='CategoryRole')
         nvivoParentRole   = nvivoRole.alias(name='ParentRole')
 
-        sel = select([
-                    nvivoItem.c.Id,
-                    nvivoCategoryRole.c.Item2_Id.label('Category'),
-                    nvivoItem.c.Name,
-                    nvivoItem.c.Description,
-                    nvivoItem.c.ColorArgb.label('Color'),
-                    nvivoSource.c.TypeId.label('ObjectTypeId'),
-                    nvivoSource.c.Object,
-                    nvivoSource.c.PlainText,
-                    nvivoSource.c.MetaData,
-                    nvivoSource.c.Thumbnail,
-                    nvivoSource.c.Waveform,
-                    nvivoItem.c.TypeId.label('SourceType'),
-                    nvivoItem.c.CreatedBy,
-                    nvivoItem.c.CreatedDate,
-                    nvivoItem.c.ModifiedBy,
-                    nvivoItem.c.ModifiedDate]
+        sources = [dict(row) for row in nvivodb.execute(select([
+                nvivoItem.c.Id,
+                nvivoCategoryRole.c.Item2_Id.label('Category'),
+                nvivoItem.c.Name,
+                nvivoItem.c.Description,
+                nvivoItem.c.ColorArgb.label('Color'),
+                nvivoSource.c.TypeId.label('ObjectTypeId'),
+                nvivoSource.c.Object,
+                nvivoSource.c.PlainText,
+                nvivoSource.c.MetaData,
+                nvivoSource.c.Thumbnail,
+                nvivoSource.c.Waveform,
+                nvivoItem.c.TypeId.label('SourceType'),
+                nvivoItem.c.CreatedBy,
+                nvivoItem.c.CreatedDate,
+                nvivoItem.c.ModifiedBy,
+                nvivoItem.c.ModifiedDate]
             ).where(
-                    nvivoItem.c.Id == nvivoSource.c.Item_Id
+                nvivoItem.c.Id == nvivoSource.c.Item_Id
             ).select_from(nvivoItem.outerjoin(
-                    nvivoCategoryRole, and_(
-                    nvivoCategoryRole.c.TypeId == literal_column('14'),
-                    nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id)
-            ))
-
-        sources = [dict(row) for row in nvivodb.execute(sel)]
+                nvivoCategoryRole,
+            and_(
+                nvivoCategoryRole.c.TypeId == literal_column('14'),
+                nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id)
+            )))]
         for source in sources:
             if args.windows:
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Name']))
@@ -445,43 +474,37 @@ def Normalise(args):
             if not isinstance(source['ModifiedDate'], datetime.datetime):
                 source['ModifiedDate'] = dateparser.parse(source['ModifiedDate'])
 
-        if args.sources == 'replace':
-            normdb.execute(normSource.delete())
-        elif args.sources == 'merge':
-            normdb.execute(normSource.delete(normSource.c.Id == bindparam('Id')),
-                           sources)
-
-        if len(sources) > 0:
-            normdb.execute(normSource.insert(), sources)
+        merge_overwrite_or_replace(normSource, ['Id'], sources, args.sources)
 
 # Source attributes
     if args.source_attributes != 'skip':
-        print("Normalising source attributes")
+        if args.verbosity > 0:
+            print("Normalising source attributes")
 
         nvivoNameItem     = nvivoItem.alias(name='NameItem')
         nvivoNameRole     = nvivoRole.alias(name='NameRole')
         nvivoValueItem    = nvivoItem.alias(name='ValueItem')
         nvivoValueRole    = nvivoRole.alias(name='ValueRole')
 
-        sel = select([nvivoSource.c.Item_Id.label('Source'),
-                      nvivoNameItem.c.Name,
-                      nvivoValueItem.c.Name.label('Value'),
-                      nvivoValueItem.c.CreatedBy,
-                      nvivoValueItem.c.CreatedDate,
-                      nvivoValueItem.c.ModifiedBy,
-                      nvivoValueItem.c.ModifiedDate,
-                      nvivoExtendedItem.c.Properties])
-        sel = sel.where(and_(
-                      nvivoSource.c.Item_Id == nvivoValueRole.c.Item1_Id,
-                      nvivoValueRole.c.TypeId == literal_column('7'),
-                      nvivoValueItem.c.Id == nvivoValueRole.c.Item2_Id,
-                      nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
-                      nvivoNameRole.c.TypeId == literal_column('6'),
-                      nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
-                      nvivoValueItem.c.Name != literal_column("'Unassigned'"),
-                      nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
-                    ))
-        sourceattrs  = [dict(row) for row in nvivodb.execute(sel)]
+        sourceattrs  = [dict(row) for row in nvivodb.execute(select([
+                nvivoSource.c.Item_Id.label('Source'),
+                nvivoNameItem.c.Name,
+                nvivoValueItem.c.Name.label('Value'),
+                nvivoValueItem.c.CreatedBy,
+                nvivoValueItem.c.CreatedDate,
+                nvivoValueItem.c.ModifiedBy,
+                nvivoValueItem.c.ModifiedDate,
+                nvivoExtendedItem.c.Properties]
+            ).where(and_(
+                nvivoSource.c.Item_Id == nvivoValueRole.c.Item1_Id,
+                nvivoValueRole.c.TypeId == literal_column('7'),
+                nvivoValueItem.c.Id == nvivoValueRole.c.Item2_Id,
+                nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
+                nvivoNameRole.c.TypeId == literal_column('6'),
+                nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
+                nvivoValueItem.c.Name != literal_column("'Unassigned'"),
+                nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
+            )))]
         for sourceattr in sourceattrs:
             properties = parseString(sourceattr['Properties'])
             for property in properties.documentElement.getElementsByTagName('Property'):
@@ -500,41 +523,33 @@ def Normalise(args):
             if not isinstance(sourceattr['ModifiedDate'], datetime.datetime):
                 sourceattr['ModifiedDate'] = dateparser.parse(sourceattr['ModifiedDate'])
 
-        if args.source_attributes == 'replace':
-            normdb.execute(normSourceAttribute.delete())
-        elif args.source_attributes == 'merge':
-            normdb.execute(normSourceAttribute.delete(
-                           and_(normSourceAttribute.c.Source == bindparam('Source'),
-                                normSourceAttribute.c.Name == bindparam('Name'))),
-                           sourceattrs)
-
-        if len(sourceattrs) > 0:
-            normdb.execute(normSourceAttribute.insert(), sourceattrs)
+        merge_overwrite_or_replace(normSourceAttribute, ['Source', 'Name'], sourceattrs, args.source_attributes)
 
 # Tagging
     if args.taggings != 'skip':
-        print("Normalising taggings")
+        if args.verbosity > 0:
+            print("Normalising taggings")
 
-        sel = select([nvivoNodeReference.c.Source_Item_Id.label('Source'),
-                      nvivoNodeReference.c.Node_Item_Id.label('Node'),
-                      nvivoNodeReference.c.StartX,
-                      nvivoNodeReference.c.LengthX,
-                      nvivoNodeReference.c.StartY,
-                      nvivoNodeReference.c.LengthY,
-                      nvivoNodeReference.c.StartZ,
-                      nvivoNodeReference.c.CreatedBy,
-                      nvivoNodeReference.c.CreatedDate,
-                      nvivoNodeReference.c.ModifiedBy,
-                      nvivoNodeReference.c.ModifiedDate,
-                      nvivoItem.c.TypeId])
-        sel = sel.where(and_(
-                      #nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
-                      nvivoItem.c.Id == nvivoNodeReference.c.Node_Item_Id,
-                      or_(
-                        nvivoItem.c.TypeId == literal_column('16'),
-                        nvivoItem.c.TypeId == literal_column('62'))))
-
-        taggings  = [dict(row) for row in nvivodb.execute(sel)]
+        taggings  = [dict(row) for row in nvivodb.execute(select([
+                nvivoNodeReference.c.Source_Item_Id.label('Source'),
+                nvivoNodeReference.c.Node_Item_Id.label('Node'),
+                nvivoNodeReference.c.StartX,
+                nvivoNodeReference.c.LengthX,
+                nvivoNodeReference.c.StartY,
+                nvivoNodeReference.c.LengthY,
+                nvivoNodeReference.c.StartZ,
+                nvivoNodeReference.c.CreatedBy,
+                nvivoNodeReference.c.CreatedDate,
+                nvivoNodeReference.c.ModifiedBy,
+                nvivoNodeReference.c.ModifiedDate,
+                nvivoItem.c.TypeId]
+            ).where(and_(
+                #nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
+                nvivoItem.c.Id == nvivoNodeReference.c.Node_Item_Id,
+                or_(
+                nvivoItem.c.TypeId == literal_column('16'),
+                nvivoItem.c.TypeId == literal_column('62')
+            ))))]
         for tagging in taggings:
             # JS: Should be able to do this in select statement - figure out how!
             if tagging['StartZ'] != None:
@@ -550,38 +565,29 @@ def Normalise(args):
             if not isinstance(tagging['ModifiedDate'], datetime.datetime):
                 tagging['ModifiedDate'] = dateparser.parse(tagging['ModifiedDate'])
 
-        if args.taggings == 'replace':
-            normdb.execute(normTagging.delete(
-                                normTagging.c.Node   != None))
-        elif args.taggings == 'merge':
-            normdb.execute(normTagging.delete(
-                           and_(normSource.c.Source  == bindparam('Source'),
-                                normSource.c.Node    == bindparam('Node'),
-                                normSource.c.StartX  == bindparam('StartX'),
-                                normSource.c.LengthX == bindparam('LengthX'))),
-                           sources)
-
-        if len(taggings) > 0:
-            normdb.execute(normTagging.insert(), taggings)
+        # This could be improved - maybe use tagging Id?
+        merge_overwrite_or_replace(normTagging, ['Source', 'Node', 'Fragment'], taggings, args.taggings)
 
 # Annotations
     if args.annotations != 'skip':
-        print("Normalising annotations")
+        if args.verbosity > 0:
+            print("Normalising annotations")
 
-        # Mac versions label some columns a bit differently here. Go figure...
-        sel = select([nvivoAnnotation.c.Item_Id.label('Source'),
-                        nvivoAnnotation.c.Text.label('Memo'),
-                        nvivoAnnotation.c.StartText.label('StartX')   if args.mac else nvivoAnnotation.c.StartX,
-                        nvivoAnnotation.c.LengthText.label('LengthX') if args.mac else nvivoAnnotation.c.LengthX,
-                        nvivoAnnotation.c.StartY,
-                        nvivoAnnotation.c.LengthY,
-                        nvivoAnnotation.c.CreatedBy,
-                        nvivoAnnotation.c.CreatedDate,
-                        nvivoAnnotation.c.ModifiedBy,
-                        nvivoAnnotation.c.ModifiedDate])
+        annotations  = [dict(row) for row in nvivodb.execute(select([
+                nvivoAnnotation.c.Item_Id.label('Source'),
+                nvivoAnnotation.c.Text.label('Memo'),
+                nvivoAnnotation.c.StartText.label('StartX')   if args.mac else nvivoAnnotation.c.StartX,
+                nvivoAnnotation.c.LengthText.label('LengthX') if args.mac else nvivoAnnotation.c.LengthX,
+                nvivoAnnotation.c.StartY,
+                nvivoAnnotation.c.LengthY,
+                nvivoAnnotation.c.CreatedBy,
+                nvivoAnnotation.c.CreatedDate,
+                nvivoAnnotation.c.ModifiedBy,
+                nvivoAnnotation.c.ModifiedDate
+            ]))]
 
-        annotations  = [dict(row) for row in nvivodb.execute(sel)]
         for annotation in annotations:
+            annotation['Node'] = None
             annotation['Fragment'] = str(annotation['StartX']) + ':' + str(annotation['StartX'] + annotation['LengthX'] - 1);
             if annotation['StartY'] != None:
                 annotation['Fragment'] += ',' + str(annotation['StartY'])
@@ -593,19 +599,10 @@ def Normalise(args):
             if not isinstance(annotation['ModifiedDate'], datetime.datetime):
                 annotation['ModifiedDate'] = dateparser.parse(annotation['ModifiedDate'])
 
-        if args.annotations == 'replace':
-            normdb.execute(normTagging.delete(
-                                normTagging.c.Node   == None))
-        elif args.annotations == 'merge':
-            normdb.execute(normTagging.delete(
-                           and_(normSource.c.Source  == bindparam('Source'),
-                                normSource.c.Node    == None,
-                                normSource.c.StartX  == bindparam('StartX'),
-                                normSource.c.LengthX == bindparam('LengthX'))),
-                           sources)
+        merge_overwrite_or_replace(normTagging, ['Source', 'Node', 'Fragment'], annotations, args.annotations)
 
-        if len(annotations) > 0:
-            normdb.execute(normTagging.insert(), annotations)
+# All done.
+    normtr.commit()
 
 ######################################################################################
 
@@ -613,6 +610,10 @@ def Denormalise(args):
     normdb = create_engine(args.indb)
     normmd = MetaData(bind=normdb)
     normmd.reflect(normdb)
+
+    normUser = Table('User', normmd,
+        Column('Id',            UUID(),         primary_key=True),
+        extend_existing=True)
 
     if args.outdb is None:
         args.outdb = args.indb.rsplit('.',1)[0] + '.nvivo'
@@ -625,10 +626,9 @@ def Denormalise(args):
     nvivotr = nvivocon.begin()
     mssql = nvivodb.dialect.name == 'mssql'
 
-    if args.structure:
-        nvivomd.drop_all(nvivocon)
-        for table in reversed(nvivomd.sorted_tables):
-            nvivomd.remove(table)
+    nvivoUserProfile = Table('UserProfile', nvivomd,
+        Column('Id',            UUID(),         primary_key=True),
+        extend_existing=True)
 
     nvivoProject = nvivomd.tables.get('Project')
     nvivoRole = nvivomd.tables.get('Role')
@@ -638,14 +638,12 @@ def Denormalise(args):
     nvivoSource = nvivomd.tables.get('Source')
     nvivoNodeReference = nvivomd.tables.get('NodeReference')
     nvivoAnnotation = nvivomd.tables.get('Annotation')
-    nvivoUserProfile = nvivomd.tables.get('UserProfile')
 
 # Users
     if args.users != 'skip':
         if args.verbosity > 0:
             print("Denormalising users")
 
-        normUser = normmd.tables['User']
         sel = select([normUser.c.Id.label('UserId'),    # Relabel so can be used for delete/update
                       normUser.c.Name])
 
@@ -1033,7 +1031,7 @@ existing project or stock empty project.
 
         addedattributes = []
         for nodeattribute in nodeattributes:
-            node = next(node for node in nodes if uuid.UUID(node['Id']) == uuid.UUID(nodeattribute['Node']))
+            node = next(node for node in nodes if node['Id'] == nodeattribute['Node'])
             nodeattribute['NodeName']          = node['Name']
             nodeattribute['PlainTextNodeName'] = node['PlainTextName']
             nodeattribute['PlainTextName']     = nodeattribute['Name']
@@ -1446,6 +1444,7 @@ existing project or stock empty project.
                     raise RuntimeError("""
 Can't find unoconv on path. Please refer to the NVivotools README file.
 """)
+                print ['--format=text', tmpfilename + '.' + source['ObjectTypeName']]
                 p = Popen(unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
                 err = p.stderr.read()
                 if err != '':
@@ -1687,7 +1686,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
 
         addedattributes = []
         for sourceattribute in sourceattributes:
-            source = next(source for source in sources if uuid.UUID(source['Item_Id']) == uuid.UUID(sourceattribute['Source']))
+            source = next(source for source in sources if source['Item_Id'] == sourceattribute['Source'])
             sourceattribute['SourceName']          = source['Name']
             sourceattribute['PlainTextSourceName'] = sourceattribute['SourceName']
             sourceattribute['PlainTextName']       = sourceattribute['Name']
@@ -1933,7 +1932,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                     tagging['LengthY'] = int(endY) - tagging['StartY'] + 1
 
             if args.mac:
-                source = next(source for source in sources if uuid.UUID(source['Item_Id']) == uuid.UUID(tagging['Source']))
+                source = next(source for source in sources if source['Item_Id'] == tagging['Source'])
                 if source['PlainText'] != None:
                     tagging['StartText']  = tagging['StartX']  - source['PlainText'][0:tagging['StartX']].count(' ')
                     tagging['LengthText'] = tagging['LengthX'] - source['PlainText'][tagging['StartX']:tagging['StartX']+tagging['LengthX']+1].count(' ')
@@ -1994,7 +1993,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                     annotation['LengthY'] = int(endY) - annotation['StartY'] + 1
 
             if args.mac:
-                source = next(source for source in sources if uuid.UUID(source['Item_Id']) == uuid.UUID(annotation['Source']))
+                source = next(source for source in sources if source['Item_Id'] == annotation['Source'])
                 if source['PlainText'] != None:
                     annotation['StartText']  = annotation['StartX']  - source['PlainText'][0:annotation['StartX']].count(' ')
                     annotation['LengthText'] = annotation['LengthX'] - source['PlainText'][annotation['StartX']:annotation['StartX']+annotation['LengthX']+1].count(' ')

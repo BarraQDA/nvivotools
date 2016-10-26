@@ -33,18 +33,18 @@ try:
     parser.add_argument('-s', '--structure', action='store_true',
                         help='Replace existing table structures.')
 
-    table_choices = ["", "skip", "replace", "merge"]
-    parser.add_argument('-n', '--nodes', choices=table_choices, default="replace",
+    table_choices = ["", "skip", "merge", "overwrite", "replace"]
+    parser.add_argument('-n', '--nodes', choices=table_choices, default="merge",
                         help='Node action.')
-    parser.add_argument('-na', '--node-attributes', choices=table_choices, default="replace",
+    parser.add_argument('-na', '--node-attributes', choices=table_choices, default="merge",
                         help='Node attribute table action.')
-    parser.add_argument('--sources', choices=table_choices, default="replace",
+    parser.add_argument('--sources', choices=table_choices, default="merge",
                         help='Source action.')
-    parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="replace",
+    parser.add_argument('-sa', '--source-attributes', choices=table_choices, default="merge",
                         help='Source attribute action.')
-    parser.add_argument('-t', '--taggings', choices=table_choices, default="replace",
+    parser.add_argument('-t', '--taggings', choices=table_choices, default="merge",
                         help='Tagging action.')
-    parser.add_argument('-u', '--users', choices=table_choices, default="replace",
+    parser.add_argument('-u', '--users', choices=table_choices, default="merge",
                         help='User action.')
 
     parser.add_argument('-U', '--user', type=str,

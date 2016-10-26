@@ -27,7 +27,7 @@ parser.add_argument('-s', '--structure', action='store_true',
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
 
-table_choices = ["", "skip", "replace", "merge"]
+table_choices = ["", "skip", "merge", "overwrite", "replace"]
 parser.add_argument('-p', '--project', choices=table_choices, default="merge",
                     help='Project action.')
 parser.add_argument('-nc', '--node-categories', choices=table_choices, default="merge",
