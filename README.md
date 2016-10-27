@@ -2,6 +2,8 @@
 
 A range of tools to help you get more out of NVivo(tm).
 
+Thanks to the wonderful [Wooey](https://github.com/wooey/Wooey) wome of these tools can now available for use without installation on our server at [http://wooey.barraqda.org](http://wooey.barraqda.org).
+
 ## Introduction
 
 The core of NVivotools its ability to convert qualitative research data (sources, nodes, coding, etc.) into and out of NVivo's proprietary format. Some reasons why you might want to do this include:
