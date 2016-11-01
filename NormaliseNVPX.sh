@@ -19,10 +19,10 @@ elif [ "$(uname)" = "Darwin" ]; then
     if test -d "$SQLANYWHERE"; then
         if test -d $SQLANYWHERE/bin64 && test -f $SQLANYWHERE/bin64/dbeng??; then
             found=1
-            DYLD_LIBRARY_PATH=$SQLANYWHERE/lib64/ $SQLANYWHERE/bin64/dbeng?? "$@"
+            export DYLD_LIBRARY_PATH=$SQLANYWHERE/lib64/
         elif test -d $SQLANYWHERE/bin32 && test -f $SQLANYWHERE/bin32/dbeng??; then
             found=1
-            DYLD_LIBRARY_PATH=$SQLANYWHERE/lib32/ $SQLANYWHERE/bin32/dbeng?? "$@"
+            export DYLD_LIBRARY_PATH=$SQLANYWHERE/lib32/
         fi
     else
         for SQLANYWHERE in `ls -d /Applications/SQLAnywhere??/System 2>/dev/null`; do
