@@ -92,21 +92,41 @@ Although I have done my best to make NVivotools work with both Python versions 2
 
 ### Windows
 
-Install a recent version of Python from [Python Releases for Windows](https://www.python.org/downloads/windows/). During the installation process you will be asked whether to add Python to the path - say 'Yes' to keep things simple.
+Install a recent version of Python 2 from [Python Releases for Windows](https://www.python.org/downloads/windows/). During the installation process you will be asked whether to add Python to the path - say 'Yes' to keep things simple.
 
 ### Linux
 
 Use your distro package manager to install Python 2.
 
+### Mac
+
+The instructions below have been tested on a fresh Mac OSX version 10.11 (El Capitan). They should work with little or no changes on other versions.
+
+Although OSX ships with a version of Python, it seems to be unable to work correctly with the SQLAlchemy package on which NVivotools depends (more precisely - if anyone knows enough about this stuff to figure it out - it fails to load the dbcapi). There is some suspicion that this problem may be related to OSX's System Integrity Protection (SIP), which was only introduced with El Capitan. It is therefore possible that the following section may not be required on earlier versions of OSX (or if you disable SIP, which we do not recommend).
+
+Instead of using the shipped version of Python, install a recent version of Python 2 from [Python Releases for Mac OS X](https://www.python.org/downloads/mac-osx/). Note that Mac releases of Python appear to lack the `dateutils` module, so you will need to install that one explicitly:
+
+    pip install --user python-dateutil
+
 ## Installing Python libraries
 
-You should use 'pip', even under Linux, as at least one of the libraries (SQLAlchemy) is not sufficiently recent, at least on Debian/sid.
+You should use 'pip', even under Linux, to be sure of having up-to-date versions of the libraries. The following commands install the libraries only for the current user, which is the recommended approach at least during the testing phases.
 
-Using a command window, type
+Using a command window, first make sure you have an up-to-date version of pip:
 
-    pip install --upgrade pip
+    pip install --user --upgrade pip
 
-    pip install future pdfminer Pillow pymssql sqlalchemy
+then install the required modules:
+
+    pip install --user future pdfminer Pillow sqlalchemy
+
+If you plan to access NVivo for Windows files, you will also need
+
+    pip install --user pymssql
+
+while if you are going to access NVivo for Mac files, you will need
+
+    pip install --user sqlalchemy_sqlany
 
 User [abers](https://github.com/abers) [found](https:/sre/github.com/BarraQDA/nvivotools/issues/1#issue-181693962) a problem on Raspberry Pi (possibly other ARM systems) where the `pymssql` library requires other packages (`freetds-common`, `libsybdb5`) to be installed. This problem was resolved by installing those packages using the package manager (eg `apt-get` for Debian-based systems) before using pip to install pymssql.
 
@@ -129,6 +149,16 @@ Simply install the packages using your usual package manager, whether a GUI like
 1. Install one of [LibreOffice](http://www.libreoffice.org) or [OpenOffice](http://www.openoffice.org) by following the links from the website.
 
 2. Download [unoconv](http://dag.wiee.rs/home-made/unoconv/) from its [github release](https://github.com/dagwieers/unoconv/archive/0.7.zip). From this zip file, extract `unoconv-0.7/unoconv` and copy it to the folder where the NVivotools scripts.
+
+### Mac
+
+According to [this report](https://github.com/dagwieers/unoconv/issues/263#issuecomment-183237795) on Mac OSX you may have to install an [older version](https://downloadarchive.documentfoundation.org/libreoffice/old/4.2.5.2/mac/x86_64/LibreOffice_4.2.5.2_MacOS_x86-64.dmg) of LibreOffice in order for unoconv to work.
+
+`unoconv` should be installable using `pip`:
+
+    pip install --user unoconv
+
+and ensure that unoconv is on your path.
 
 ## And you are ready to go
 
