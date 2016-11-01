@@ -17,12 +17,12 @@ if [ "$(uname)" = "Linux" ]; then
 elif [ "$(uname)" = "Darwin" ]; then
     SQLANYWHERE=/Applications/NVivo.app/Contents/SQLAnywhere
     if test -d "$SQLANYWHERE"; then
-        if test -d $SQLANYWHERE/bin64 && test -f $SQLANYWHERE/bin64/dbeng??; then
+        if test -d $SQLANYWHERE/lib64; then
             found=1
-            export DYLD_LIBRARY_PATH=$SQLANYWHERE/lib64/
-        elif test -d $SQLANYWHERE/bin32 && test -f $SQLANYWHERE/bin32/dbeng??; then
+            export DYLD_LIBRARY_PATH=$SQLANYWHERE/lib64
+        elif test -d $SQLANYWHERE/lib32; then
             found=1
-            export DYLD_LIBRARY_PATH=$SQLANYWHERE/lib32/
+            export DYLD_LIBRARY_PATH=$SQLANYWHERE/lib32
         fi
     else
         for SQLANYWHERE in `ls -d /Applications/SQLAnywhere??/System 2>/dev/null`; do
@@ -43,4 +43,5 @@ if [ "$found" != "1" ]; then
     exit
 fi
 
-`dirname $0`/NormaliseNVPX.py "$@"
+# Call python explicitly here, otherwise env will drop our environment.
+python `dirname $0`/NormaliseNVPX.py "$@"
