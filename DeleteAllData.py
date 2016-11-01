@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 from sqlalchemy import exc, TypeDecorator, CHAR, String, create_engine, MetaData, bindparam
