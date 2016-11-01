@@ -1496,7 +1496,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
         if args.sources == 'overwrite' or args.sources == 'replace':
             sourcestoupdate = [source for source in sources if {'Item_Id':source['Item_Id']} in curids]
             if len(sourcestoupdate) > 0:
-                if verbosity > 1:
+                if args.verbosity > 1:
                     print("    updating " + repr(sourcestoupdate))
                 nvivocon.execute(nvivoItem.update(
                         nvivoItem.c.Id == bindparam('Item_Id')).values({
@@ -1519,7 +1519,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
 
         sourcestoinsert = [source for source in sources if not {'Item_Id':source['Item_Id']} in curids]
         if len(sourcestoinsert) > 0:
-            if verbosity > 1:
+            if args.verbosity > 1:
                 print("    inserting " + repr(sourcestoinsert))
             nvivocon.execute(nvivoItem.insert().values({
                     'Id':       bindparam('Item_Id'),
