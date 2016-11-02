@@ -1382,14 +1382,22 @@ NVivo file contains no head Internal source.
 
                 # Look for unoconv script or executable. Could this be made simpler?
                 unoconvcmd = None
-                for path in os.environ["PATH"].split(os.pathsep):
-                    unoconvpath = os.path.join(path, 'unoconv')
-                    if os.path.exists(unoconvpath):
-                        if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
-                            unoconvcmd = [unoconvpath]
-                        else:
-                            unoconvcmd = ['python', unoconvpath]
-                        break
+                # Look first in current directory, then in path.
+                unoconvpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'unoconv')
+                if os.path.exists(unoconvpath):
+                    if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
+                        unoconvcmd = [unoconvpath]
+                    else:
+                        unoconvcmd = ['python', unoconvpath]
+                else:
+                    for path in os.environ["PATH"].split(os.pathsep):
+                        unoconvpath = os.path.join(path, 'unoconv')
+                        if os.path.exists(unoconvpath):
+                            if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
+                                unoconvcmd = [unoconvpath]
+                            else:
+                                unoconvcmd = ['python', unoconvpath]
+                            break
                 if unoconvcmd is None:
                     raise RuntimeError("""
 Can't find unoconv on path. Please refer to the NVivotools README file.
@@ -1416,6 +1424,7 @@ Can't find unoconv on path. Please refer to the NVivotools README file.
                     p = Popen(unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
                     err = p.stderr.read()
                     if err != '':
+                        err = "unoconv invocation error:\n" + err
                         raise RuntimeError(err)
 
                     source['Object'] = file(tmpfilename + '.' + destformat, 'rb').read()
