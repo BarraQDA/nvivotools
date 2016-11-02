@@ -2,7 +2,7 @@
 
 A range of tools to help you get more out of NVivo(tm).
 
-Thanks to the wonderful [Wooey](https://github.com/wooey/Wooey) wome of these tools are now available for use on our server at [http://wooey.barraqda.org](http://wooey.barraqda.org).
+Thanks to the wonderful [Wooey](https://github.com/wooey/Wooey) some of these tools are now available for use on our server at [http://wooey.barraqda.org](http://wooey.barraqda.org).
 
 ## Introduction
 
