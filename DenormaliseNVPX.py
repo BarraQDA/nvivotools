@@ -79,7 +79,7 @@ freeport = str(s.getsockname()[1])
 s.close()
 
 DEVNULL = open(os.devnull, 'wb')
-dbproc = Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + '/sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpoutfilename, '-n', 'NVivo'+freeport], stdout=PIPE, stdin=DEVNULL)
+dbproc = Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + '/sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga', '-xd',  tmpoutfilename, '-n', 'NVivo'+freeport], stdout=PIPE, stdin=DEVNULL)
 
 # Wait until SQL Anywhere engine starts...
 while dbproc.poll() is None:
