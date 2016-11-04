@@ -16,7 +16,7 @@ from sqlalchemy.schema import (
     DropConstraint,
     )
 
-exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
+exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
 try:
     parser = argparse.ArgumentParser(description='Drop certain foreign keys.')

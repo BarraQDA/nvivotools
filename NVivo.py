@@ -39,7 +39,7 @@ from pdfminer.layout import LAParams
 from pdfminer.pdfpage import PDFPage
 from cStringIO import StringIO
 
-exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'DataTypes.py').read())
+exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
 # Generic merge/overwrite/replace function
 def merge_overwrite_or_replace(conn, table, columns, data, operation, verbosity):
@@ -605,6 +605,10 @@ def Normalise(args):
 
 # All done.
         normtr.commit()
+        normtr = None
+        normdb.dispose()
+
+        nvivodb.dispose()
 
     except:
         if not normtr is None:
@@ -638,7 +642,7 @@ def Denormalise(args):
             args.outdb = args.indb.rsplit('.',1)[0] + '.nvivo'
 
         #nvivodb = create_engine(args.outdb, deprecate_large_types=True)
-        nvivodb = create_engine(args.outdb)
+        nvivodb = create_engine(args.outdb, encoding='UTF16')
         nvivomd = MetaData(bind=nvivodb)
         nvivomd.reflect(nvivodb)
         nvivocon = nvivodb.connect()
@@ -715,17 +719,24 @@ def Denormalise(args):
                 if args.verbosity > 0:
                     print('Denormalising ' + name + ' categories')
                 # Look up head category
+                headcategoryname = unicode(name + ' Classifications')
+                print repr(headcategoryname)
+                if args.windows:
+                    headcategoryname = u''.join(map(lambda ch: chr(ord(ch) + 0x377), headcategoryname))
+
                 headcategory = nvivocon.execute(select([
                         nvivoItem.c.Id
                     ]).where(and_(
                         nvivoItem.c.TypeId == literal_column('0'),
-                        nvivoItem.c.Name   == literal_column("'" + name + " Classifications'"),
+                        nvivoItem.c.Name   == literal_column("'" + headcategoryname + "'"),
                         nvivoItem.c.System == True
                     ))).fetchone()
                 if headcategory is None:
                     raise RuntimeError("""
         NVivo file contains no head """ + name + """ category.
         """)
+                else:
+                    print "Found head"
                 categories = [dict(row) for row in normdb.execute(select([
                         normtable.c.Id,
                         normtable.c.Name,
@@ -794,11 +805,15 @@ def Denormalise(args):
                 print("Denormalising nodes")
 
             # Look up head node
+            headnodename = 'Nodes'
+            if args.windows:
+                headnodename = u''.join(map(lambda ch: chr(ord(ch) + 0x377), headnodename))
+
             headnode = nvivocon.execute(select([
                     nvivoItem.c.Id
                 ]).where(and_(
                     nvivoItem.c.TypeId == literal_column('0'),
-                    nvivoItem.c.Name == literal_column("'Nodes'"),
+                    nvivoItem.c.Name == literal_column("'" + headnodename + "'"),
                     nvivoItem.c.System == True
                 ))).fetchone()
             if headnode is None:
@@ -1709,6 +1724,10 @@ def Denormalise(args):
 
 # All done.
         nvivotr.commit()
+        nvivotr = None
+        nvivodb.dispose()
+
+        normdb.dispose()
 
     except:
         if not nvivotr is None:

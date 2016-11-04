@@ -18,9 +18,12 @@
 
 import argparse
 
-parser = argparse.ArgumentParser(description='Normalise an NVivo for Mac file.')
+parser = argparse.ArgumentParser(description='Normalise an NVivo for Windows file.')
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
+
+parser.add_argument('-i', '--instance', type=str, nargs='?',
+                    help="Microsoft SQL Server instance")
 
 parser.add_argument('-u', '--users', choices=["", "skip", "merge", "overwrite", "replace"], default="merge",
                     help='User action.')
@@ -51,8 +54,8 @@ parser.add_argument('outfilename', type=str, nargs='?',
 args = parser.parse_args()
 
 # Fill in extra arguments that NVivo module expects
-args.mac       = True
-args.windows   = False
+args.mac       = False
+args.windows   = True
 args.structure = True
 
 import NVivo
@@ -74,24 +77,36 @@ tmpoutfilename = tempfile.mktemp()
 if args.outfilename is None:
     args.outfilename = os.path.basename(args.infile.name.rsplit('.',1)[0] + '.norm')
 
-import socket
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-s.bind(("",0))
-freeport = str(s.getsockname()[1])
-s.close()
+curpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'Windows' + os.path.sep
 
-DEVNULL = open(os.devnull, 'wb')
-dbproc = Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport], stdout=PIPE, stdin=DEVNULL)
+if args.instance is None:
+    proc = Popen([curpath + 'mssqlInstance.bat'], stdout=PIPE)
+    args.instance = proc.stdout.readline()[0:-len(os.linesep)]
+    if args.verbosity > 0:
+        print("Using MSSQL instance: " + args.instance)
 
-# Wait until SQL Anywhere engine starts...
-while dbproc.poll() is None:
-    line = dbproc.stdout.readline()
-    if line == 'Now accepting requests\n':
-        break
-args.indb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' + freeport + '/NVivo' + freeport
-args.outdb = 'sqlite:///' + tmpoutfilename
+# Get reasonably distinct yet recognisable DB name
+dbname = 'nt' + str(os.getpid())
 
-NVivo.Normalise(args)
+proc = Popen([curpath + 'mssqlAttach.bat', tmpinfilename, dbname, args.instance])
+proc.wait()
+if args.verbosity > 0:
+    print("Attached database " + dbname)
 
-shutil.move(tmpoutfilename, args.outfilename)
-os.remove(tmpinfilename)
+try:
+    args.indb = 'mssql+pymssql://nvivotools:nvivotools@localhost/' + dbname
+    args.outdb = 'sqlite:///' + tmpoutfilename
+
+    NVivo.Normalise(args)
+
+except:
+    raise
+
+finally:
+    proc = Popen([curpath + 'mssqlDrop.bat', dbname, args.instance])
+    proc.wait()
+    if args.verbosity > 0:
+        print("Dropped database " + dbname)
+
+    shutil.move(tmpoutfilename, args.outfilename)
+    os.remove(tmpinfilename)

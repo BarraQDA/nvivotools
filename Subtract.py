@@ -9,7 +9,7 @@ import os
 import argparse
 import uuid
 
-exec(open(os.path.dirname(os.path.realpath(__file__)) + '/' + 'NVivoTypes.py').read())
+exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
 try:
 
