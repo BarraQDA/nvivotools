@@ -14,7 +14,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sqlalchemy_sqlany
+
+try:
+    import sqlalchemy_sqlany
+    sqlany = True
+except:
+    sqlany = False
+
 from sqlalchemy.databases import mssql, sqlite
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
@@ -50,8 +56,10 @@ class UUID(TypeDecorator):
     def process_result_value(self, value, dialect):
         if value is None:
             return value
-        else:
+        elif not isinstance(value, uuid.UUID):
             return uuid.UUID(value)
+        else:
+            return value
 
 @compiles(UUID, 'sqlite')
 def compile_UUID_mssql_sqlite(element, compiler, **kw):
@@ -63,9 +71,10 @@ mssql.ischema_names['uniqueidentifier'] = UUID
 
 sqlite.ischema_names['UNIQUEIDENTIFIER'] = UUID
 
-sqlalchemy_sqlany.dialect.ischema_names['xml'] = String
-sqlalchemy_sqlany.dialect.ischema_names['long nvarchar'] = TEXT
-sqlalchemy_sqlany.dialect.ischema_names['uniqueidentifier'] = UUID
+if sqlany:
+    sqlalchemy_sqlany.dialect.ischema_names['xml'] = String
+    sqlalchemy_sqlany.dialect.ischema_names['long nvarchar'] = TEXT
+    sqlalchemy_sqlany.dialect.ischema_names['uniqueidentifier'] = UUID
 
 DataTypeName = { 0: 'Text',
                  1: 'Integer',
