@@ -43,20 +43,13 @@ exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes
 
 # Generic merge/overwrite/replace function
 def merge_overwrite_or_replace(conn, table, columns, data, operation, verbosity):
-    if verbosity > 1:
-        print("merge_overwrite_or_replace('" + table.name + "'," + repr(columns) + "," + repr(data) + ",'" + operation + "')")
     newids = [{column:row[column] for column in columns} for row in data]
     curids = [{column:row[column] for column in columns}
                 for row in conn.execute(select([table.c[column] for column in columns]))]
-    if verbosity > 1:
-        print("newids " + repr(newids))
-        print("curids " + repr(curids))
 
     if operation == 'replace':
         idstodelete = [id for id in curids if not id in newids]
         if len(idstodelete) > 0:
-            if verbosity > 1:
-                print("    deleting " + repr(idstodelete))
             delete = table.delete()
             for column in columns:
                 if column == 'Id':  # Hack to catch reserved word disallowed in bindparam
@@ -70,8 +63,6 @@ def merge_overwrite_or_replace(conn, table, columns, data, operation, verbosity)
     if operation == 'overwrite' or operation == 'replace':
         rowstoupdate = [row for row in data if {column:row[column] for column in columns} in curids]
         if len(rowstoupdate) > 0:
-            if verbosity > 1:
-                print("    updating " + repr(rowstoupdate))
             update = table.update()
             for column in columns:
                 if column == 'Id':  # Hack to catch reserved word disallowed in bindparam
@@ -84,8 +75,6 @@ def merge_overwrite_or_replace(conn, table, columns, data, operation, verbosity)
 
     rowstoinsert = [row for row in data if not {column:row[column] for column in columns} in curids]
     if len(rowstoinsert) > 0:
-        if verbosity > 1:
-            print("    inserting " + repr(rowstoinsert))
         conn.execute(table.insert(), rowstoinsert)
 
 def Normalise(args):
@@ -214,8 +203,7 @@ def Normalise(args):
             Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
             Column('ModifiedDate',  DateTime))
 
-        if args.structure:
-            normmd.create_all(normdb)
+        normmd.create_all(normdb)
 
         if nvivodb is None:     # that is, if all we are doing is making an empty norm file
             return
@@ -243,11 +231,16 @@ def Normalise(args):
             project = dict(nvivodb.execute(select([
                     nvivoProject.c.Title,
                     nvivoProject.c.Description,
+                    nvivoProject.c.UnassignedLabel,
+                    nvivoProject.c.NotApplicableLabel,
                     nvivoProject.c.CreatedBy,
                     nvivoProject.c.CreatedDate,
                     nvivoProject.c.ModifiedBy,
                     nvivoProject.c.ModifiedDate
                 ])).fetchone())
+
+            unassignedlabel    = project['UnassignedLabel']
+            notapplicablelabel = project['NotApplicableLabel']
             if args.windows:
                 project['Title']       = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Title']))
                 project['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Description']))
@@ -365,9 +358,11 @@ def Normalise(args):
                     nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
                     nvivoNameRole.c.TypeId == literal_column('6'),
                     nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
-                    nvivoValueItem.c.Name != literal_column("'Unassigned'"),
+                    nvivoValueItem.c.Name != bindparam('UnassignedLabel'),
                     nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
-                )))]
+                )),
+                    {'UnassignedLabel':unassignedlabel}
+                )]
             for nodeattr in nodeattrs:
                 properties = parseString(nodeattr['Properties'])
                 for property in properties.documentElement.getElementsByTagName('Property'):
@@ -454,7 +449,7 @@ def Normalise(args):
                     source['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Name']))
                     source['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description']))
 
-                if source['PlainText'] != None:
+                if source['PlainText'] is not None:
                     #source['Content'] = source['PlainText'].replace ('\\n', os.linesep * int(2 / len(os.linesep)))
                     source['Content'] = source['PlainText']
                 else:
@@ -464,7 +459,7 @@ def Normalise(args):
 
                 if source['ObjectType'] == 'DOC':
                     # Look for ODT signature from NVivo for Mac files
-                    if source['Object'][0:4] != 'PK\x03\x04':
+                    if source['Object'][0:4] == 'PK\x03\x04':
                         source['ObjectType'] = 'ODT'
                     else:
                         try:
@@ -506,9 +501,11 @@ def Normalise(args):
                     nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
                     nvivoNameRole.c.TypeId == literal_column('6'),
                     nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
-                    nvivoValueItem.c.Name != literal_column("'Unassigned'"),
+                    nvivoValueItem.c.Name != bindparam('UnassignedLabel'),
                     nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
-                )))]
+                )),
+                    {'UnassignedLabel':unassignedlabel}
+                )]
             for sourceattr in sourceattrs:
                 properties = parseString(sourceattr['Properties'])
                 for property in properties.documentElement.getElementsByTagName('Property'):
@@ -554,10 +551,10 @@ def Normalise(args):
                 )))]
             for tagging in taggings:
                 # JS: Should be able to do this in select statement - figure out how!
-                if tagging['StartZ'] != None:
+                if tagging['StartZ'] is not None:
                     next
                 tagging['Fragment'] = str(tagging['StartX']) + ':' + str(tagging['StartX'] + tagging['LengthX'] - 1)
-                if tagging['StartY'] != None:
+                if tagging['StartY'] is not None:
                     tagging['Fragment'] += ',' + str(tagging['StartY'])
                     if tagging['LengthY'] > 0:
                         tagging['Fragment'] += ':' + str(tagging['StartY'] + tagging['LengthY'] - 1)
@@ -591,7 +588,7 @@ def Normalise(args):
             for annotation in annotations:
                 annotation['Node'] = None
                 annotation['Fragment'] = str(annotation['StartX']) + ':' + str(annotation['StartX'] + annotation['LengthX'] - 1);
-                if annotation['StartY'] != None:
+                if annotation['StartY'] is not None:
                     annotation['Fragment'] += ',' + str(annotation['StartY'])
                     if annotation['LengthY'] > 0:
                         annotation['Fragment'] += ':' + str(annotation['StartY'] + annotation['LengthY'] - 1)
@@ -606,14 +603,17 @@ def Normalise(args):
 # All done.
         normtr.commit()
         normtr = None
+        normcon.close()
         normdb.dispose()
 
         nvivodb.dispose()
 
     except:
+        raise
         if not normtr is None:
             normtr.rollback()
-        raise
+        normdb.dispose()
+        nvivodb.dispose()
 
 ######################################################################################
 
@@ -717,10 +717,9 @@ def Denormalise(args):
         def skip_merge_or_overwrite_categories(normtable, itemtype, name, operation):
             if operation != 'skip':
                 if args.verbosity > 0:
-                    print('Denormalising ' + name + ' categories')
+                    print('Denormalising ' + name.lower() + ' categories')
                 # Look up head category
                 headcategoryname = unicode(name + ' Classifications')
-                print repr(headcategoryname)
                 if args.windows:
                     headcategoryname = u''.join(map(lambda ch: chr(ord(ch) + 0x377), headcategoryname))
 
@@ -728,15 +727,18 @@ def Denormalise(args):
                         nvivoItem.c.Id
                     ]).where(and_(
                         nvivoItem.c.TypeId == literal_column('0'),
-                        nvivoItem.c.Name   == literal_column("'" + headcategoryname + "'"),
+                        nvivoItem.c.Name   == bindparam('Name'),
                         nvivoItem.c.System == True
-                    ))).fetchone()
+                    )),
+                        {'Name':headcategoryname}
+                    ).fetchone()
                 if headcategory is None:
                     raise RuntimeError("""
         NVivo file contains no head """ + name + """ category.
         """)
                 else:
-                    print "Found head"
+                    if args.verbosity > 1:
+                        print("Head " + name.lower() + " category Id: " + str(headcategory['Id']))
                 categories = [dict(row) for row in normdb.execute(select([
                         normtable.c.Id,
                         normtable.c.Name,
@@ -761,9 +763,6 @@ def Denormalise(args):
                     ]).where(
                         nvivoItem.c.TypeId == literal_column(itemtype)
                     ))]
-                if args.verbosity > 1:
-                    print("newids " + repr(newids))
-                    print("curids " + repr(curids))
 
                 if operation == 'overwrite':
                     rowstoupdate = [row for row in categories if {'_Id':row['Id']} in curids]
@@ -813,13 +812,18 @@ def Denormalise(args):
                     nvivoItem.c.Id
                 ]).where(and_(
                     nvivoItem.c.TypeId == literal_column('0'),
-                    nvivoItem.c.Name == literal_column("'" + headnodename + "'"),
+                    nvivoItem.c.Name == bindparam('Name'),
                     nvivoItem.c.System == True
-                ))).fetchone()
+                )),
+                    {'Name':headnodename}
+                ).fetchone()
             if headnode is None:
                 raise RuntimeError("""
     NVivo file contains no head node.
     """)
+            else:
+                if args.verbosity > 1:
+                    print("Head node Id: " + str(headnode['Id']))
 
             nodes = [dict(row) for row in normdb.execute(select([
                     normNode.c.Id,
@@ -877,9 +881,6 @@ def Denormalise(args):
                 ]).where(
                     nvivoItem.c.TypeId == literal_column('16')
                 ))]
-            if args.verbosity > 1:
-                print("newids " + repr(newids))
-                print("curids " + repr(curids))
 
             nodestoinsert = [node for node in nodes if not {'_Id':node['Id']} in curids]
             if len(nodestoinsert) > 0:
@@ -902,8 +903,8 @@ def Denormalise(args):
                         'Tag':      bindparam('RoleTag')
                     }), nodestoinsert)
 
-                nodeswithparent   = [dict(row) for row in nodestoinsert if row['Parent']   != None]
-                nodeswithcategory = [dict(row) for row in nodestoinsert if row['Category'] != None]
+                nodeswithparent   = [dict(row) for row in nodestoinsert if row['Parent']   is not None]
+                nodeswithcategory = [dict(row) for row in nodestoinsert if row['Category'] is not None]
                 if len(nodeswithcategory) > 0:
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Id'),
@@ -1011,6 +1012,7 @@ def Denormalise(args):
                 attribute['PlainTextName']     = attribute['Name']
                 attribute['PlainTextValue']    = attribute['Value']
                 if args.windows:
+                    attribute['PlainTextItemName']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), attribute['PlainTextItemName']))
                     attribute['Name']  = u''.join(map(lambda ch: chr(ord(ch) + 0x377), attribute['Name']))
                     attribute['Value'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), attribute['Value']))
 
@@ -1020,7 +1022,7 @@ def Denormalise(args):
                 else:
                     attribute.update(newattributes[0])
                     if attribute['Type'] is None:
-                        if attribute['Properties'] != None:
+                        if attribute['Properties'] is not None:
                             properties = parseString(attribute['Properties'])
                             for property in properties.documentElement.getElementsByTagName('Property'):
                                 if property.getAttribute('Key') == 'DataType':
@@ -1030,7 +1032,7 @@ def Denormalise(args):
                         else:
                             attribute['Type'] = 'Text'
 
-                    attributecurrentlyexists = (attribute['AttributeId'] != None)
+                    attributecurrentlyexists = (attribute['AttributeId'] is not None)
                     if not attributecurrentlyexists:
                         if args.verbosity > 1:
                             print("Creating attribute '" + attribute['PlainTextName'] + "/" + attribute['PlainTextName'] + "' for item '" + attribute['PlainTextItemName'] + "'")
@@ -1114,10 +1116,10 @@ def Denormalise(args):
                         }), attribute)
                         attribute['MaxValueTag'] = 1
 
-                    if operation == 'overwrite' or not attributecurrentlyexists:
+                    if operation == 'overwrite' or attribute['ExistingValueId'] is None:
                         if attribute['NewValueId'] is None:
                             if args.verbosity > 1:
-                                print("Creating value '" + attribute['PlainTextValue'] + "' for attribute '" + attribute['PlainTextName'] + "' for item '" + attribute['PlainTextItemName'] + "'")
+                                print("Creating value '" + attribute['PlainTextValue'] + "' for attribute '" + attribute['PlainTextName'] + "' of item '" + attribute['PlainTextItemName'] + "'")
                             attribute['NewValueId']  = uuid.uuid4()
                             attribute['NewValueTag'] = attribute['MaxValueTag'] + 1
                             nvivocon.execute(nvivoItem.insert().values({
@@ -1141,16 +1143,16 @@ def Denormalise(args):
                             }), attribute)
 
                         if attribute['NewValueId'] != attribute['ExistingValueId']:
-                            if attribute['ExistingValueId'] != None:
+                            if attribute['ExistingValueId'] is not None:
                                 if args.verbosity > 1:
-                                    print("Removing existing value of attribute '" + attribute['PlainTextName'] + "' for item '" + attribute['PlainTextItemName'] + "'")
+                                    print("Removing existing value of attribute '" + attribute['PlainTextName'] + "' of item '" + attribute['PlainTextItemName'] + "'")
                                 nvivocon.execute(nvivoRole.delete().values({
                                         'Item1_Id': bindparam('Item'),
                                         'Item2_Id': bindparam('ExistingValueId'),
                                         'TypeId':   literal_column('7')
                                     }), attribute )
                             if args.verbosity > 1:
-                                print("Assigning value '" + attribute['PlainTextValue'] + "' for attribute '" + attribute['PlainTextName'] + "' for item '" + attribute['PlainTextItemName'] + "'")
+                                print("Assigning value '" + attribute['PlainTextValue'] + "' to attribute '" + attribute['PlainTextName'] + "' of item '" + attribute['PlainTextItemName'] + "'")
                             nvivocon.execute(nvivoRole.insert().values({
                                     'Item1_Id': bindparam('Item'),
                                     'Item2_Id': bindparam('NewValueId'),
@@ -1274,9 +1276,10 @@ def Denormalise(args):
 
                 category['Layout'] = layout.toxml()
 
-            nvivocon.execute(nvivoCategory.update(
-                    nvivoCategory.c.Item_Id == bindparam('CategoryId')
-                ), categories)
+            if len(categories) > 0:
+                nvivocon.execute(nvivoCategory.update(
+                        nvivoCategory.c.Item_Id == bindparam('CategoryId')
+                    ), categories)
 
 
         # Node category layouts
@@ -1291,22 +1294,28 @@ def Denormalise(args):
             if args.verbosity > 0:
                 print("Denormalising sources")
 
+            unoconvcmd = None
+
             # Look up head source
-            sel = select([nvivoItem.c.Id]).where(and_(
-                nvivoItem.c.TypeId == literal_column('0'),
-                nvivoItem.c.Name == literal_column("'Internals'"),
-                nvivoItem.c.System == True))
+            headsourcename = unicode('Internals')
+            if args.windows:
+                headsourcename = u''.join(map(lambda ch: chr(ord(ch) + 0x377), headsourcename))
             headsource = nvivocon.execute(select([
                     nvivoItem.c.Id
                 ]).where(and_(
                     nvivoItem.c.TypeId == literal_column('0'),
-                    nvivoItem.c.Name == literal_column("'Internals'"),
+                    nvivoItem.c.Name == bindparam('Name'),
                     nvivoItem.c.System == True
-                ))).fetchone()
+                )),
+                    {'Name':headsourcename}
+                ).fetchone()
             if headsource is None:
                 raise RuntimeError("""
     NVivo file contains no head Internal source.
     """)
+            else:
+                if args.verbosity > 1:
+                    print("Head source Id: " + str(headsource['Id']))
 
             sources = [dict(row) for row in normdb.execute(select([
                         normSource.c.Id.label('Item_Id'),
@@ -1327,6 +1336,8 @@ def Denormalise(args):
             extendeditems = []
 
             for source in sources:
+                if args.verbosity > 1:
+                    print("Source: " + source['Name'])
                 source['Item_Id']       = source['Item_Id']     or uuid.uuid4()
                 source['Description']   = source['Description'] or u''
                 source['PlainTextName'] = source['Name']
@@ -1412,28 +1423,29 @@ def Denormalise(args):
                     tmpfile.write(source['Object'])
                     tmpfile.close()
 
-                    # Look for unoconv script or executable. Could this be made simpler?
-                    unoconvcmd = None
-                    # Look first on path for OS installed version, otherwise use our copy
-                    for path in os.environ["PATH"].split(os.pathsep):
-                        unoconvpath = os.path.join(path, 'unoconv')
-                        if os.path.exists(unoconvpath):
-                            if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
-                                unoconvcmd = [unoconvpath]
-                            else:
-                                unoconvcmd = ['python', unoconvpath]
-                            break
+                    # Look for unoconvcmd just once
                     if unoconvcmd is None:
-                        unoconvpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'unoconv')
-                        if os.path.exists(unoconvpath):
-                            if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
-                                unoconvcmd = [unoconvpath]
-                            else:
-                                unoconvcmd = ['python', unoconvpath]
-                    if unoconvcmd is None:
-                        raise RuntimeError("""
-    Can't find unoconv on path. Please refer to the NVivotools README file.
-    """)
+                        # Look first on path for OS installed version, otherwise use our copy
+                        for path in os.environ["PATH"].split(os.pathsep):
+                            unoconvpath = os.path.join(path, 'unoconv')
+                            if os.path.exists(unoconvpath):
+                                if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
+                                    unoconvcmd = [unoconvpath]
+                                else:
+                                    unoconvcmd = ['python', unoconvpath]
+                                break
+                        if unoconvcmd is None:
+                            unoconvpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'unoconv')
+                            if os.path.exists(unoconvpath):
+                                if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
+                                    unoconvcmd = [unoconvpath]
+                                else:
+                                    unoconvcmd = ['python', unoconvpath]
+                        if unoconvcmd is None:
+                            raise RuntimeError("""
+        Can't find unoconv on path. Please refer to the NVivotools README file.
+        """)
+
                     if source['PlainText'] is None:
                         # Use unoconv to convert to text
                         p = Popen(unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
@@ -1530,15 +1542,10 @@ def Denormalise(args):
             curids = [{'Item_Id':row['Item_Id']} for row in nvivocon.execute(select([
                     nvivoSource.c.Item_Id
                 ]))]
-            if args.verbosity > 1:
-                print("newids " + repr(newids))
-                print("curids " + repr(curids))
 
             if args.sources == 'overwrite' or args.sources == 'replace':
                 sourcestoupdate = [source for source in sources if {'Item_Id':source['Item_Id']} in curids]
                 if len(sourcestoupdate) > 0:
-                    if args.verbosity > 1:
-                        print("    updating " + repr(sourcestoupdate))
                     nvivocon.execute(nvivoItem.update(
                             nvivoItem.c.Id == bindparam('Item_Id')).values({
                             'TypeId':   bindparam('SourceType'),
@@ -1560,8 +1567,6 @@ def Denormalise(args):
 
             sourcestoinsert = [source for source in sources if not {'Item_Id':source['Item_Id']} in curids]
             if len(sourcestoinsert) > 0:
-                if args.verbosity > 1:
-                    print("    inserting " + repr(sourcestoinsert))
                 nvivocon.execute(nvivoItem.insert().values({
                         'Id':       bindparam('Item_Id'),
                         'TypeId':   bindparam('SourceType'),
@@ -1588,7 +1593,7 @@ def Denormalise(args):
                         'TypeId':   literal_column('0')
                     }), sourcestoinsert)
 
-            sourcestoinsertwithcategory = [dict(row) for row in sourcestoinsert if row['Category'] != None]
+            sourcestoinsertwithcategory = [dict(row) for row in sourcestoinsert if row['Category'] is not None]
             if len(sourcestoinsertwithcategory) > 0:
                 nvivocon.execute(nvivoRole.insert().values({
                         'Item1_Id': bindparam('Item_Id'),
@@ -1602,9 +1607,6 @@ def Denormalise(args):
                 curids = [{'Item_Id':row['Item_Id']} for row in nvivocon.execute(select([
                         nvivoExtendedItem.c.Item_Id
                     ]))]
-                if args.verbosity > 1:
-                    print("newids " + repr(newids))
-                    print("curids " + repr(curids))
                 if args.sources == 'overwrite':
                     extendeditemstoupdate = [row for row in extendeditems if {'Item_Id':source['Item_Id']} in curids]
                     if len(extendeditemstoupdate) > 0:
@@ -1683,15 +1685,15 @@ def Denormalise(args):
                 tagging['StartY']  = None
                 tagging['LengthY'] = None
                 startY = matchfragment.group(3)
-                if startY != None:
+                if startY is not None:
                     tagging['StartY'] = int(startY)
                     endY = matchfragment.group(4)
-                    if endY != None:
+                    if endY is not None:
                         tagging['LengthY'] = int(endY) - tagging['StartY'] + 1
 
                 if args.mac:
                     source = next(source for source in sources if source['Item_Id'] == tagging['Source'])
-                    if source['PlainText'] != None:
+                    if source['PlainText'] is not None:
                         tagging['StartText']  = tagging['StartX']  - source['PlainText'][0:tagging['StartX']].count(' ')
                         tagging['LengthText'] = tagging['LengthX'] - source['PlainText'][tagging['StartX']:tagging['StartX']+tagging['LengthX']+1].count(' ')
                     else:
@@ -1725,11 +1727,14 @@ def Denormalise(args):
 # All done.
         nvivotr.commit()
         nvivotr = None
+        nvivocon.close()
         nvivodb.dispose()
 
         normdb.dispose()
 
     except:
+        raise
         if not nvivotr is None:
             nvivotr.rollback()
-        raise
+        nvivodb.dispose()
+        normdb.dispose()
