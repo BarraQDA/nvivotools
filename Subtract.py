@@ -66,13 +66,13 @@ try:
             subtrahendrows = [dict(row) for row in subtrahendrows]
             for row in subtrahendrows:
                 for ignorecolumn in ignorecols:
-                    row['ignorecolumne'] = None
+                    row[ignorecolumn] = None
 
             minuendrows = minuenddb.execute(minuendtable.select())
             minuendrows = [dict(row) for row in minuendrows]
             for row in minuendrows:
                 for ignorecolumn in ignorecols:
-                    row['ignorecolumne'] = None
+                    row[ignorecolumn] = None
 
             differencerows = [ x for x in minuendrows if not x in subtrahendrows ]
 
