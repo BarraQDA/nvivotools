@@ -71,6 +71,7 @@ mssql.ischema_names['xml'] = String
 mssql.ischema_names['uniqueidentifier'] = UUID
 
 sqlite.ischema_names['UNIQUEIDENTIFIER'] = UUID
+sqlite.ischema_names['UUIDTEXT'] = UUID
 
 if sqlany:
     sqlalchemy_sqlany.dialect.ischema_names['xml'] = String
