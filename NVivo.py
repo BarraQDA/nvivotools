@@ -547,12 +547,10 @@ def Normalise(args):
                 ).where(and_(
                     #nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
                     nvivoItem.c.Id == nvivoNodeReference.c.Node_Item_Id,
-                    nvivoItem.c.TypeId == literal_column('16')
+                    nvivoItem.c.TypeId == literal_column('16'),
+                    nvivoNodeReference.c.StartZ.is_(None)
                 )))]
             for tagging in taggings:
-                # JS: Should be able to do this in select statement - figure out how!
-                if tagging['StartZ'] is not None:
-                    next
                 tagging['Fragment'] = str(tagging['StartX']) + ':' + str(tagging['StartX'] + tagging['LengthX'] - 1)
                 if tagging['StartY'] is not None:
                     tagging['Fragment'] += ',' + str(tagging['StartY'])
