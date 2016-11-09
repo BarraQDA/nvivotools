@@ -24,6 +24,7 @@ except:
 from sqlalchemy.databases import mssql, sqlite
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
+import uuid
 
 class UUID(TypeDecorator):
     """Platform-independent UUID type.
