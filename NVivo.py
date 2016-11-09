@@ -52,12 +52,9 @@ def merge_overwrite_or_replace(conn, table, columns, data, operation, verbosity)
         if len(idstodelete) > 0:
             delete = table.delete()
             for column in columns:
-                if column == 'Id':  # Hack to catch reserved word disallowed in bindparam
-                    for id in idstodelete:
-                        id['_' + column] = id[column]
-                    delete = delete.where(table.c[column] == bindparam('_' + column))
-                else:
-                    delete = delete.where(table.c[column] == bindparam(column))
+                for id in idstodelete:
+                    id['_' + column] = id[column]
+                delete = delete.where(table.c[column] == bindparam('_' + column))
             conn.execute(delete, idstodelete)
 
     if operation == 'overwrite' or operation == 'replace':
@@ -65,12 +62,9 @@ def merge_overwrite_or_replace(conn, table, columns, data, operation, verbosity)
         if len(rowstoupdate) > 0:
             update = table.update()
             for column in columns:
-                if column == 'Id':  # Hack to catch reserved word disallowed in bindparam
-                    for id in rowstoupdate:
-                        id['_' + column] = id[column]
-                    update = update.where(table.c[column] == bindparam('_' + column))
-                else:
-                    update = update.where(table.c[column] == bindparam(column))
+                for id in rowstoupdate:
+                    id['_' + column] = id[column]
+                update = update.where(table.c[column] == bindparam('_' + column))
             conn.execute(update, rowstoupdate)
 
     rowstoinsert = [row for row in data if not {column:row[column] for column in columns} in curids]
@@ -198,11 +192,23 @@ def Normalise(args):
         normSourceAttribute = normmd.tables.get('SourceAttribute')
         if normSourceAttribute is None:
             normSourceAttribute = Table('SourceAttribute', normmd,
-                Column('Source',        UUID(),         ForeignKey("Source.Id"),    primary_key=True),
-                Column('Name',          String(256),                                primary_key=True),
-                Column('Value',         String(256)),
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Name',          String(256)),
+                Column('Description',   String(512)),
                 Column('Type',          String(16)),
                 Column('Length',        Integer),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+
+        normSourceValue = normmd.tables.get('SourceValue')
+        if normSourceValue is None:
+            normSourceValue = Table('SourceValue', normmd,
+                Column('Source',        UUID(),         ForeignKey("Source.Id"),    primary_key=True),
+                Column('Attribute',     UUID(),         ForeignKey("SourceAttribute.Id"),
+                                                                                    primary_key=True),
+                Column('Value',         String(256)),
                 Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
                 Column('CreatedDate',   DateTime),
                 Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
@@ -211,11 +217,23 @@ def Normalise(args):
         normNodeAttribute = normmd.tables.get('NodeAttribute')
         if normNodeAttribute is None:
             normNodeAttribute = Table('NodeAttribute', normmd,
-                Column('Node',          UUID(),         ForeignKey("Node.Id"),      primary_key=True),
-                Column('Name',          String(256),                                primary_key=True),
-                Column('Value',         String(256)),
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Name',          String(256)),
+                Column('Description',   String(512)),
                 Column('Type',          String(16)),
                 Column('Length',        Integer),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+
+        normNodeValue = normmd.tables.get('NodeValue')
+        if normNodeValue is None:
+            normNodeValue = Table('NodeValue', normmd,
+                Column('Node',          UUID(),         ForeignKey("Node.Id"),      primary_key=True),
+                Column('Attribute',     UUID(),         ForeignKey("NodeAttribute.Id"),
+                                                                                    primary_key=True),
+                Column('Value',         String(256)),
                 Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
                 Column('CreatedDate',   DateTime),
                 Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
@@ -262,6 +280,8 @@ def Normalise(args):
             if args.windows:
                 project['Title']       = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Title']))
                 project['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Description']))
+                unassignedlabel    = u''.join(map(lambda ch: chr(ord(ch) + 0x377), unassignedlabel))
+                notapplicablelabel = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicablelabel))
 
             # SQLAlchemy should probably handle this...
             if not isinstance(project['CreatedDate'], datetime.datetime):
@@ -357,16 +377,20 @@ def Normalise(args):
             nvivoValueItem    = nvivoItem.alias(name='ValueItem')
             nvivoValueRole    = nvivoRole.alias(name='ValueRole')
 
-            nodeattrs = [dict(row) for row in nvivodb.execute(select([
+            nodeattrvalues = [dict(row) for row in nvivodb.execute(select([
                     nvivoNodeItem.c.Id.label('Node'),
-                    nvivoNameItem.c.Name.label('Name'),
+                    nvivoNameItem.c.Id.label('Attribute'),
+                    nvivoNameItem.c.Name,
+                    nvivoNameItem.c.Description,
+                    nvivoNameItem.c.CreatedBy.label('AttrCreatedBy'),
+                    nvivoNameItem.c.CreatedDate.label('AttrCreatedDate'),
+                    nvivoNameItem.c.ModifiedBy.label('AttrModifiedBy'),
+                    nvivoNameItem.c.ModifiedDate.label('AttrModifiedDate'),
                     nvivoValueItem.c.Name.label('Value'),
                     nvivoValueItem.c.CreatedBy,
                     nvivoValueItem.c.CreatedDate,
                     nvivoValueItem.c.ModifiedBy,
                     nvivoValueItem.c.ModifiedDate,
-                    nvivoNameRole.c.TypeId.label('NameRoleTypeId'),
-                    nvivoValueRole.c.TypeId.label('ValueRoleTypeId'),
                     nvivoExtendedItem.c.Properties]
                 ).where(and_(
                     nvivoNodeItem.c.TypeId==literal_column('16'),
@@ -378,28 +402,52 @@ def Normalise(args):
                     nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
                     nvivoValueItem.c.Name != bindparam('UnassignedLabel'),
                     nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
-                )),
+                )).order_by(
+                    nvivoNameItem.c.Id
+                ),
                     {'UnassignedLabel':unassignedlabel}
                 )]
-            for nodeattr in nodeattrs:
-                properties = parseString(nodeattr['Properties'])
-                for property in properties.documentElement.getElementsByTagName('Property'):
-                    if property.getAttribute('Key') == 'DataType':
-                        nodeattr['Type'] = DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
-                    elif property.getAttribute('Key') == 'Length':
-                        nodeattr['Length'] = int(property.getAttribute('Value'))
-
-            for nodeattr in nodeattrs:
+            lastattribute = None
+            nodeattrs = []
+            for nodeattrvalue in nodeattrvalues:
                 if args.windows:
-                    nodeattr['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattr['Name']))
-                    nodeattr['Value'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattr['Value']))
+                    nodeattrvalue['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattrvalue['Name']))
+                    nodeattrvalue['Value'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattrvalue['Value']))
+                if not isinstance(nodeattrvalue['AttrCreatedDate'], datetime.datetime):
+                    nodeattrvalue['AttrCreatedDate'] = dateparser.parse(nodeattrvalue['AttrCreatedDate'])
+                if not isinstance(nodeattrvalue['AttrModifiedDate'], datetime.datetime):
+                    nodeattrvalue['AttrModifiedDate'] = dateparser.parse(nodeattrvalue['AttrModifiedDate'])
+                if not isinstance(nodeattrvalue['CreatedDate'], datetime.datetime):
+                    nodeattrvalue['CreatedDate'] = dateparser.parse(nodeattrvalue['CreatedDate'])
+                if not isinstance(nodeattrvalue['ModifiedDate'], datetime.datetime):
+                    nodeattrvalue['ModifiedDate'] = dateparser.parse(nodeattrvalue['ModifiedDate'])
 
-                if not isinstance(nodeattr['CreatedDate'], datetime.datetime):
-                    nodeattr['CreatedDate'] = dateparser.parse(nodeattr['CreatedDate'])
-                if not isinstance(nodeattr['ModifiedDate'], datetime.datetime):
-                    nodeattr['ModifiedDate'] = dateparser.parse(nodeattr['ModifiedDate'])
+                if nodeattrvalue['Attribute'] != lastattribute:
+                    lastattribute = nodeattrvalue['Attribute']
+                    attrtype = None
+                    attrlength = None
+                    for property in parseString(nodeattrvalue['Properties']).documentElement.getElementsByTagName('Property'):
+                        if property.getAttribute('Key') == 'DataType':
+                            attrtype = DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
+                        elif property.getAttribute('Key') == 'Length':
+                            attrlength = int(property.getAttribute('Value'))
+                            if attrlength == 0:
+                                attrlength = None
 
-            merge_overwrite_or_replace(normcon, normNodeAttribute, ['Node', 'Name'], nodeattrs, args.node_attributes, args.verbosity)
+                    nodeattrs += [{
+                        'Id':           lastattribute,
+                        'Name':         nodeattrvalue['Name'],
+                        'Description':  nodeattrvalue['Description'],
+                        'Type':         attrtype,
+                        'Length':       attrlength,
+                        'CreatedBy':    nodeattrvalue['AttrCreatedBy'],
+                        'CreatedDate':  nodeattrvalue['AttrCreatedDate'],
+                        'ModifiedBy':   nodeattrvalue['AttrModifiedBy'],
+                        'ModifiedDate': nodeattrvalue['AttrModifiedDate']
+                    }]
+
+            merge_overwrite_or_replace(normcon, normNodeAttribute, ['Id'], nodeattrs, args.node_attributes, args.verbosity)
+            merge_overwrite_or_replace(normcon, normNodeValue, ['Node', 'Attribute'], nodeattrvalues, args.node_attributes, args.verbosity)
 
 # Source categories
         if args.source_categories != 'skip':
@@ -503,9 +551,15 @@ def Normalise(args):
             nvivoValueItem    = nvivoItem.alias(name='ValueItem')
             nvivoValueRole    = nvivoRole.alias(name='ValueRole')
 
-            sourceattrs  = [dict(row) for row in nvivodb.execute(select([
+            sourceattrvalues  = [dict(row) for row in nvivodb.execute(select([
                     nvivoSource.c.Item_Id.label('Source'),
+                    nvivoNameItem.c.Id.label('Attribute'),
                     nvivoNameItem.c.Name,
+                    nvivoNameItem.c.Description,
+                    nvivoNameItem.c.CreatedBy.label('AttrCreatedBy'),
+                    nvivoNameItem.c.CreatedDate.label('AttrCreatedDate'),
+                    nvivoNameItem.c.ModifiedBy.label('AttrModifiedBy'),
+                    nvivoNameItem.c.ModifiedDate.label('AttrModifiedDate'),
                     nvivoValueItem.c.Name.label('Value'),
                     nvivoValueItem.c.CreatedBy,
                     nvivoValueItem.c.CreatedDate,
@@ -521,28 +575,52 @@ def Normalise(args):
                     nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
                     nvivoValueItem.c.Name != bindparam('UnassignedLabel'),
                     nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
-                )),
+                )).order_by(
+                    nvivoNameItem.c.Id
+                ),
                     {'UnassignedLabel':unassignedlabel}
                 )]
-            for sourceattr in sourceattrs:
-                properties = parseString(sourceattr['Properties'])
-                for property in properties.documentElement.getElementsByTagName('Property'):
-                    if property.getAttribute('Key') == 'DataType':
-                        sourceattr['Type'] = DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
-                    elif property.getAttribute('Key') == 'Length':
-                        sourceattr['Length'] = int(property.getAttribute('Value'))
-
-            for sourceattr in sourceattrs:
+            lastattribute = None
+            sourceattrs = []
+            for sourceattrvalue in sourceattrvalues:
                 if args.windows:
-                    sourceattr['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Name']))
-                    sourceattr['Value'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattr['Value']))
+                    sourceattrvalue['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattrvalue['Name']))
+                    sourceattrvalue['Value'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattrvalue['Value']))
+                if not isinstance(nodeattrvalue['AttrCreatedDate'], datetime.datetime):
+                    nodeattrvalue['AttrCreatedDate'] = dateparser.parse(nodeattrvalue['AttrCreatedDate'])
+                if not isinstance(nodeattrvalue['AttrModifiedDate'], datetime.datetime):
+                    nodeattrvalue['AttrModifiedDate'] = dateparser.parse(nodeattrvalue['AttrModifiedDate'])
+                if not isinstance(nodeattrvalue['CreatedDate'], datetime.datetime):
+                    nodeattrvalue['CreatedDate'] = dateparser.parse(nodeattrvalue['CreatedDate'])
+                if not isinstance(nodeattrvalue['ModifiedDate'], datetime.datetime):
+                    nodeattrvalue['ModifiedDate'] = dateparser.parse(nodeattrvalue['ModifiedDate'])
 
-                if not isinstance(sourceattr['CreatedDate'], datetime.datetime):
-                    sourceattr['CreatedDate'] = dateparser.parse(sourceattr['CreatedDate'])
-                if not isinstance(sourceattr['ModifiedDate'], datetime.datetime):
-                    sourceattr['ModifiedDate'] = dateparser.parse(sourceattr['ModifiedDate'])
+                if sourceattrvalue['Attribute'] != lastattribute:
+                    lastattribute = sourceattrvalue['Attribute']
+                    attrtype = None
+                    attrlength = None
+                    for property in parseString(sourceattrvalue['Properties']).documentElement.getElementsByTagName('Property'):
+                        if property.getAttribute('Key') == 'DataType':
+                            attrtype = DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
+                        elif property.getAttribute('Key') == 'Length':
+                            attrlength = int(property.getAttribute('Value'))
+                            if attrlength == 0:
+                                attrlength = None
 
-            merge_overwrite_or_replace(normcon, normSourceAttribute, ['Source', 'Name'], sourceattrs, args.source_attributes, args.verbosity)
+                    sourceattrs += [{
+                        'Id':           lastattribute,
+                        'Name':         sourceattrvalue['Name'],
+                        'Description':  nodeattrvalue['Description'],
+                        'Type':         attrtype,
+                        'Length':       attrlength,
+                        'CreatedBy':    sourceattrvalue['AttrCreatedBy'],
+                        'CreatedDate':  sourceattrvalue['AttrCreatedDate'],
+                        'ModifiedBy':   sourceattrvalue['AttrModifiedBy'],
+                        'ModifiedDate': sourceattrvalue['AttrModifiedDate']
+                    }]
+
+            merge_overwrite_or_replace(normcon, normSourceAttribute, ['Id'], sourceattrs, args.source_attributes, args.verbosity)
+            merge_overwrite_or_replace(normcon, normSourceValue, ['Source', 'Attribute'], sourceattrvalues, args.source_attributes, args.verbosity)
 
 # Tagging
         if args.taggings != 'skip':
@@ -702,11 +780,11 @@ def Denormalise(args):
     existing project or stock empty project.
     """)
         else:
-            unassignedLabel    = nvivoproject['UnassignedLabel']
-            notapplicableLabel = nvivoproject['NotApplicableLabel']
+            unassignedlabel    = nvivoproject['UnassignedLabel']
+            notapplicablelabel = nvivoproject['NotApplicableLabel']
             if args.windows:
-                unassignedLabel    = u''.join(map(lambda ch: chr(ord(ch) + 0x377), unassignedLabel))
-                notapplicableLabel = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicableLabel))
+                unassignedlabel    = u''.join(map(lambda ch: chr(ord(ch) + 0x377), unassignedlabel))
+                notapplicablelabel = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicablelabel))
 
         if args.project != 'skip':
             print("Denormalising project")
@@ -1086,7 +1164,7 @@ def Denormalise(args):
                         addedattributes.append({ 'CategoryId':     attribute['CategoryId'],
                                                 'AttributeId':    attribute['AttributeId'],
                                                 'DefaultValueId': attribute['ValueId'] })
-                        attribute['Unassigned'] = unassignedLabel
+                        attribute['Unassigned'] = unassignedlabel
                         nvivocon.execute(nvivoItem.insert().values({
                                 'Id':       bindparam('ValueId'),
                                 'Name':     bindparam('Unassigned'),
@@ -1108,7 +1186,7 @@ def Denormalise(args):
                                 'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="True"/></Properties>\'')
                         }), attribute)
                         attribute['ValueId'] = uuid.uuid4()
-                        attribute['NotApplicable'] = notapplicableLabel
+                        attribute['NotApplicable'] = notapplicablelabel
                         nvivocon.execute(nvivoItem.insert().values({
                                 'Id':       bindparam('ValueId'),
                                 'Name':     bindparam('NotApplicable'),
