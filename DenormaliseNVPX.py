@@ -93,5 +93,5 @@ args.outdb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' 
 
 NVivo.Denormalise(args)
 
-shutil.move(tmpoutfilename, os.path.basename(args.outfile.name))
+shutil.move(tmpoutfilename, args.outfile.name)
 os.remove(tmpinfilename)

@@ -108,5 +108,5 @@ finally:
     if args.verbosity > 0:
         print("Dropped database " + dbname)
 
-    shutil.move(tmpoutfilename, os.path.basename(args.outfile.name))
+    shutil.move(tmpoutfilename, args.outfile.name)
     os.remove(tmpinfilename)

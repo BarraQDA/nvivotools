@@ -72,7 +72,7 @@ tmpinfileptr.close()
 tmpoutfilename = tempfile.mktemp()
 
 if args.outfilename is None:
-    args.outfilename = os.path.basename(args.infile.name.rsplit('.',1)[0] + '.norm')
+    args.outfilename = args.infile.name.rsplit('.',1)[0] + '.norm'
 
 import socket
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
