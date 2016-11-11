@@ -1193,11 +1193,7 @@ def Denormalise(args):
 
                     # Create unassigned and not applicable attribute values
                     attribute['ValueId'] = uuid.uuid4()
-                    # Save the attribute and 'Unassigned' value so that it can be filled in later
-                    # for all items of the present category.
-                    addedattributes.append({'Category':       attribute['Category'],
-                                            'AttributeId':    attribute['AttributeId'],
-                                            'DefaultValueId': attribute['ValueId'] })
+                    print "Unassigned ID :" + str(attribute['ValueId'])
                     attribute['Unassigned'] = unassignedlabel
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
@@ -1219,7 +1215,15 @@ def Denormalise(args):
                             'Item_Id': bindparam('ValueId'),
                             'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="True"/></Properties>\'')
                     }), attribute)
+
+                    # Save the attribute and 'Unassigned' value so that it can be filled in later
+                    # for all items of the present category.
+                    addedattributes.append({'Category':       attribute['Category'],
+                                            'AttributeId':    attribute['AttributeId'],
+                                            'DefaultValueId': attribute['ValueId'] })
+
                     attribute['ValueId'] = uuid.uuid4()
+                    print "Not applicable ID :" + str(attribute['ValueId'])
                     attribute['NotApplicable'] = notapplicablelabel
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
@@ -1247,6 +1251,9 @@ def Denormalise(args):
                         'NewValueId':None,
                         'ExistingValueId':None,
                     }
+                    # Catch 'Not Applicable' values manually
+                    if value['Value'] == notapplicablelabel:
+                        valuestatus['NewValueId'] = attribute['ValueId']
                 else:
                     valuestatus = dict(values[0])
 
