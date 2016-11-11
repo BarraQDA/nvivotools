@@ -1193,7 +1193,6 @@ def Denormalise(args):
 
                     # Create unassigned and not applicable attribute values
                     attribute['ValueId'] = uuid.uuid4()
-                    print "Unassigned ID :" + str(attribute['ValueId'])
                     attribute['Unassigned'] = unassignedlabel
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
@@ -1223,7 +1222,6 @@ def Denormalise(args):
                                             'DefaultValueId': attribute['ValueId'] })
 
                     attribute['ValueId'] = uuid.uuid4()
-                    print "Not applicable ID :" + str(attribute['ValueId'])
                     attribute['NotApplicable'] = notapplicablelabel
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('ValueId'),
