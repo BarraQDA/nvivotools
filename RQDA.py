@@ -304,7 +304,7 @@ def Denormalise(args):
             if args.verbosity > 0:
                 print("Converting project")
 
-            curproject = rqdacon.execute(select([rqdaproject.c.memo])).fetchone()
+            curproject = rqdacon.execute(select([rqdaproject.c.memo])).first()
             if curproject is not None and args.project == 'overwrite':
                 rqdacon.execute(rqdaproject.delete())
                 curproject = None
@@ -315,7 +315,7 @@ def Denormalise(args):
                         normProject.c.Description.label('memo'),
                         normProject.c.CreatedDate,
                         normProject.c.ModifiedDate
-                    ])).fetchone())
+                    ])).first())
                 project['About'] = project['Title'] +' Imported by NVivotools ' + datetime.datetime.now().strftime('%c')
 
                 project['date']  = project['CreatedDate'].strftime('%c')
