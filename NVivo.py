@@ -843,7 +843,7 @@ def Denormalise(args):
                 if args.verbosity > 0:
                     print('Denormalising ' + name.lower() + ' categories')
                 # Look up head category
-                headcategoryname = name + u' Classifications'
+                headcategoryname = name.title() + u' Classifications'
                 if args.windows:
                     headcategoryname = u''.join(map(lambda ch: chr(ord(ch) + 0x377), headcategoryname))
 
@@ -860,7 +860,7 @@ def Denormalise(args):
                     raise RuntimeError("NVivo file contains no head " + name + " category.")
                 else:
                     if args.verbosity > 1:
-                        print("Head " + name.lower() + " category Id: " + str(headcategory['Id']))
+                        print("Found head " + name + " category Id: " + str(headcategory['Id']))
                 categories = [dict(row) for row in normdb.execute(select([
                         normtable.c.Id,
                         normtable.c.Name,
@@ -918,7 +918,7 @@ def Denormalise(args):
 
 
 # Node Categories
-        skip_merge_or_overwrite_categories(normNodeCategory, '52', 'Node', args.node_categories)
+        skip_merge_or_overwrite_categories(normNodeCategory, '52', 'node', args.node_categories)
 
 # Nodes
         if args.nodes != 'skip':
@@ -945,7 +945,7 @@ def Denormalise(args):
     """)
             else:
                 if args.verbosity > 1:
-                    print("Head node Id: " + str(headnode['Id']))
+                    print("Found head node Id: " + str(headnode['Id']))
 
             nodes = [dict(row) for row in normdb.execute(select([
                     normNode.c.Id,
@@ -1048,11 +1048,9 @@ def Denormalise(args):
 
         # Function to handle node or source attributes
 
-        def skip_merge_or_overwrite_attributes(attributes, values, operation):
+        def skip_merge_or_overwrite_attributes(attributes, values, name, operation):
 
             nvivoCategoryRole  = nvivoRole.alias(name='CategoryRole')
-            nvivoCategoryItem  = nvivoItem.alias(name='CategoryItem')
-            nvivoCategoryItemRole = nvivoRole.alias(name='CategoryItemRole')
             nvivoCategoryAttributeRole = nvivoRole.alias(name='CategoryAttributeRole')
             nvivoAttributeItem = nvivoItem.alias(name='AttributeItem')
             nvivoNewValueRole = nvivoRole.alias(name='NewValueRole')
@@ -1063,11 +1061,9 @@ def Denormalise(args):
             nvivoCountValueRole = nvivoRole.alias(name='CountValueRole')
 
             itemsel = select([
-                    nvivoCategoryRole.c.Item2_Id.label('Category'),
-                    nvivoCategoryItem.c.Name.label('CategoryName')
+                    nvivoCategoryRole.c.Item2_Id.label('Category')
                 ]).where(and_(
-                    nvivoItem.c.Id == bindparam('Item'),
-                    nvivoCategoryItem.c.Id == nvivoCategoryRole.c.Item2_Id
+                    nvivoItem.c.Id == bindparam('Item')
                 )).select_from(
                     nvivoItem.outerjoin(
                     nvivoCategoryRole, and_(
@@ -1078,13 +1074,9 @@ def Denormalise(args):
             # Build dictionary of item categories
             uniqueitems = set(value['Item'] for value in values)
             itemcategory = {}
-            categoryplaintextnames = {}
             for item in uniqueitems:
                 itemselresult = nvivocon.execute(itemsel, {'Item':item}).first()
                 itemcategory[item] = itemselresult['Category']
-                categoryplaintextnames[itemcategory[item]] = itemselresult['CategoryName']
-                if args.windows:
-                    categoryplaintextnames[itemcategory[item]] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), categoryplaintextnames[itemcategory[item]]))
 
             attrsel = select([
                     func.max(nvivoCountAttributeRole.c.Tag).label('MaxAttributeTag')
@@ -1131,6 +1123,27 @@ def Denormalise(args):
                     nvivoCountValueRole.c.Item1_Id == bindparam('AttributeId')
                 ))
 
+            missingvaluesel = select([
+                    nvivoCategoryRole.c.Item1_Id.label('Item')
+                ]).where(and_(
+                    nvivoCategoryRole.c.TypeId   == literal_column('14'),
+                    nvivoCategoryRole.c.Item2_Id == bindparam('Category')
+                )).group_by(
+                    nvivoCategoryRole.c.Item1_Id
+                ).having(
+                    func.count(nvivoValueRole.c.Item1_Id).label('ValueCount') == 0
+                ).select_from(
+                    nvivoCategoryRole.outerjoin(
+                    nvivoValueRole.join(
+                        nvivoExistingValueRole, and_(
+                            nvivoExistingValueRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
+                            nvivoExistingValueRole.c.TypeId == literal_column('7')
+                        )), and_(
+                        nvivoValueRole.c.TypeId == literal_column('6'),
+                        nvivoValueRole.c.Item1_Id == bindparam('AttributeId'),
+                        nvivoExistingValueRole.c.Item1_Id == nvivoCategoryRole.c.Item1_Id
+                )))
+
             for attribute in attributes:
                 attribute['PlainTextName'] = attribute['Name']
                 if args.windows:
@@ -1164,7 +1177,7 @@ def Denormalise(args):
                     maxvaluetags[(value['Category'], attribute['AttributeId'])] = 1
 
                     if args.verbosity > 1:
-                        print("Creating attribute '" + value['PlainTextAttribute'] + "' for category '" + categoryplaintextnames[value['Category']] + "' with tag: " + str(attribute['Tag']))
+                        print("Creating " + name + " attribute '" + value['PlainTextAttribute'] + "' for category '" + itemname(value['Category']) + "' with tag: " + str(attribute['Tag']))
 
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('AttributeId'),
@@ -1192,10 +1205,10 @@ def Denormalise(args):
                     }), attribute)
 
                     # Create unassigned and not applicable attribute values
-                    attribute['ValueId'] = uuid.uuid4()
+                    attribute['UnassignedValueId'] = uuid.uuid4()
                     attribute['Unassigned'] = unassignedlabel
                     nvivocon.execute(nvivoItem.insert().values({
-                            'Id':       bindparam('ValueId'),
+                            'Id':       bindparam('UnassignedValueId'),
                             'Name':     bindparam('Unassigned'),
                             'Description': literal_column("''"),
                             'TypeId':   literal_column('21'),
@@ -1206,12 +1219,12 @@ def Denormalise(args):
                         }), attribute)
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('AttributeId'),
-                            'Item2_Id': bindparam('ValueId'),
+                            'Item2_Id': bindparam('UnassignedValueId'),
                             'TypeId':   literal_column('6'),
                             'Tag':      literal_column('0')
                         }), attribute )
                     nvivocon.execute(nvivoExtendedItem.insert().values({
-                            'Item_Id': bindparam('ValueId'),
+                            'Item_Id': bindparam('UnassignedValueId'),
                             'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="True"/></Properties>\'')
                     }), attribute)
 
@@ -1219,12 +1232,12 @@ def Denormalise(args):
                     # for all items of the present category.
                     addedattributes.append({'Category':       attribute['Category'],
                                             'AttributeId':    attribute['AttributeId'],
-                                            'DefaultValueId': attribute['ValueId'] })
+                                            'DefaultValueId': attribute['UnassignedValueId'] })
 
-                    attribute['ValueId'] = uuid.uuid4()
+                    attribute['NotApplicableValueId'] = uuid.uuid4()
                     attribute['NotApplicable'] = notapplicablelabel
                     nvivocon.execute(nvivoItem.insert().values({
-                            'Id':       bindparam('ValueId'),
+                            'Id':       bindparam('NotApplicableValueId'),
                             'Name':     bindparam('NotApplicable'),
                             'Description': literal_column("''"),
                             'TypeId':   literal_column('21'),
@@ -1235,12 +1248,12 @@ def Denormalise(args):
                         }), attribute)
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('AttributeId'),
-                            'Item2_Id': bindparam('ValueId'),
+                            'Item2_Id': bindparam('NotApplicableValueId'),
                             'TypeId':   literal_column('6'),
                             'Tag':      literal_column('1')
                         }), attribute )
                     nvivocon.execute(nvivoExtendedItem.insert().values({
-                            'Item_Id': bindparam('ValueId'),
+                            'Item_Id': bindparam('NotApplicableValueId'),
                             'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="False"/></Properties>\'')
                     }), attribute)
 
@@ -1249,9 +1262,11 @@ def Denormalise(args):
                         'NewValueId':None,
                         'ExistingValueId':None,
                     }
-                    # Catch 'Not Applicable' values manually
-                    if value['Value'] == notapplicablelabel:
-                        valuestatus['NewValueId'] = attribute['ValueId']
+                    # Catch 'Unassigned' and 'Not Applicable' values manually
+                    if value['Value'] == unassignedlabel:
+                        valuestatus['NewValueId'] = attribute['UnassignedValueId']
+                    elif value['Value'] == notapplicablelabel:
+                        valuestatus['NewValueId'] = attribute['NotApplicableValueId']
                 else:
                     valuestatus = dict(values[0])
 
@@ -1269,11 +1284,11 @@ def Denormalise(args):
                         maxvaluetags[categoryattribute] = (maxvaluetags[categoryattribute] or -1) + 1
                         value['Tag'] = maxvaluetags[categoryattribute]
                         if args.verbosity > 1:
-                            print("Creating value '" + value['PlainTextValue'] + "' for attribute '" + value['PlainTextAttribute'] + "' with tag: "+ str(value['Tag']))
+                            print("Creating value '" + value['PlainTextValue'] + "' for " + name + " attribute '" + value['PlainTextAttribute'] + "' with tag: "+ str(value['Tag']))
 
-                        value['ValueId']  = uuid.uuid4()
+                        value['Id']  = uuid.uuid4()
                         nvivocon.execute(nvivoItem.insert().values({
-                                'Id':       bindparam('ValueId'),
+                                'Id':       bindparam('Id'),
                                 'Name':     bindparam('Value'),
                                 'Description': literal_column("''"),
                                 'TypeId':   literal_column('21'),
@@ -1284,23 +1299,23 @@ def Denormalise(args):
                         value['AttributeId'] = valuestatus['AttributeId']
                         nvivocon.execute(nvivoRole.insert().values({
                                 'Item1_Id': bindparam('AttributeId'),
-                                'Item2_Id': bindparam('ValueId'),
+                                'Item2_Id': bindparam('Id'),
                                 'TypeId':   literal_column('6'),
                                 'Tag':      bindparam('Tag')
                             }), value )
                         nvivocon.execute(nvivoExtendedItem.insert().values({
-                                'Item_Id': bindparam('ValueId'),
+                                'Item_Id': bindparam('Id'),
                                 'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="False"/></Properties>\'')
                         }), value)
 
-                        valuestatus['NewValueId'] = value['ValueId']
+                        valuestatus['NewValueId'] = value['Id']
 
                     # Assign value to attribute
                     if valuestatus['ExistingValueId'] != valuestatus['NewValueId']:
                         value.update(valuestatus)
                         if valuestatus['ExistingValueId'] is not None:
                             if args.verbosity > 1:
-                                print("Deassigning existing value '" + itemname(value['ExistingValueId']) + "' from attribute '" + value['PlainTextAttribute']  + "' of item '" + itemname(value['Item']) + "'")
+                                print("Deassigning existing value '" + itemname(value['ExistingValueId']) + "' from " + name + " attribute '" + value['PlainTextAttribute']  + "' of " + name + " '" + itemname(value['Item']) + "'")
                             nvivocon.execute(nvivoRole.delete(and_(
                                     nvivoRole.c.Item1_Id == bindparam('Item'),
                                     nvivoRole.c.Item2_Id == bindparam('ExistingValueId'),
@@ -1308,12 +1323,29 @@ def Denormalise(args):
                                 )), value )
 
                         if args.verbosity > 1:
-                            print("Assigning value '" + value['PlainTextValue'] + "' to attribute '" + value['PlainTextAttribute']  + "' of item '" + itemname(value['Item']) + "'")
+                            print("Assigning value '" + value['PlainTextValue'] + "' to " + name + " attribute '" + value['PlainTextAttribute']  + "' of " + name + " '" + itemname(value['Item']) + "'")
                         nvivocon.execute(nvivoRole.insert().values({
                                 'Item1_Id': bindparam('Item'),
                                 'Item2_Id': bindparam('NewValueId'),
                                 'TypeId':   literal_column('7')
                             }), value )
+
+            # Now fill in default ('Undefined') for new attributes
+            for addedattribute in addedattributes:
+                # Set value of undefined attribute to 'Unassigned'
+                attributes = [dict(row) for row in nvivocon.execute(missingvaluesel, addedattribute)]
+                for attribute in attributes:
+                    if args.verbosity > 1:
+                        print("Assigning default value '" + itemname(addedattribute['DefaultValueId']) + "' to attribute '" + itemname(addedattribute['AttributeId']) + "' of " + name + " '" + itemname(attribute['Item']) + "'")
+                    attribute.update(addedattribute)
+
+                if len(attributes) > 0:
+                    addedattribute.update(attribute)
+                    nvivocon.execute(nvivoRole.insert().values({
+                            'Item1_Id': bindparam('Item'),
+                            'Item2_Id': bindparam('DefaultValueId'),
+                            'TypeId':   literal_column('7')
+                        }), attributes )
 
 # Node attributes
         if args.node_attributes != 'skip':
@@ -1339,7 +1371,7 @@ def Denormalise(args):
                     normNodeValue.c.ModifiedDate
                 ]))]
 
-            skip_merge_or_overwrite_attributes(attributes, values, args.node_attributes)
+            skip_merge_or_overwrite_attributes(attributes, values, 'node', args.node_attributes)
 
         # Function to handle node or source category records
         def rebuild_category_records(itemtype):
@@ -1410,7 +1442,7 @@ def Denormalise(args):
             rebuild_category_records('52')
 
 # Source categories
-        skip_merge_or_overwrite_categories(normSourceCategory, '51', 'Source', args.source_categories)
+        skip_merge_or_overwrite_categories(normSourceCategory, '51', 'source', args.source_categories)
 
 # Sources
         if args.sources != 'skip':
@@ -1438,7 +1470,7 @@ def Denormalise(args):
     """)
             else:
                 if args.verbosity > 1:
-                    print("Head source Id: " + str(headsource['Id']))
+                    print("Found head source Id: " + str(headsource['Id']))
 
             sources = [dict(row) for row in normdb.execute(select([
                         normSource.c.Id.label('Item_Id'),
@@ -1458,7 +1490,7 @@ def Denormalise(args):
                     ]))]
             extendeditems = []
 
-            for source in sources:
+            def massagesource(source):
                 if args.verbosity > 1:
                     print("Source: " + source['Name'])
                 source['Item_Id']       = source['Item_Id']     or uuid.uuid4()
@@ -1660,6 +1692,7 @@ def Denormalise(args):
                     source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])]
                 else:
                     source['ObjectType'] = int(source['ObjectTypeName'])
+            # end of massagesource
 
             newids = [{'Item_Id':row['Item_Id']} for row in sources]
             curids = [{'Item_Id':row['Item_Id']} for row in nvivocon.execute(select([
@@ -1668,6 +1701,10 @@ def Denormalise(args):
 
             if args.sources == 'overwrite' or args.sources == 'replace':
                 sourcestoupdate = [source for source in sources if {'Item_Id':source['Item_Id']} in curids]
+
+                for source in sourcestoupdate:
+                    massagesource(source)
+
                 if len(sourcestoupdate) > 0:
                     nvivocon.execute(nvivoItem.update(
                             nvivoItem.c.Id == bindparam('Item_Id')).values({
@@ -1689,6 +1726,9 @@ def Denormalise(args):
                         }), sourcestoupdate)
 
             sourcestoinsert = [source for source in sources if not {'Item_Id':source['Item_Id']} in curids]
+            for source in sourcestoinsert:
+                massagesource(source)
+
             if len(sourcestoinsert) > 0:
                 nvivocon.execute(nvivoItem.insert().values({
                         'Id':       bindparam('Item_Id'),
@@ -1765,7 +1805,7 @@ def Denormalise(args):
                     normSourceValue.c.ModifiedDate
                 ]))]
 
-            skip_merge_or_overwrite_attributes(attributes, values, args.source_attributes)
+            skip_merge_or_overwrite_attributes(attributes, values, 'source', args.source_attributes)
 
         # Source category layouts
         if args.sources != 'skip' or args.source_categories != 'skip' or args.source_attributes != 'skip':
