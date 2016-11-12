@@ -40,7 +40,7 @@ ExtendedItem
 
 Node attribute structures
 
- Node <-> Item1 7 Item2 <-> Value <-> Item2 6 Item1 <-> Name
+ Node <-> Item1 7 Item2 <-> Value <-> Item2 6 Item1 <-> Attribute
 
 Node classifications
 
