@@ -82,16 +82,16 @@ def Normalise(args):
         if args.indb != '-':
             nvivodb = create_engine(args.indb)
             nvivomd = MetaData(bind=nvivodb)
-            nvivomd.reflect(nvivodb)
 
-            nvivoAnnotation    = nvivomd.tables.get('Annotation')
-            nvivoExtendedItem  = nvivomd.tables.get('ExtendedItem')
-            nvivoItem          = nvivomd.tables.get('Item')
-            nvivoNodeReference = nvivomd.tables.get('NodeReference')
-            nvivoProject       = nvivomd.tables.get('Project')
-            nvivoRole          = nvivomd.tables.get('Role')
-            nvivoSource        = nvivomd.tables.get('Source')
-            nvivoUserProfile   = nvivomd.tables.get('UserProfile')
+            nvivoAnnotation    = Table('Annotation',    nvivomd, autoload=True)
+            nvivoCategory      = Table('Category',      nvivomd, autoload=True)
+            nvivoExtendedItem  = Table('ExtendedItem',  nvivomd, autoload=True)
+            nvivoItem          = Table('Item',          nvivomd, autoload=True)
+            nvivoNodeReference = Table('NodeReference', nvivomd, autoload=True)
+            nvivoProject       = Table('Project',       nvivomd, autoload=True)
+            nvivoRole          = Table('Role',          nvivomd, autoload=True)
+            nvivoSource        = Table('Source',        nvivomd, autoload=True)
+            nvivoUserProfile   = Table('UserProfile',   nvivomd, autoload=True)
         else:
             nvivodb = None
 
@@ -106,14 +106,17 @@ def Normalise(args):
                 normmd.remove(table)
 
 # Create the normalised database structure
-        normUser = normmd.tables.get('User')
-        if normUser is None:
+        try:
+            normUser = Table('User', normmd, autoload=True)
+        except exc.NoSuchTableError:
             normUser = Table('User', normmd,
                 Column('Id',            UUID(),         primary_key=True),
                 Column('Name',          String(256)))
+            normUser.create(normdb)
 
-        normProject = normmd.tables.get('Project')
-        if normProject is None:
+        try:
+            normProject = Table('Project', normmd, autoload=True)
+        except exc.NoSuchTableError:
             normProject = Table('Project', normmd,
                 Column('Title',         String(256),                            nullable=False),
                 Column('Description',   String(2048)),
@@ -121,12 +124,85 @@ def Normalise(args):
                 Column('CreatedDate',   DateTime,                               nullable=False),
                 Column('ModifiedBy',    UUID(),         ForeignKey("User.Id"),  nullable=False),
                 Column('ModifiedDate',  DateTime,                               nullable=False))
+            normProject.create(normdb)
 
-        normSource = normmd.tables.get('Source')
-        if normSource is None:
+        try:
+            normNodeCategory = Table('NodeCategory', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normNodeCategory = Table('NodeCategory', normmd,
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Name',          String(256)),
+                Column('Description',   String(512)),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normNodeCategory.create(normdb)
+
+        try:
+            normNode = Table('Node', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normNode = Table('Node', normmd,
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Parent',        UUID(),         ForeignKey("Node.Id")),
+                Column('Category',      UUID(),         ForeignKey("NodeCategory.Id")),
+                Column('Name',          String(256)),
+                Column('Description',   String(512)),
+                Column('Color',         Integer),
+                Column('Aggregate',     Boolean),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normNode.create(normdb)
+
+        try:
+            normNodeAttribute = Table('NodeAttribute', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normNodeAttribute = Table('NodeAttribute', normmd,
+                Column('Name',          String(256),    primary_key=True),
+                Column('Description',   String(512)),
+                Column('Type',          String(16)),
+                Column('Length',        Integer),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normNodeAttribute.create(normdb)
+
+        try:
+            normNodeValue = Table('NodeValue', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normNodeValue = Table('NodeValue', normmd,
+                Column('Node',          UUID(),         ForeignKey("Node.Id"),      primary_key=True),
+                Column('Attribute',     String(256),    ForeignKey("NodeAttribute.Name"),
+                                                                                    primary_key=True),
+                Column('Value',         String(256)),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normNodeValue.create(normdb)
+
+        try:
+            normSourceCategory = Table('SourceCategory', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normSourceCategory = Table('SourceCategory', normmd,
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Name',          String(256)),
+                Column('Description',   String(512)),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normSourceCategory.create(normdb)
+
+        try:
+            normSource = Table('Source', normmd, autoload=True)
+        except exc.NoSuchTableError:
             normSource = Table('Source', normmd,
                 Column('Id',            UUID(),         primary_key=True),
-                Column('Category',      UUID()),
+                Column('Category',      UUID(),         ForeignKey("SourceCategory.Id")),
                 Column('Name',          String(256)),
                 Column('Description',   String(512)),
                 Column('Color',         Integer),
@@ -140,20 +216,39 @@ def Normalise(args):
                 Column('CreatedDate',   DateTime),
                 Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
                 Column('ModifiedDate',  DateTime))
+            normSource.create(normdb)
 
-        normSourceCategory = normmd.tables.get('SourceCategory')
-        if normSourceCategory is None:
-            normSourceCategory = Table('SourceCategory', normmd,
-                Column('Id',            UUID(),         primary_key=True),
-                Column('Name',          String(256)),
+        try:
+            normSourceAttribute = Table('SourceAttribute', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normSourceAttribute = Table('SourceAttribute', normmd,
+                Column('Name',          String(256),    primary_key=True),
                 Column('Description',   String(512)),
+                Column('Type',          String(16)),
+                Column('Length',        Integer),
                 Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
                 Column('CreatedDate',   DateTime),
                 Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
                 Column('ModifiedDate',  DateTime))
+            normSourceAttribute.create(normdb)
 
-        normTagging = normmd.tables.get('Tagging')
-        if normTagging is None:
+        try:
+            normSourceValue = Table('SourceValue', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normSourceValue = Table('SourceValue', normmd,
+                Column('Source',        UUID(),         ForeignKey("Source.Id"),    primary_key=True),
+                Column('Attribute',     String(256),    ForeignKey("SourceAttribute.Name"),
+                                                                                    primary_key=True),
+                Column('Value',         String(256)),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normSourceValue.create(normdb)
+
+        try:
+            normTagging = Table('Tagging', normmd, autoload=True)
+        except exc.NoSuchTableError:
             normTagging = Table('Tagging', normmd,
                 Column('Id',            UUID(),         primary_key=True),
                 Column('Source',        UUID(),         ForeignKey("Source.Id")),
@@ -164,84 +259,10 @@ def Normalise(args):
                 Column('CreatedDate',   DateTime),
                 Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
                 Column('ModifiedDate',  DateTime))
-
-        normNode = normmd.tables.get('Node')
-        if normNode is None:
-            normNode = Table('Node', normmd,
-                Column('Id',            UUID(),         primary_key=True),
-                Column('Parent',        UUID(),         ForeignKey("Node.Id")),
-                Column('Category',      UUID(),         ForeignKey("NodeCategory.Id")),
-                Column('Name',          String(256)),
-                Column('Description',   String(512)),
-                Column('Color',         Integer),
-                Column('Aggregate',     Boolean),
-                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-                Column('CreatedDate',   DateTime),
-                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-                Column('ModifiedDate',  DateTime))
-
-        normNodeCategory = normmd.tables.get('NodeCategory')
-        if normNodeCategory is None:
-            normNodeCategory = Table('NodeCategory', normmd,
-                Column('Id',            UUID(),         primary_key=True),
-                Column('Name',          String(256)),
-                Column('Description',   String(512)),
-                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-                Column('CreatedDate',   DateTime),
-                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-                Column('ModifiedDate',  DateTime))
-
-        normSourceAttribute = normmd.tables.get('SourceAttribute')
-        if normSourceAttribute is None:
-            normSourceAttribute = Table('SourceAttribute', normmd,
-                Column('Name',          String(256),    primary_key=True),
-                Column('Description',   String(512)),
-                Column('Type',          String(16)),
-                Column('Length',        Integer),
-                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-                Column('CreatedDate',   DateTime),
-                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-                Column('ModifiedDate',  DateTime))
-
-        normSourceValue = normmd.tables.get('SourceValue')
-        if normSourceValue is None:
-            normSourceValue = Table('SourceValue', normmd,
-                Column('Source',        UUID(),         ForeignKey("Source.Id"),    primary_key=True),
-                Column('Attribute',     String(256),    ForeignKey("SourceAttribute.Name"),
-                                                                                    primary_key=True),
-                Column('Value',         String(256)),
-                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-                Column('CreatedDate',   DateTime),
-                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-                Column('ModifiedDate',  DateTime))
-
-        normNodeAttribute = normmd.tables.get('NodeAttribute')
-        if normNodeAttribute is None:
-            normNodeAttribute = Table('NodeAttribute', normmd,
-                Column('Name',          String(256),    primary_key=True),
-                Column('Description',   String(512)),
-                Column('Type',          String(16)),
-                Column('Length',        Integer),
-                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-                Column('CreatedDate',   DateTime),
-                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-                Column('ModifiedDate',  DateTime))
-
-        normNodeValue = normmd.tables.get('NodeValue')
-        if normNodeValue is None:
-            normNodeValue = Table('NodeValue', normmd,
-                Column('Node',          UUID(),         ForeignKey("Node.Id"),      primary_key=True),
-                Column('Attribute',     String(256),    ForeignKey("NodeAttribute.Name"),
-                                                                                    primary_key=True),
-                Column('Value',         String(256)),
-                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
-                Column('CreatedDate',   DateTime),
-                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
-                Column('ModifiedDate',  DateTime))
-
-        normmd.create_all(normdb)
+            normTagging.create(normdb)
 
         if nvivodb is None:     # that is, if all we are doing is making an empty norm file
+            normdb.dispose()
             return
 
         normcon = normdb.connect()
@@ -735,42 +756,39 @@ def Denormalise(args):
     try:
         normdb = create_engine(args.indb)
         normmd = MetaData(bind=normdb)
-        normmd.reflect(normdb)
 
-        normUser            = normmd.tables.get('User')
-        normProject         = normmd.tables.get('Project')
-        normSource          = normmd.tables.get('Source')
-        normSourceCategory  = normmd.tables.get('SourceCategory')
-        normTagging         = normmd.tables.get('Tagging')
-        normNode            = normmd.tables.get('Node')
-        normNodeCategory    = normmd.tables.get('NodeCategory')
-        normSourceAttribute = normmd.tables.get('SourceAttribute')
-        normSourceValue     = normmd.tables.get('SourceValue')
-        normNodeAttribute   = normmd.tables.get('NodeAttribute')
-        normNodeValue       = normmd.tables.get('NodeValue')
+        normUser            = Table('User', normmd, autoload=True)
+        normProject         = Table('Project', normmd, autoload=True)
+        normSource          = Table('Source', normmd, autoload=True)
+        normSourceCategory  = Table('SourceCategory', normmd, autoload=True)
+        normTagging         = Table('Tagging', normmd, autoload=True)
+        normNode            = Table('Node', normmd, autoload=True)
+        normNodeCategory    = Table('NodeCategory', normmd, autoload=True)
+        normSourceAttribute = Table('SourceAttribute', normmd, autoload=True)
+        normSourceValue     = Table('SourceValue', normmd, autoload=True)
+        normNodeAttribute   = Table('NodeAttribute', normmd, autoload=True)
+        normNodeValue       = Table('NodeValue', normmd, autoload=True)
 
         if args.outdb is None:
             args.outdb = args.indb.rsplit('.',1)[0] + '.nvivo'
 
         nvivodb = create_engine(args.outdb)
         nvivomd = MetaData(bind=nvivodb)
-        nvivomd.reflect(nvivodb)
+
+        nvivoAnnotation    = Table('Annotation',    nvivomd, autoload=True)
+        nvivoCategory      = Table('Category',      nvivomd, autoload=True)
+        nvivoExtendedItem  = Table('ExtendedItem',  nvivomd, autoload=True)
+        nvivoItem          = Table('Item',          nvivomd, autoload=True)
+        nvivoNodeReference = Table('NodeReference', nvivomd, autoload=True)
+        nvivoProject       = Table('Project',       nvivomd, autoload=True)
+        nvivoRole          = Table('Role',          nvivomd, autoload=True)
+        nvivoSource        = Table('Source',        nvivomd, autoload=True)
+        nvivoUserProfile   = Table('UserProfile',   nvivomd, autoload=True)
+
+
         nvivocon = nvivodb.connect()
         nvivotr = nvivocon.begin()
         mssql = nvivodb.dialect.name == 'mssql'
-
-        nvivoUserProfile = Table('UserProfile', nvivomd,
-            Column('Id',            UUID(),         primary_key=True),
-            extend_existing=True)
-
-        nvivoProject       = nvivomd.tables.get('Project')
-        nvivoRole          = nvivomd.tables.get('Role')
-        nvivoItem          = nvivomd.tables.get('Item')
-        nvivoExtendedItem  = nvivomd.tables.get('ExtendedItem')
-        nvivoCategory      = nvivomd.tables.get('Category')
-        nvivoSource        = nvivomd.tables.get('Source')
-        nvivoNodeReference = nvivomd.tables.get('NodeReference')
-        nvivoAnnotation    = nvivomd.tables.get('Annotation')
 
 # Users
         if args.users != 'skip':
