@@ -155,6 +155,7 @@ def Normalise(args):
         normTagging = normmd.tables.get('Tagging')
         if normTagging is None:
             normTagging = Table('Tagging', normmd,
+                Column('Id',            UUID(),         primary_key=True),
                 Column('Source',        UUID(),         ForeignKey("Source.Id")),
                 Column('Node',          UUID(),         ForeignKey("Node.Id")),
                 Column('Fragment',      String(256)),
@@ -641,6 +642,7 @@ def Normalise(args):
                 print("Normalising taggings")
 
             taggings  = [dict(row) for row in nvivodb.execute(select([
+                    nvivoNodeReference.c.Id,
                     nvivoNodeReference.c.Source_Item_Id.label('Source'),
                     nvivoNodeReference.c.Node_Item_Id.label('Node'),
                     nvivoNodeReference.c.StartX,
@@ -671,8 +673,7 @@ def Normalise(args):
                 if not isinstance(tagging['ModifiedDate'], datetime.datetime):
                     tagging['ModifiedDate'] = dateparser.parse(tagging['ModifiedDate'])
 
-            # This could be improved - maybe use tagging Id?
-            merge_overwrite_or_replace(normcon, normTagging, ['Source', 'Node', 'Fragment'], taggings, args.taggings, args.verbosity)
+            merge_overwrite_or_replace(normcon, normTagging, ['Id'], taggings, args.taggings, args.verbosity)
 
 # Annotations
         if args.annotations != 'skip':
@@ -680,6 +681,7 @@ def Normalise(args):
                 print("Normalising annotations")
 
             annotations  = [dict(row) for row in nvivodb.execute(select([
+                    nvivoAnnotation.c.Id,
                     nvivoAnnotation.c.Item_Id.label('Source'),
                     nvivoAnnotation.c.Text.label('Memo'),
                     nvivoAnnotation.c.StartText.label('StartX')   if args.mac else nvivoAnnotation.c.StartX,
@@ -705,7 +707,7 @@ def Normalise(args):
                 if not isinstance(annotation['ModifiedDate'], datetime.datetime):
                     annotation['ModifiedDate'] = dateparser.parse(annotation['ModifiedDate'])
 
-            merge_overwrite_or_replace(normcon, normTagging, ['Source', 'Node', 'Fragment'], annotations, args.annotations, args.verbosity)
+            merge_overwrite_or_replace(normcon, normTagging, ['Id'], annotations, args.annotations, args.verbosity)
 
 # All done.
         normtr.commit()
@@ -940,9 +942,7 @@ def Denormalise(args):
                     {'Name':headnodename}
                 ).first()
             if headnode is None:
-                raise RuntimeError("""
-    NVivo file contains no head node.
-    """)
+                raise RuntimeError("NVivo file contains no head node.")
             else:
                 if args.verbosity > 1:
                     print("Found head node Id: " + str(headnode['Id']))
@@ -991,12 +991,6 @@ def Denormalise(args):
                         else:
                             tagchildnodes(node['TopParent'], node['Id'], [], depth+1)
 
-            tagchildnodes(None, None, [], 0)
-            aggregatepairs = []
-            for node in nodes:
-                for dest in node['AggregateList']:
-                    aggregatepairs += [{ 'Id': node['Id'], 'Ancestor': dest }]
-
             newids = [{'_Id':row['Id']} for row in nodes]
             curids = [{'_Id':row['Id']} for row in nvivocon.execute(select([
                     nvivoItem.c.Id
@@ -1005,6 +999,16 @@ def Denormalise(args):
                 ))]
 
             nodestoinsert = [node for node in nodes if not {'_Id':node['Id']} in curids]
+            if args.verbosity > 1:
+                for node in nodestoinsert:
+                    print "Inserting node: " + node['PlainTextName']
+
+            tagchildnodes(None, None, [], 0)
+            aggregatepairs = []
+            for node in nodestoinsert:
+                for dest in node['AggregateList']:
+                    aggregatepairs += [{ 'Id': node['Id'], 'Ancestor': dest }]
+
             if len(nodestoinsert) > 0:
                 nvivocon.execute(nvivoItem.insert().values({
                         'TypeId':   literal_column('16'),
@@ -1812,9 +1816,9 @@ def Denormalise(args):
             rebuild_category_records('51')
 
 # Taggings and annotations
-        if args.taggings != 'skip':
+        if args.taggings != 'skip' or args.annotations != 'skip':
             if args.verbosity > 0:
-                print("Denormalising taggings")
+                print("Denormalising taggings and/or annotations")
 
             sources = [dict(row) for row in nvivocon.execute(select([
                     nvivoSource.c.Item_Id,
@@ -1822,11 +1826,12 @@ def Denormalise(args):
                 ]))]
 
             taggings = [dict(row) for row in normdb.execute(select([
+                    normTagging.c.Id,
                     normTagging.c.Source,
                     normSource.c.ObjectType,
                     normSource.c.Name.label('SourceName'),
                     normTagging.c.Node,
-                    normTagging.c.Memo,
+                    normTagging.c.Memo.label('Text'),
                     normTagging.c.Fragment,
                     normTagging.c.CreatedBy,
                     normTagging.c.CreatedDate,
@@ -1872,23 +1877,19 @@ def Denormalise(args):
                 else:
                     tagging['ReferenceTypeId'] = 0
 
-                tagging['Id'] = uuid.uuid4()  # Not clear what purpose this field serves
-
+                matchedtagging = False
                 if tagging['Node']:
+                    tagging['Node_Item_Id'] = tagging['Node']
+                    tagging['Source_Item_Id'] = tagging['Source']
                     nvivotaggings += [tagging]
                 else:
+                    tagging['Item_Id'] = tagging['Source']
                     nvivoannotations += [tagging]
 
-            if len(nvivotaggings) > 0:
-                nvivocon.execute(nvivoNodeReference.insert().values({
-                            'Node_Item_Id':     bindparam('Node'),
-                            'Source_Item_Id':   bindparam('Source')
-                    }), nvivotaggings)
-            if len(nvivoannotations) > 0:
-                nvivocon.execute(nvivoAnnotation.insert().values({
-                            'Item_Id':          bindparam('Source'),
-                            'Text':             bindparam('Memo')
-                    }), nvivoannotations)
+            if args.taggings != 'skip':
+                merge_overwrite_or_replace(nvivocon, nvivoNodeReference, ['Id'], nvivotaggings, args.taggings, args.verbosity)
+            if args.annotations != 'skip':
+                merge_overwrite_or_replace(nvivocon, nvivoAnnotation, ['Id'], nvivoannotations, args.annotations, args.verbosity)
 
 # All done.
         nvivotr.commit()
