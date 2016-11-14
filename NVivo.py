@@ -118,6 +118,7 @@ def Normalise(args):
             normProject = Table('Project', normmd, autoload=True)
         except exc.NoSuchTableError:
             normProject = Table('Project', normmd,
+                Column('Version',       String(16)),
                 Column('Title',         String(256),                            nullable=False),
                 Column('Description',   String(2048)),
                 Column('CreatedBy',     UUID(),         ForeignKey("User.Id"),  nullable=False),
@@ -311,7 +312,9 @@ def Normalise(args):
                 project['ModifiedDate'] = dateparser.parse(project['ModifiedDate'])
 
             normcon.execute(normProject.delete())
-            normcon.execute(normProject.insert(), project)
+            normcon.execute(normProject.insert().values({
+                    'Version': '0.1'
+                }), project)
 
 # Node Categories
         if args.node_categories != 'skip':
@@ -825,6 +828,7 @@ def Denormalise(args):
             print("Denormalising project")
 
             project = dict(normdb.execute(select([
+                    normProject.c.Version,
                     normProject.c.Title,
                     normProject.c.Description,
                     normProject.c.CreatedBy,
@@ -832,6 +836,11 @@ def Denormalise(args):
                     normProject.c.ModifiedBy,
                     normProject.c.ModifiedDate
                 ])).first())
+
+            if float(project['Version']) > '0.1':
+                raise RuntimeError("Incompatible version of normalised file: " + project['Version'])
+
+
             project['Description'] = project['Description'] or u''
             if args.windows:
                 project['Title']       = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Title']))
@@ -1466,12 +1475,215 @@ def Denormalise(args):
 # Source categories
         skip_merge_or_overwrite_categories(normSourceCategory, '51', 'source', args.source_categories)
 
+# Function to massage source data
+        def massagesource(source):
+            if args.verbosity > 1:
+                print("Source: " + source['Name'])
+            source['Item_Id']       = source['Item_Id']     or uuid.uuid4()
+            source['Description']   = source['Description'] or u''
+            source['PlainTextName'] = source['Name']
+            if args.windows:
+                source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
+                source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description']))
+
+            source['PlainText'] = source['Content']
+            source['MetaData']  = None
+
+            # Do our best to imitate NVivo's treatment of sources. In particular, generating
+            # the PlainText column is very tricky. If it was already filled in the Object column
+            # of the normalised file then use that value instead.
+            if source['ObjectTypeName'] == 'PDF':
+                source['SourceType'] = 34
+                source['LengthX'] = 0
+
+                doc = Document()
+                pages = doc.createElement("PdfPages")
+                pages.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+
+                # Write out PDF object into a temporary file, then read it using pdfminer
+                tmpfilename = tempfile.mktemp()
+                tmpfileptr  = file(tmpfilename, 'wb')
+                tmpfileptr.write(source['Object'])
+                tmpfileptr.close()
+                rsrcmgr = PDFResourceManager()
+                retstr = StringIO()
+                laparams = LAParams()
+                device = TextConverter(rsrcmgr, retstr, codec='utf-8', laparams=laparams)
+                tmpfileptr = file(tmpfilename, 'rb')
+                interpreter = PDFPageInterpreter(rsrcmgr, device)
+                pagenos = set()
+                pdfpages = PDFPage.get_pages(tmpfileptr, password='', check_extractable=True)
+                pageoffset = 0
+                pdfstr = u''
+                for pdfpage in pdfpages:
+                    mediabox   = pdfpage.attrs['MediaBox']
+
+                    interpreter.process_page(pdfpage)
+                    pageelement = pages.appendChild(doc.createElement("PdfPage"))
+                    pageelement.setAttribute("PageLength", str(retstr.tell()))
+                    pageelement.setAttribute("PageOffset", str(pageoffset))
+                    pageelement.setAttribute("PageWidth",  str(int(mediabox[2] - mediabox[0])))
+                    pageelement.setAttribute("PageHeight", str(int(mediabox[3] - mediabox[1])))
+
+                    pagestr = unicode(retstr.getvalue(), 'utf-8')
+                    pagestr = re.sub('(?<!\n)\n(?!\n)', ' ', pagestr).replace('\n\n', '\n')
+                    retstr.truncate(0)
+                    pdfstr += pagestr
+                    pageoffset += len(pagestr)
+
+                tmpfileptr.close()
+                os.remove(tmpfilename)
+
+                if source['PlainText'] is None:
+                    source['PlainText'] = pdfstr
+
+                paragraphs = doc.createElement("Paragraphs")
+                paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                start = 0
+                while start < len(source['PlainText']):
+                    end = source['PlainText'].find('\n', start)
+                    if end == -1:
+                        end = len(source['PlainText']) - 1
+                    para = paragraphs.appendChild(doc.createElement("Para"))
+                    para.setAttribute("Pos", str(start))
+                    para.setAttribute("Len", str(end - start + 1))
+                    para.setAttribute("Style", "")
+                    start = end + 1
+
+                source['MetaData'] = paragraphs.toxml() + pages.toxml()
+
+                # Would be good to work out how NVivo calculates the PDF checksum
+                extendeditems.append({'Item_Id':    source['Item_Id'],
+                                    'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>'})
+            elif source['ObjectTypeName'] in {'DOC', 'ODT', 'TXT'}:
+                if source['SourceType'] is None:
+                    source['SourceType'] = 2  # or 3 or 4?
+
+                tmpfilename = tempfile.mktemp()
+                tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
+                tmpfile.write(source['Object'])
+                tmpfile.close()
+
+                # Look for unoconvcmd just once
+                if massagesource.unoconvcmd is None:
+                    # Look first on path for OS installed version, otherwise use our copy
+                    for path in os.environ["PATH"].split(os.pathsep):
+                        unoconvpath = os.path.join(path, 'unoconv')
+                        if os.path.exists(unoconvpath):
+                            if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
+                                massagesource.unoconvcmd = [unoconvpath]
+                            else:
+                                massagesource.unoconvcmd = ['python', unoconvpath]
+                            break
+                    if massagesource.unoconvcmd is None:
+                        unoconvpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'unoconv')
+                        if os.path.exists(unoconvpath):
+                            if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
+                                massagesource.unoconvcmd = [unoconvpath]
+                            else:
+                                massagesource.unoconvcmd = ['python', unoconvpath]
+                    if massagesource.unoconvcmd is None:
+                        raise RuntimeError("Can't find unoconv on path. Please refer to the NVivotools README file.")
+
+                if source['PlainText'] is None:
+                    # Use unoconv to convert to text
+                    p = Popen(massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
+                    err = p.stderr.read()
+                    if err != '':
+                        raise RuntimeError(err)
+
+                    # Read text output from unocode, then massage it by first dropping a final line
+                    # terminator, then changing to Windows (CRLF) or Mac (LFLF) line terminators
+                    source['PlainText'] = codecs.open(tmpfilename + '.txt', 'r', 'utf-8-sig').read()
+                    if source['PlainText'].endswith('\n'):
+                        source['PlainText'] = source['PlainText'][:-1]
+                    source['PlainText'] = source['PlainText'].replace('\n', '\n\n' if args.mac else '\r\n')
+
+                    os.remove(tmpfilename + '.txt')
+
+                # Convert object to DOC/ODT if isn't already
+                if source['ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
+                    destformat = 'odt' if args.mac else 'doc'
+                    p = Popen(massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
+                    err = p.stderr.read()
+                    if err != '':
+                        err = "unoconv invocation error:\n" + err
+                        raise RuntimeError(err)
+
+                    source['Object'] = file(tmpfilename + '.' + destformat, 'rb').read()
+
+                    os.remove(tmpfilename + '.' + destformat)
+
+                os.remove(tmpfilename + '.' + source['ObjectTypeName'])
+
+                # Hack so that right object type code is found later
+                source['ObjectTypeName'] = 'DOC'
+
+                if args.mac:
+                    source['LengthX'] = len(source['PlainText'].replace(u' ', u''))
+                else:
+                    # Compress doc object without header using compression level 6
+                    compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
+                    source['Object'] = compressor.compress(source['Object']) + compressor.flush()
+
+                    source['LengthX'] = 0
+
+                    doc = Document()
+                    settings = doc.createElement("DisplaySettings")
+                    settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                    settings.setAttribute("InputPosition", "0")
+                    source['MetaData'] = settings.toxml()
+
+                    paragraphs = doc.createElement("Paragraphs")
+                    paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                    start = 0
+                    while start < len(source['PlainText']):
+                        end = source['PlainText'].find('\n', start)
+                        if end == -1:
+                            end = len(source['PlainText']) - 1
+                        para = paragraphs.appendChild(doc.createElement("Para"))
+                        para.setAttribute("Pos", str(start))
+                        para.setAttribute("Len", str(end - start + 1))
+                        para.setAttribute("Style", "Text Body")
+                        start = end + 1
+
+                    source['MetaData'] = paragraphs.toxml() + settings.toxml()
+
+            # Note that NVivo 10 for Mac doesn't support images
+            elif source['ObjectTypeName'] == 'JPEG':
+                source['SourceType'] = 33
+                image = Image.open(StringIO(source['Object']))
+                source['LengthX'], source['LengthY'] = image.size
+                image.thumbnail((200,200))
+                thumbnail = StringIO()
+                image.save(thumbnail, format='BMP')
+                source['Thumbnail'] = thumbnail.getvalue()
+                source['Properties'] = '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"/>'
+
+                extendeditems.append({'Item_Id':source['Item_Id'],
+                                    'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PictureRotation" Value="0"/><Property Key="PictureBrightness" Value="0"/><Property Key="PictureContrast" Value="0"/><Property Key="PictureQuality" Value="0"/></Properties>'})
+            #elif source['ObjectTypeName'] == 'MP3':
+                #source['LengthX'] = length of recording in milliseconds
+                #source['Waveform'] = waveform of recording, one byte per centisecond
+            #elif source['ObjectTypeName'] == 'WMV':
+                #source['LengthX'] = length of recording in milliseconds
+                #source['Waveform'] = waveform of recording, one byte per centisecond
+            else:
+                source['LengthX'] = 0
+
+            # Lookup object type from name
+            if source['ObjectTypeName'] in ObjectTypeName.values():
+                source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])]
+            else:
+                source['ObjectType'] = int(source['ObjectTypeName'])
+
+        # Unitialise static variable
+        massagesource.unoconvcmd = None
+
 # Sources
         if args.sources != 'skip':
             if args.verbosity > 0:
                 print("Denormalising sources")
-
-            unoconvcmd = None
 
             # Look up head source
             headsourcename = u'Internals'
@@ -1512,209 +1724,7 @@ def Denormalise(args):
                     ]))]
             extendeditems = []
 
-            def massagesource(source):
-                if args.verbosity > 1:
-                    print("Source: " + source['Name'])
-                source['Item_Id']       = source['Item_Id']     or uuid.uuid4()
-                source['Description']   = source['Description'] or u''
-                source['PlainTextName'] = source['Name']
-                if args.windows:
-                    source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
-                    source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description']))
 
-                source['PlainText'] = source['Content']
-                source['MetaData']  = None
-
-                # Do our best to imitate NVivo's treatment of sources. In particular, generating
-                # the PlainText column is very tricky. If it was already filled in the Object column
-                # of the normalised file then use that value instead.
-                if source['ObjectTypeName'] == 'PDF':
-                    source['SourceType'] = 34
-                    source['LengthX'] = 0
-
-                    doc = Document()
-                    pages = doc.createElement("PdfPages")
-                    pages.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-
-                    # Write out PDF object into a temporary file, then read it using pdfminer
-                    tmpfilename = tempfile.mktemp()
-                    tmpfileptr  = file(tmpfilename, 'wb')
-                    tmpfileptr.write(source['Object'])
-                    tmpfileptr.close()
-                    rsrcmgr = PDFResourceManager()
-                    retstr = StringIO()
-                    laparams = LAParams()
-                    device = TextConverter(rsrcmgr, retstr, codec='utf-8', laparams=laparams)
-                    tmpfileptr = file(tmpfilename, 'rb')
-                    interpreter = PDFPageInterpreter(rsrcmgr, device)
-                    pagenos = set()
-                    pdfpages = PDFPage.get_pages(tmpfileptr, password='', check_extractable=True)
-                    pageoffset = 0
-                    pdfstr = u''
-                    for pdfpage in pdfpages:
-                        mediabox   = pdfpage.attrs['MediaBox']
-
-                        interpreter.process_page(pdfpage)
-                        pageelement = pages.appendChild(doc.createElement("PdfPage"))
-                        pageelement.setAttribute("PageLength", str(retstr.tell()))
-                        pageelement.setAttribute("PageOffset", str(pageoffset))
-                        pageelement.setAttribute("PageWidth",  str(int(mediabox[2] - mediabox[0])))
-                        pageelement.setAttribute("PageHeight", str(int(mediabox[3] - mediabox[1])))
-
-                        pagestr = unicode(retstr.getvalue(), 'utf-8')
-                        pagestr = re.sub('(?<!\n)\n(?!\n)', ' ', pagestr).replace('\n\n', '\n')
-                        retstr.truncate(0)
-                        pdfstr += pagestr
-                        pageoffset += len(pagestr)
-
-                    tmpfileptr.close()
-                    os.remove(tmpfilename)
-
-                    if source['PlainText'] is None:
-                        source['PlainText'] = pdfstr
-
-                    paragraphs = doc.createElement("Paragraphs")
-                    paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-                    start = 0
-                    while start < len(source['PlainText']):
-                        end = source['PlainText'].find('\n', start)
-                        if end == -1:
-                            end = len(source['PlainText']) - 1
-                        para = paragraphs.appendChild(doc.createElement("Para"))
-                        para.setAttribute("Pos", str(start))
-                        para.setAttribute("Len", str(end - start + 1))
-                        para.setAttribute("Style", "")
-                        start = end + 1
-
-                    source['MetaData'] = paragraphs.toxml() + pages.toxml()
-
-                    # Would be good to work out how NVivo calculates the PDF checksum
-                    extendeditems.append({'Item_Id':    source['Item_Id'],
-                                        'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>'})
-                elif source['ObjectTypeName'] in {'DOC', 'ODT', 'TXT'}:
-                    if source['SourceType'] is None:
-                        source['SourceType'] = 2  # or 3 or 4?
-
-                    tmpfilename = tempfile.mktemp()
-                    tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
-                    tmpfile.write(source['Object'])
-                    tmpfile.close()
-
-                    # Look for unoconvcmd just once
-                    if unoconvcmd is None:
-                        # Look first on path for OS installed version, otherwise use our copy
-                        for path in os.environ["PATH"].split(os.pathsep):
-                            unoconvpath = os.path.join(path, 'unoconv')
-                            if os.path.exists(unoconvpath):
-                                if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
-                                    unoconvcmd = [unoconvpath]
-                                else:
-                                    unoconvcmd = ['python', unoconvpath]
-                                break
-                        if unoconvcmd is None:
-                            unoconvpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'unoconv')
-                            if os.path.exists(unoconvpath):
-                                if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
-                                    unoconvcmd = [unoconvpath]
-                                else:
-                                    unoconvcmd = ['python', unoconvpath]
-                        if unoconvcmd is None:
-                            raise RuntimeError("""
-        Can't find unoconv on path. Please refer to the NVivotools README file.
-        """)
-
-                    if source['PlainText'] is None:
-                        # Use unoconv to convert to text
-                        p = Popen(unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
-                        err = p.stderr.read()
-                        if err != '':
-                            raise RuntimeError(err)
-
-                        # Read text output from unocode, then massage it by first dropping a final line
-                        # terminator, then changing to Windows (CRLF) or Mac (LFLF) line terminators
-                        source['PlainText'] = codecs.open(tmpfilename + '.txt', 'r', 'utf-8-sig').read()
-                        if source['PlainText'].endswith('\n'):
-                            source['PlainText'] = source['PlainText'][:-1]
-                        source['PlainText'] = source['PlainText'].replace('\n', '\n\n' if args.mac else '\r\n')
-
-                        os.remove(tmpfilename + '.txt')
-
-                    # Convert object to DOC/ODT if isn't already
-                    if source['ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
-                        destformat = 'odt' if args.mac else 'doc'
-                        p = Popen(unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
-                        err = p.stderr.read()
-                        if err != '':
-                            err = "unoconv invocation error:\n" + err
-                            raise RuntimeError(err)
-
-                        source['Object'] = file(tmpfilename + '.' + destformat, 'rb').read()
-
-                        os.remove(tmpfilename + '.' + destformat)
-
-                    os.remove(tmpfilename + '.' + source['ObjectTypeName'])
-
-                    # Hack so that right object type code is found later
-                    source['ObjectTypeName'] = 'DOC'
-
-                    if args.mac:
-                        source['LengthX'] = len(source['PlainText'].replace(u' ', u''))
-                    else:
-                        # Compress doc object without header using compression level 6
-                        compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
-                        source['Object'] = compressor.compress(source['Object']) + compressor.flush()
-
-                        source['LengthX'] = 0
-
-                        doc = Document()
-                        settings = doc.createElement("DisplaySettings")
-                        settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-                        settings.setAttribute("InputPosition", "0")
-                        source['MetaData'] = settings.toxml()
-
-                        paragraphs = doc.createElement("Paragraphs")
-                        paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-                        start = 0
-                        while start < len(source['PlainText']):
-                            end = source['PlainText'].find('\n', start)
-                            if end == -1:
-                                end = len(source['PlainText']) - 1
-                            para = paragraphs.appendChild(doc.createElement("Para"))
-                            para.setAttribute("Pos", str(start))
-                            para.setAttribute("Len", str(end - start + 1))
-                            para.setAttribute("Style", "Text Body")
-                            start = end + 1
-
-                        source['MetaData'] = paragraphs.toxml() + settings.toxml()
-
-                # Note that NVivo 10 for Mac doesn't support images
-                elif source['ObjectTypeName'] == 'JPEG':
-                    source['SourceType'] = 33
-                    image = Image.open(StringIO(source['Object']))
-                    source['LengthX'], source['LengthY'] = image.size
-                    image.thumbnail((200,200))
-                    thumbnail = StringIO()
-                    image.save(thumbnail, format='BMP')
-                    source['Thumbnail'] = thumbnail.getvalue()
-                    source['Properties'] = '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"/>'
-
-                    extendeditems.append({'Item_Id':source['Item_Id'],
-                                        'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PictureRotation" Value="0"/><Property Key="PictureBrightness" Value="0"/><Property Key="PictureContrast" Value="0"/><Property Key="PictureQuality" Value="0"/></Properties>'})
-                #elif source['ObjectTypeName'] == 'MP3':
-                    #source['LengthX'] = length of recording in milliseconds
-                    #source['Waveform'] = waveform of recording, one byte per centisecond
-                #elif source['ObjectTypeName'] == 'WMV':
-                    #source['LengthX'] = length of recording in milliseconds
-                    #source['Waveform'] = waveform of recording, one byte per centisecond
-                else:
-                    source['LengthX'] = 0
-
-                # Lookup object type from name
-                if source['ObjectTypeName'] in ObjectTypeName.values():
-                    source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])]
-                else:
-                    source['ObjectType'] = int(source['ObjectTypeName'])
-            # end of massagesource
 
             newids = [{'Item_Id':row['Item_Id']} for row in sources]
             curids = [{'Item_Id':row['Item_Id']} for row in nvivocon.execute(select([
