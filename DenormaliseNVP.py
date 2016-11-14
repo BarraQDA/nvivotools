@@ -103,10 +103,10 @@ except:
     raise
 
 finally:
-    proc = Popen([curpath + 'mssqlDrop.bat', dbname, args.instance])
+    proc = Popen([curpath + 'mssqlSave.bat', tmpoutfilename, dbname, args.instance])
     proc.wait()
     if args.verbosity > 0:
-        print("Dropped database " + dbname)
+        print("Saved database " + dbname)
 
     shutil.move(tmpoutfilename, args.outfile.name)
     os.remove(tmpinfilename)
