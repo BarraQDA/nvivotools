@@ -828,7 +828,7 @@ def Denormalise(args):
             print("Denormalising project")
 
             project = dict(normdb.execute(select([
-                    normProject.c.Version,
+                    normProject.c.Version.label('NVivotoolsVersion'),   # Don't overwrite NVivo's version
                     normProject.c.Title,
                     normProject.c.Description,
                     normProject.c.CreatedBy,
@@ -837,9 +837,8 @@ def Denormalise(args):
                     normProject.c.ModifiedDate
                 ])).first())
 
-            if float(project['Version']) > '0.1':
+            if float(project['NVivotoolsVersion']) > '0.1':
                 raise RuntimeError("Incompatible version of normalised file: " + project['Version'])
-
 
             project['Description'] = project['Description'] or u''
             if args.windows:
