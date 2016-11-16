@@ -24,6 +24,7 @@ except:
 from sqlalchemy.databases import mssql, sqlite
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
+from sqlalchemy import TypeDecorator, Binary, TEXT
 import uuid
 
 class UUID(TypeDecorator):
