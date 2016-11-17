@@ -813,10 +813,12 @@ def Denormalise(args):
             if args.users == 'replace':
                 newids = [row['Id'] for row in users]
                 curids = [row['Id'] for row in nvivocon.execute(select([nvivoUserProfile.c.Id]))]
-                idstodelete = [id for id in curids if not id in newids]
+                idstodelete = [{'_Id':id} for id in curids if not id in newids]
 
+                # First create the new users
                 merge_overwrite_or_replace(nvivocon, nvivoUserProfile, ['Id'], users, 'overwrite', args.verbosity)
 
+                # Then replace every reference to a user to be deleted
                 for table in nvivomd.sorted_tables:
                     userCreatedBy  = table.c.get('CreatedBy')
                     userModifiedBy = table.c.get('ModifiedBy')
@@ -829,22 +831,28 @@ def Denormalise(args):
                                     'CreatedBy':   bindparam('CreatedBy'),
                                     'CreatedDate': bindparam('CreatedDate')
                                 }), {
-                                    '_Id':         idtodelete,
+                                    '_Id':         idtodelete['_Id'],
                                     'CreatedBy':   project['CreatedBy'],
                                     'CreatedDate': project['CreatedDate']
                                 })
                     if userModifiedBy is not None:
                         for idtodelete in idstodelete:
-                            nvivocon.execute(table.update().where(
+                            nvivocon.execute(table.update(
                                     userModifiedBy == bindparam('_Id')
                                 ).values({
                                     'ModifiedBy':   bindparam('ModifiedBy'),
                                     'ModifiedDate': bindparam('ModifiedDate')
                                 }), {
-                                    '_Id':         idtodelete,
+                                    '_Id':          idtodelete['_Id'],
                                     'ModifiedBy':   project['ModifiedBy'],
                                     'ModifiedDate': project['ModifiedDate']
                                 })
+
+                    # Finally the users can be deleted
+                    if len(idstodelete) > 0:
+                        nvivocon.execute(nvivoUserProfile.delete(
+                                    nvivoUserProfile.c.Id == bindparam('_Id')
+                                ),  idstodelete)
             else:
                 merge_overwrite_or_replace(nvivocon, nvivoUserProfile, ['Id'], users, args.users, args.verbosity)
 
@@ -970,7 +978,7 @@ def Denormalise(args):
 
 
 # Node Categories
-        skip_merge_or_overwrite_categories(normNodeCategory, '52', 'node', args.node_categories)
+        skip_merge_or_overwrite_categories(normNodeCategory, '52', 'case' if args.nvivoversion == '11' else 'node', args.node_categories)
 
 # Nodes
         if args.nodes != 'skip':
