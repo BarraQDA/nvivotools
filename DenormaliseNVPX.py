@@ -22,6 +22,9 @@ parser = argparse.ArgumentParser(description='Create an NVivo for Mac file from 
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
 
+parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
+                    help='NVivo version (10 or 11)')
+
 parser.add_argument('-u', '--users', choices=["", "skip", "merge", "overwrite", "replace"], default="merge",
                     help='User action.')
 parser.add_argument('-p', '--project', choices=["", "skip", "overwrite"], default="overwrite",
@@ -93,5 +96,5 @@ args.outdb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' 
 
 NVivo.Denormalise(args)
 
-shutil.move(tmpoutfilename, args.outfile.name)
+shutil.move(tmpoutfilename, os.path.basename(args.outfile.name))
 os.remove(tmpinfilename)

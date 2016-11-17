@@ -24,10 +24,11 @@ parser.add_argument('-w', '--windows', action='store_true',
                     help='Correct NVivo for Windows string coding. Use if offloaded file will be used with Windows version of NVivo.')
 parser.add_argument('-m', '--mac',  action='store_true',
                     help='Use NVivo for Mac database format.')
-parser.add_argument('-s', '--structure', action='store_true',
-                    help='Replace existing table structures.')
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
+
+parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
+                    help='NVivo version (10 or 11)')
 
 parser.add_argument('-u', '--users', choices=["", "skip", "merge", "overwrite", "replace"], default="merge",
                     help='User action.')

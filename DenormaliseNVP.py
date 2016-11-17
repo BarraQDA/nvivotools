@@ -22,6 +22,9 @@ parser = argparse.ArgumentParser(description='Create an NVivo for Mac file from 
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
 
+parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
+                    help='NVivo version (10 or 11)')
+
 parser.add_argument('-i', '--instance', type=str, nargs='?',
                     help="Microsoft SQL Server instance")
 
