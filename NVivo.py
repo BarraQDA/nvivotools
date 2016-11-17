@@ -100,11 +100,6 @@ def Normalise(args):
         normdb = create_engine(args.outdb)
         normmd = MetaData(bind=normdb)
 
-        if args.structure:
-            normmd.drop_all(normdb)
-            for table in reversed(normmd.sorted_tables):
-                normmd.remove(table)
-
 # Create the normalised database structure
         try:
             normUser = Table('User', normmd, autoload=True)
@@ -760,17 +755,17 @@ def Denormalise(args):
         normdb = create_engine(args.indb)
         normmd = MetaData(bind=normdb)
 
-        normUser            = Table('User', normmd, autoload=True)
-        normProject         = Table('Project', normmd, autoload=True)
-        normSource          = Table('Source', normmd, autoload=True)
-        normSourceCategory  = Table('SourceCategory', normmd, autoload=True)
-        normTagging         = Table('Tagging', normmd, autoload=True)
-        normNode            = Table('Node', normmd, autoload=True)
-        normNodeCategory    = Table('NodeCategory', normmd, autoload=True)
+        normUser            = Table('User',            normmd, autoload=True)
+        normProject         = Table('Project',         normmd, autoload=True)
+        normSource          = Table('Source',          normmd, autoload=True)
+        normSourceCategory  = Table('SourceCategory',  normmd, autoload=True)
+        normTagging         = Table('Tagging',         normmd, autoload=True)
+        normNode            = Table('Node',            normmd, autoload=True)
+        normNodeCategory    = Table('NodeCategory',    normmd, autoload=True)
         normSourceAttribute = Table('SourceAttribute', normmd, autoload=True)
-        normSourceValue     = Table('SourceValue', normmd, autoload=True)
-        normNodeAttribute   = Table('NodeAttribute', normmd, autoload=True)
-        normNodeValue       = Table('NodeValue', normmd, autoload=True)
+        normSourceValue     = Table('SourceValue',     normmd, autoload=True)
+        normNodeAttribute   = Table('NodeAttribute',   normmd, autoload=True)
+        normNodeValue       = Table('NodeValue',       normmd, autoload=True)
 
         if args.outdb is None:
             args.outdb = args.indb.rsplit('.',1)[0] + '.nvivo'
@@ -788,10 +783,20 @@ def Denormalise(args):
         nvivoSource        = Table('Source',        nvivomd, autoload=True)
         nvivoUserProfile   = Table('UserProfile',   nvivomd, autoload=True)
 
-
         nvivocon = nvivodb.connect()
         nvivotr = nvivocon.begin()
         mssql = nvivodb.dialect.name == 'mssql'
+
+# Load project record to extract the default users
+        project = dict(normdb.execute(select([
+                normProject.c.Version.label('NVivotoolsVersion'),   # Don't overwrite NVivo's version
+                normProject.c.Title,
+                normProject.c.Description,
+                normProject.c.CreatedBy,
+                normProject.c.CreatedDate,
+                normProject.c.ModifiedBy,
+                normProject.c.ModifiedDate
+            ])).first())
 
 # Users
         if args.users != 'skip':
@@ -805,37 +810,56 @@ def Denormalise(args):
             for user in users:
                 user['Initials'] = u''.join(word[0].upper() for word in user['Name'].split())
 
-            merge_overwrite_or_replace(nvivocon, nvivoUserProfile, ['Id'], users, args.users, args.verbosity)
+            if args.users == 'replace':
+                newids = [row['Id'] for row in users]
+                curids = [row['Id'] for row in nvivocon.execute(select([nvivoUserProfile.c.Id]))]
+                idstodelete = [id for id in curids if not id in newids]
+
+                merge_overwrite_or_replace(nvivocon, nvivoUserProfile, ['Id'], users, 'overwrite', args.verbosity)
+
+                for table in nvivomd.sorted_tables:
+                    userCreatedBy  = table.c.get('CreatedBy')
+                    userModifiedBy = table.c.get('ModifiedBy')
+
+                    if userCreatedBy is not None:
+                        for idtodelete in idstodelete:
+                            nvivocon.execute(table.update(
+                                    userCreatedBy == bindparam('_Id')
+                                ).values({
+                                    'CreatedBy':   bindparam('CreatedBy'),
+                                    'CreatedDate': bindparam('CreatedDate')
+                                }), {
+                                    '_Id':         idtodelete,
+                                    'CreatedBy':   project['CreatedBy'],
+                                    'CreatedDate': project['CreatedDate']
+                                })
+                    if userModifiedBy is not None:
+                        for idtodelete in idstodelete:
+                            nvivocon.execute(table.update().where(
+                                    userModifiedBy == bindparam('_Id')
+                                ).values({
+                                    'ModifiedBy':   bindparam('ModifiedBy'),
+                                    'ModifiedDate': bindparam('ModifiedDate')
+                                }), {
+                                    '_Id':         idtodelete,
+                                    'ModifiedBy':   project['ModifiedBy'],
+                                    'ModifiedDate': project['ModifiedDate']
+                                })
+            else:
+                merge_overwrite_or_replace(nvivocon, nvivoUserProfile, ['Id'], users, args.users, args.verbosity)
 
 # Project
-        # First read existing NVivo project record to test that it is there and extract
-        # Unassigned and Not Applicable field labels.
+        # Read unassigned and not applicable labels from existing NVivo project record.
         nvivoproject = nvivocon.execute(select([nvivoProject.c.UnassignedLabel,
                                                 nvivoProject.c.NotApplicableLabel])).first()
-        if nvivoproject is None:
-            raise RuntimeError("""
-    NVivo file contains no project record. Begin denormalisation with an
-    existing project or stock empty project.
-    """)
-        else:
-            unassignedlabel    = nvivoproject['UnassignedLabel']
-            notapplicablelabel = nvivoproject['NotApplicableLabel']
-            if args.windows:
-                unassignedlabel    = u''.join(map(lambda ch: chr(ord(ch) + 0x377), unassignedlabel))
-                notapplicablelabel = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicablelabel))
+        unassignedlabel    = nvivoproject['UnassignedLabel']
+        notapplicablelabel = nvivoproject['NotApplicableLabel']
+        if args.windows:
+            unassignedlabel    = u''.join(map(lambda ch: chr(ord(ch) + 0x377), unassignedlabel))
+            notapplicablelabel = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicablelabel))
 
         if args.project != 'skip':
             print("Denormalising project")
-
-            project = dict(normdb.execute(select([
-                    normProject.c.Version.label('NVivotoolsVersion'),   # Don't overwrite NVivo's version
-                    normProject.c.Title,
-                    normProject.c.Description,
-                    normProject.c.CreatedBy,
-                    normProject.c.CreatedDate,
-                    normProject.c.ModifiedBy,
-                    normProject.c.ModifiedDate
-                ])).first())
 
             if float(project['NVivotoolsVersion']) > '0.1':
                 raise RuntimeError("Incompatible version of normalised file: " + project['Version'])
