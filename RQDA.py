@@ -352,6 +352,24 @@ def Denormalise(args):
 
             merge_overwrite_or_replace(rqdacon, rqdafilecat, ['catid'], sourcecats, args.source_categories, args.verbosity)
 
+# Source attributes
+        if args.source_attributes != 'skip':
+            if args.verbosity > 0:
+                print("Converting source attributes")
+
+            sourceattrs  = [dict(row) for row in normdb.execute(select([
+                    normSourceCategory.c.Id,
+                    normSourceCategory.c.Name.label('name'),
+                    normSourceCategory.c.Description.label('memo'),
+                    normUser.c.Name.label('owner'),
+                    normSourceCategory.c.CreatedDate,
+                    normSourceCategory.c.ModifiedDate
+                ]).where(
+                    normUser.c.Id == normSourceCategory.c.CreatedBy
+                ))]
+
+
+
 # All done.
         rqdatr.commit()
         rqdatr = None
