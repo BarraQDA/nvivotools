@@ -32,8 +32,6 @@ exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes
 
 try:
     parser = argparse.ArgumentParser(description='Normalise an offloaded NVivo project.')
-    parser.add_argument('-s', '--structure', action='store_true',
-                        help='Replace existing table structures.')
 
     table_choices = ["", "skip", "merge", "overwrite", "replace"]
     parser.add_argument('-n', '--nodes', choices=table_choices, default="merge",
@@ -75,11 +73,6 @@ try:
     normdb = create_engine(args.outfile)
     normmd = MetaData(bind=normdb)
     normmd.reflect(normdb)
-
-    if args.structure:
-        normmd.drop_all(normdb)
-        for table in reversed(normmd.sorted_tables):
-            normmd.remove(table)
 
     # Create the normalised database structure
     normUser = normmd.tables.get('User')
