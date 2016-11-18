@@ -106,6 +106,8 @@ Although OSX ships with a version of Python, it seems to be unable to work corre
 
 Instead of using the shipped version of Python, install a recent version of Python 2 from [Python Releases for Mac OS X](https://www.python.org/downloads/mac-osx/). Note that Mac releases of Python appear to lack the `dateutils` module, so you will need to install that one explicitly:
 
+    pip install --user dateutils
+
 ## Installing Python libraries
 
 You should use 'pip', even under Linux, to be sure of having up-to-date versions of the libraries. The following commands install the libraries only for the current user, which is the recommended approach at least during the testing phases.
