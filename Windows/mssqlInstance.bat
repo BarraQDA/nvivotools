@@ -15,7 +15,7 @@ rem
 rem You should have received a copy of the GNU General Public License
 rem along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-set preferredinstances=QSRNVIVO10 QSRNVIVO1 SQLEXPRESS MSSQLSERVER
+set preferredinstances=QSRNVIVO10 SQLEXPRESS MSSQLSERVER
 
 setlocal EnableDelayedExpansion
 set first=
