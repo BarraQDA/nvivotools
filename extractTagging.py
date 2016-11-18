@@ -70,14 +70,13 @@ try:
             normSource.c.Name == bindparam('SourceName')
         )
 
-    print sel
     taggings = normdb.execute(sel, {
             'NodeName':   args.node,
             'SourceName': args.source
         })
 
     for tagging in taggings:
-        print("Node: " + tagging['NodeName'] + " Source: " + tagging['SourceName'] + "[" + tagging['Fragment']) + "]"
+        print("Node: " + tagging['NodeName'] + " Source: " + tagging['SourceName'] + "[" + tagging['Fragment'] + "]")
 
         matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
         if matchfragment is None:
