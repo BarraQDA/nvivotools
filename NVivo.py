@@ -1027,6 +1027,23 @@ def Denormalise(args):
                 if args.windows:
                     node['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Name']))
                     node['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Description']))
+                node['Color'] = node['Color'] or 0
+                if args.mac:
+                    node['HierarchicalName'] = node['Name']
+                    parent = node['Parent']
+                    while parent is not None:
+                        parentnode = normdb.execute(select([
+                                normNode.c.Name,
+                                normNode.c.Parent
+                            ]).where(
+                                normNode.c.Id == bindparam('Parent')
+                            ), {
+                                'Parent': parent
+                            }).first()
+                        node['HierarchicalName'] = parentnode['Name'] + u'\\' + node['HierarchicalName']
+                        parent = parentnode['Parent']
+                    node['HierarchicalName'] = u'Nodes\\\\' + node['HierarchicalName']
+
 
             def tagchildnodes(TopParent, Parent, AggregateList, depth):
                 tag = depth << 16
@@ -1880,21 +1897,23 @@ def Denormalise(args):
 
             sources = [dict(row) for row in nvivocon.execute(select([
                     nvivoSource.c.Item_Id,
+                    nvivoItem.c.Name,
                     nvivoSource.c.PlainText
-                ]))]
+                ]).where(
+                    nvivoItem.c.Id == nvivoSource.c.Item_Id
+                ))]
 
             taggings = [dict(row) for row in normdb.execute(select([
                     normTagging.c.Id,
                     normTagging.c.Source,
                     normSource.c.ObjectType,
-                    normSource.c.Name.label('SourceName'),
                     normTagging.c.Node,
                     normTagging.c.Memo.label('Text'),
                     normTagging.c.Fragment,
                     normTagging.c.CreatedBy,
                     normTagging.c.CreatedDate,
                     normTagging.c.ModifiedBy,
-                    normTagging.c.ModifiedDate
+                    normTagging.c.ModifiedDate,
                 ]).where(
                     normSource.c.Id == normTagging.c.Source
                 ))]
@@ -1905,7 +1924,8 @@ def Denormalise(args):
                 tagging['ClusterId'] = None
                 matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
                 if matchfragment is None:
-                    print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + tagging['SourceName'] )
+                    source = next(source for source in sources if source['Item_Id'] == tagging['Source'])
+                    print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + source['Name'] )
                     taggings.remove(tagging)
                     continue
 
@@ -1913,6 +1933,7 @@ def Denormalise(args):
                 tagging['LengthX'] = int(matchfragment.group(2)) - int(matchfragment.group(1)) + 1
                 tagging['StartY']  = None
                 tagging['LengthY'] = None
+                tagging['StartZ']  = 0
                 startY = matchfragment.group(3)
                 if startY is not None:
                     tagging['StartY'] = int(startY)
@@ -1920,13 +1941,15 @@ def Denormalise(args):
                     if endY is not None:
                         tagging['LengthY'] = int(endY) - tagging['StartY'] + 1
 
-                # On Mac need to remove white space from startX andLengthX to calculate
-                # StartText and LengthText
+                # On Mac need to remove white space (but not non-breaking spaces) from startX
+                # andLengthX to calculate StartText and LengthText
                 if args.mac:
                     source = next(source for source in sources if source['Item_Id'] == tagging['Source'])
                     if source['PlainText'] is not None:
-                        tagging['StartText']  = tagging['StartX']  - sum(c.isspace() for c in source['PlainText'][0:tagging['StartX']])
-                        tagging['LengthText'] = tagging['LengthX'] - sum(c.isspace() for c in source['PlainText'][tagging['StartX']:tagging['StartX']+tagging['LengthX']])
+                        tagging['StartText']  = tagging['StartX'] - sum(c.isspace() and c != u'\xa0'
+                                                for c in source['PlainText'][0:tagging['StartX']])
+                        tagging['LengthText'] = tagging['LengthX'] - sum(c.isspace() and c != u'\xa0'
+                                                for c in source['PlainText'][tagging['StartX']:tagging['StartX']+tagging['LengthX']])
                     else:
                         tagging['StartText']  = tagging['StartX']
                         tagging['LengthText'] = tagging['LengthX']
