@@ -542,7 +542,6 @@ def Normalise(args):
                     source['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description']))
 
                 if source['PlainText'] is not None:
-                    #source['Content'] = source['PlainText'].replace ('\\n', os.linesep * int(2 / len(os.linesep)))
                     source['Content'] = source['PlainText']
                 else:
                     source['Content'] = None
@@ -1921,11 +1920,13 @@ def Denormalise(args):
                     if endY is not None:
                         tagging['LengthY'] = int(endY) - tagging['StartY'] + 1
 
+                # On Mac need to remove white space from startX andLengthX to calculate
+                # StartText and LengthText
                 if args.mac:
                     source = next(source for source in sources if source['Item_Id'] == tagging['Source'])
                     if source['PlainText'] is not None:
-                        tagging['StartText']  = tagging['StartX']  - source['PlainText'][0:tagging['StartX']].count(' ')
-                        tagging['LengthText'] = tagging['LengthX'] - source['PlainText'][tagging['StartX']:tagging['StartX']+tagging['LengthX']+1].count(' ')
+                        tagging['StartText']  = tagging['StartX']  - sum(c.isspace() for c in source['PlainText'][0:tagging['StartX']])
+                        tagging['LengthText'] = tagging['LengthX'] - sum(c.isspace() for c in source['PlainText'][tagging['StartX']:tagging['StartX']+tagging['LengthX']])
                     else:
                         tagging['StartText']  = tagging['StartX']
                         tagging['LengthText'] = tagging['LengthX']
