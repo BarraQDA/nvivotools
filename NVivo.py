@@ -156,7 +156,8 @@ def Normalise(args):
             normNodeAttribute = Table('NodeAttribute', normmd, autoload=True)
         except exc.NoSuchTableError:
             normNodeAttribute = Table('NodeAttribute', normmd,
-                Column('Name',          String(256),    primary_key=True),
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Name',          String(256)),
                 Column('Description',   String(512)),
                 Column('Type',          String(16)),
                 Column('Length',        Integer),
@@ -171,7 +172,7 @@ def Normalise(args):
         except exc.NoSuchTableError:
             normNodeValue = Table('NodeValue', normmd,
                 Column('Node',          UUID(),         ForeignKey("Node.Id"),      primary_key=True),
-                Column('Attribute',     String(256),    ForeignKey("NodeAttribute.Name"),
+                Column('Attribute',     UUID(),         ForeignKey("NodeAttribute.Id"),
                                                                                     primary_key=True),
                 Column('Value',         String(256)),
                 Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
@@ -218,7 +219,8 @@ def Normalise(args):
             normSourceAttribute = Table('SourceAttribute', normmd, autoload=True)
         except exc.NoSuchTableError:
             normSourceAttribute = Table('SourceAttribute', normmd,
-                Column('Name',          String(256),    primary_key=True),
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Name',          String(256)),
                 Column('Description',   String(512)),
                 Column('Type',          String(16)),
                 Column('Length',        Integer),
@@ -233,7 +235,7 @@ def Normalise(args):
         except exc.NoSuchTableError:
             normSourceValue = Table('SourceValue', normmd,
                 Column('Source',        UUID(),         ForeignKey("Source.Id"),    primary_key=True),
-                Column('Attribute',     String(256),    ForeignKey("SourceAttribute.Name"),
+                Column('Attribute',     UUID(),         ForeignKey("SourceAttribute.Id"),
                                                                                     primary_key=True),
                 Column('Value',         String(256)),
                 Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
@@ -308,7 +310,7 @@ def Normalise(args):
 
             normcon.execute(normProject.delete())
             normcon.execute(normProject.insert().values({
-                    'Version': '0.1'
+                    'Version': '0.2'
                 }), project)
 
 # Node Categories
@@ -398,7 +400,8 @@ def Normalise(args):
 
             nodeattrvalues = [dict(row) for row in nvivodb.execute(select([
                     nvivoNodeItem.c.Id.label('Node'),
-                    nvivoNameItem.c.Name.label('Attribute'),
+                    nvivoNameItem.c.Id.label('Attribute'),
+                    nvivoNameItem.c.Name,
                     nvivoNameItem.c.Description,
                     nvivoNameItem.c.CreatedBy.label('AttrCreatedBy'),
                     nvivoNameItem.c.CreatedDate.label('AttrCreatedDate'),
@@ -461,7 +464,8 @@ def Normalise(args):
                             raise RuntimeError("ERROR: Attribute " + nodeattrvalue['PlainTextName'] + " is multiply defined with different type or length.")
                     else:
                         nodeattrs += [{
-                            'Name':          nodeattrvalue['Attribute'],
+                            'Id':            nodeattrvalue['Attribute'],
+                            'Name':          nodeattrvalue['Name'],
                             'PlainTextName': nodeattrvalue['PlainTextName'],
                             'Description':   nodeattrvalue['Description'],
                             'Type':          attrtype,
@@ -472,7 +476,7 @@ def Normalise(args):
                             'ModifiedDate':  nodeattrvalue['AttrModifiedDate']
                         }]
 
-            merge_overwrite_or_replace(normcon, normNodeAttribute, ['Name'], nodeattrs, args.node_attributes, args.verbosity)
+            merge_overwrite_or_replace(normcon, normNodeAttribute, ['Id'], nodeattrs, args.node_attributes, args.verbosity)
             merge_overwrite_or_replace(normcon, normNodeValue, ['Node', 'Attribute'], nodeattrvalues, args.node_attributes, args.verbosity)
 
 # Source categories
@@ -578,7 +582,8 @@ def Normalise(args):
 
             sourceattrvalues  = [dict(row) for row in nvivodb.execute(select([
                     nvivoSource.c.Item_Id.label('Source'),
-                    nvivoNameItem.c.Name.label('Attribute'),
+                    nvivoNameItem.c.Id.label('Attribute'),
+                    nvivoNameItem.c.Name,
                     nvivoNameItem.c.Description,
                     nvivoNameItem.c.CreatedBy.label('AttrCreatedBy'),
                     nvivoNameItem.c.CreatedDate.label('AttrCreatedDate'),
@@ -640,7 +645,8 @@ def Normalise(args):
                             raise RuntimeError("ERROR: Attribute " + sourceattrvalue['PlainTextName'] + " is multiply defined with different type or length.")
                     else:
                         sourceattrs += [{
-                            'Name':          sourceattrvalue['Attribute'],
+                            'Id':            sourceattrvalue['Attribute'],
+                            'Name':          sourceattrvalue['Name'],
                             'PlainTextName': sourceattrvalue['PlainTextName'],
                             'Description':   sourceattrvalue['Description'],
                             'Type':          attrtype,
@@ -651,7 +657,7 @@ def Normalise(args):
                             'ModifiedDate':  sourceattrvalue['AttrModifiedDate']
                         }]
 
-            merge_overwrite_or_replace(normcon, normSourceAttribute, ['Name'], sourceattrs, args.source_attributes, args.verbosity)
+            merge_overwrite_or_replace(normcon, normSourceAttribute, ['Id'], sourceattrs, args.source_attributes, args.verbosity)
             merge_overwrite_or_replace(normcon, normSourceValue, ['Source', 'Attribute'], sourceattrvalues, args.source_attributes, args.verbosity)
 
 # Tagging
@@ -797,6 +803,9 @@ def Denormalise(args):
                 normProject.c.ModifiedDate
             ])).first())
 
+        if project['NVivotoolsVersion'] != '0.2':
+            raise RuntimeError("Incompatible version of normalised file: " + project['NVivotoolsVersion'])
+
 # Users
         if args.users != 'skip':
             if args.verbosity > 0:
@@ -859,6 +868,7 @@ def Denormalise(args):
         # Read unassigned and not applicable labels from existing NVivo project record.
         nvivoproject = nvivocon.execute(select([nvivoProject.c.UnassignedLabel,
                                                 nvivoProject.c.NotApplicableLabel])).first()
+
         unassignedlabel    = nvivoproject['UnassignedLabel']
         notapplicablelabel = nvivoproject['NotApplicableLabel']
         if args.windows:
@@ -867,9 +877,6 @@ def Denormalise(args):
 
         if args.project != 'skip':
             print("Denormalising project")
-
-            if float(project['NVivotoolsVersion']) > '0.1':
-                raise RuntimeError("Incompatible version of normalised file: " + project['Version'])
 
             project['Description'] = project['Description'] or u''
             if args.windows:
@@ -892,6 +899,8 @@ def Denormalise(args):
                 res = res['Name']
                 if args.windows:
                     res = u''.join(map(lambda ch: chr(ord(ch) - 0x377), res))
+            else:
+                res = u''
             return res
 
 
@@ -1164,25 +1173,21 @@ def Denormalise(args):
                 ))
 
             valuesel = select([
-                    nvivoAttributeItem.c.Id.label('AttributeId'),
                     nvivoNewValueItem.c.Id.label('NewValueId'),
                     nvivoValueRole.c.Item2_Id.label('ExistingValueId'),
                 ]).where(and_(
-                    nvivoAttributeItem.c.Name == bindparam('Attribute'),
+                    nvivoCategoryAttributeRole.c.Item1_Id == bindparam('Attribute'),
                     nvivoCategoryAttributeRole.c.TypeId == literal_column('13'),
                     nvivoCategoryAttributeRole.c.Item2_Id == bindparam('Category')
                 )).select_from(
-                    nvivoCategoryAttributeRole.join(
-                        nvivoAttributeItem,
-                        nvivoAttributeItem.c.Id == nvivoCategoryAttributeRole.c.Item1_Id
-                ).outerjoin(
+                    nvivoCategoryAttributeRole.outerjoin(
                     nvivoNewValueRole.join(
                         nvivoNewValueItem, and_(
                         nvivoNewValueItem.c.Id == nvivoNewValueRole.c.Item2_Id,
                         nvivoNewValueItem.c.Name == bindparam('Value')
                     )), and_(
                         nvivoNewValueRole.c.TypeId == literal_column('6'),
-                        nvivoNewValueRole.c.Item1_Id == nvivoAttributeItem.c.Id
+                        nvivoNewValueRole.c.Item1_Id == nvivoCategoryAttributeRole.c.Item1_Id
                 )).outerjoin(
                     nvivoExistingValueRole.join(
                         nvivoValueRole, and_(
@@ -1191,14 +1196,14 @@ def Denormalise(args):
                         nvivoValueRole.c.Item1_Id == bindparam('Item')
                     )), and_(
                         nvivoExistingValueRole.c.TypeId == literal_column('6'),
-                        nvivoExistingValueRole.c.Item1_Id == nvivoAttributeItem.c.Id
+                        nvivoExistingValueRole.c.Item1_Id == nvivoCategoryAttributeRole.c.Item1_Id
                 )))
 
             maxvaluesel = select([
                     func.max(nvivoCountValueRole.c.Tag).label('MaxValueTag')
                 ]).where(and_(
                     nvivoCountValueRole.c.TypeId == literal_column('6'),
-                    nvivoCountValueRole.c.Item1_Id == bindparam('AttributeId')
+                    nvivoCountValueRole.c.Item1_Id == bindparam('Attribute')
                 ))
 
             missingvaluesel = select([
@@ -1218,7 +1223,7 @@ def Denormalise(args):
                             nvivoExistingValueRole.c.TypeId == literal_column('7')
                         )), and_(
                         nvivoValueRole.c.TypeId == literal_column('6'),
-                        nvivoValueRole.c.Item1_Id == bindparam('AttributeId'),
+                        nvivoValueRole.c.Item1_Id == bindparam('Attribute'),
                         nvivoExistingValueRole.c.Item1_Id == nvivoCategoryRole.c.Item1_Id
                 )))
 
@@ -1231,13 +1236,11 @@ def Denormalise(args):
             maxvaluetags = {}
             addedattributes = []
             for value in values:
-                value['PlainTextAttribute'] = value['Attribute']
                 value['PlainTextValue']     = value['Value']
                 if args.windows:
-                    value['Attribute'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), value['Attribute']))
                     value['Value']     = u''.join(map(lambda ch: chr(ord(ch) + 0x377), value['Value']))
 
-                attribute = next(attribute for attribute in attributes if attribute['Name'] == value['Attribute'])
+                attribute = next(attribute for attribute in attributes if attribute['Id'] == value['Attribute'])
                 value['Category'] = itemcategory[value['Item']]
 
                 values = [dict(row) for row in nvivocon.execute(valuesel, value)]
@@ -1246,19 +1249,19 @@ def Denormalise(args):
                     print values
                     raise RuntimeError("ERROR: Sanity check!")
                 elif len(values) == 0:  # Attribute does not exist
-                    attribute['AttributeId'] = uuid.uuid4()
+                    attribute['AttributeId'] = value['Attribute']
                     if value['Category'] not in maxattributetags.keys():
                         maxattributetags[value['Category']] = nvivocon.execute(attrsel, {'Category':value['Category']}).first()['MaxAttributeTag'] or -1
                     maxattributetags[value['Category']] += 1
                     attribute['Tag'] = maxattributetags[value['Category']]
                     attribute['Category'] = value['Category']
-                    maxvaluetags[(value['Category'], attribute['AttributeId'])] = 1
+                    maxvaluetags[(value['Category'], attribute['Id'])] = 1
 
                     if args.verbosity > 1:
-                        print("Creating " + name + " attribute '" + value['PlainTextAttribute'] + "' for category '" + itemname(value['Category']) + "' with tag: " + str(attribute['Tag']))
+                        print("Creating " + name + " attribute '" + attribute['PlainTextName'] + "' for category '" + itemname(value['Category']) + "' with tag: " + str(attribute['Tag']))
 
                     nvivocon.execute(nvivoItem.insert().values({
-                            'Id':       bindparam('AttributeId'),
+                            'Id':       bindparam('Id'),
                             'Name':     bindparam('Name'),
                             'Description': literal_column("''"),
                             'TypeId':   literal_column('20'),
@@ -1267,7 +1270,7 @@ def Denormalise(args):
                             'InheritPermissions': literal_column('1')
                         }), attribute)
                     nvivocon.execute(nvivoRole.insert().values({
-                            'Item1_Id': bindparam('AttributeId'),
+                            'Item1_Id': bindparam('Id'),
                             'Item2_Id': bindparam('Category'),
                             'TypeId':   literal_column('13'),
                             'Tag':      bindparam('Tag')
@@ -1278,7 +1281,7 @@ def Denormalise(args):
                     else:
                         datatype = 0;
                     nvivocon.execute(nvivoExtendedItem.insert().values({
-                            'Item_Id': bindparam('AttributeId'),
+                            'Item_Id': bindparam('Id'),
                             'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="DataType" Value="' + str(datatype) + '" /><Property Key="Length" Value="0" /><Property Key="EndNoteFieldTypeId" Value="-1" /></Properties>\'')
                     }), attribute)
 
@@ -1296,7 +1299,7 @@ def Denormalise(args):
                             'ColorArgb': literal_column('0')
                         }), attribute)
                     nvivocon.execute(nvivoRole.insert().values({
-                            'Item1_Id': bindparam('AttributeId'),
+                            'Item1_Id': bindparam('Id'),
                             'Item2_Id': bindparam('UnassignedValueId'),
                             'TypeId':   literal_column('6'),
                             'Tag':      literal_column('0')
@@ -1309,7 +1312,7 @@ def Denormalise(args):
                     # Save the attribute and 'Unassigned' value so that it can be filled in later
                     # for all items of the present category.
                     addedattributes.append({'Category':       attribute['Category'],
-                                            'AttributeId':    attribute['AttributeId'],
+                                            'Attribute':      attribute['Id'],
                                             'DefaultValueId': attribute['UnassignedValueId'] })
 
                     attribute['NotApplicableValueId'] = uuid.uuid4()
@@ -1325,7 +1328,7 @@ def Denormalise(args):
                             'ColorArgb': literal_column('0')
                         }), attribute)
                     nvivocon.execute(nvivoRole.insert().values({
-                            'Item1_Id': bindparam('AttributeId'),
+                            'Item1_Id': bindparam('Id'),
                             'Item2_Id': bindparam('NotApplicableValueId'),
                             'TypeId':   literal_column('6'),
                             'Tag':      literal_column('1')
@@ -1336,7 +1339,6 @@ def Denormalise(args):
                     }), attribute)
 
                     valuestatus = {
-                        'AttributeId':attribute['AttributeId'],
                         'NewValueId':None,
                         'ExistingValueId':None,
                     }
@@ -1351,7 +1353,7 @@ def Denormalise(args):
                 # Create new value if required
                 if operation == 'overwrite' or valuestatus['ExistingValueId'] is None:
                     if valuestatus['NewValueId'] is None:
-                        categoryattribute = (value['Category'], valuestatus['AttributeId'])
+                        categoryattribute = (value['Category'], value['Attribute'])
                         # First time we have met this attribute?
                         if categoryattribute not in maxvaluetags.keys():
                             maxvalues = [dict(row) for row in nvivocon.execute(maxvaluesel, valuestatus)]
@@ -1362,7 +1364,7 @@ def Denormalise(args):
                         maxvaluetags[categoryattribute] = (maxvaluetags[categoryattribute] or -1) + 1
                         value['Tag'] = maxvaluetags[categoryattribute]
                         if args.verbosity > 1:
-                            print("Creating value '" + value['PlainTextValue'] + "' for " + name + " attribute '" + value['PlainTextAttribute'] + "' with tag: "+ str(value['Tag']))
+                            print("Creating value '" + value['PlainTextValue'] + "' for " + name + " attribute '" + attribute['PlainTextName'] + "' with tag: "+ str(value['Tag']))
 
                         value['Id']  = uuid.uuid4()
                         nvivocon.execute(nvivoItem.insert().values({
@@ -1374,9 +1376,9 @@ def Denormalise(args):
                                 'ReadOnly': literal_column('0'),
                                 'InheritPermissions': literal_column('1')
                             }), value )
-                        value['AttributeId'] = valuestatus['AttributeId']
+                        value['Attribute'] = value['Attribute']
                         nvivocon.execute(nvivoRole.insert().values({
-                                'Item1_Id': bindparam('AttributeId'),
+                                'Item1_Id': bindparam('Attribute'),
                                 'Item2_Id': bindparam('Id'),
                                 'TypeId':   literal_column('6'),
                                 'Tag':      bindparam('Tag')
@@ -1393,7 +1395,7 @@ def Denormalise(args):
                         value.update(valuestatus)
                         if valuestatus['ExistingValueId'] is not None:
                             if args.verbosity > 1:
-                                print("Deassigning existing value '" + itemname(value['ExistingValueId']) + "' from " + name + " attribute '" + value['PlainTextAttribute']  + "' of " + name + " '" + itemname(value['Item']) + "'")
+                                print("Deassigning existing value '" + itemname(value['ExistingValueId']) + "' from " + name + " attribute '" + attribute['PlainTextName']  + "' of " + name + " '" + itemname(value['Item']) + "'")
                             nvivocon.execute(nvivoRole.delete(and_(
                                     nvivoRole.c.Item1_Id == bindparam('Item'),
                                     nvivoRole.c.Item2_Id == bindparam('ExistingValueId'),
@@ -1401,7 +1403,7 @@ def Denormalise(args):
                                 )), value )
 
                         if args.verbosity > 1:
-                            print("Assigning value '" + value['PlainTextValue'] + "' to " + name + " attribute '" + value['PlainTextAttribute']  + "' of " + name + " '" + itemname(value['Item']) + "'")
+                            print("Assigning value '" + value['PlainTextValue'] + "' to " + name + " attribute '" + attribute['PlainTextName']  + "' of " + name + " '" + itemname(value['Item']) + "'")
                         nvivocon.execute(nvivoRole.insert().values({
                                 'Item1_Id': bindparam('Item'),
                                 'Item2_Id': bindparam('NewValueId'),
@@ -1412,9 +1414,9 @@ def Denormalise(args):
             for addedattribute in addedattributes:
                 # Set value of undefined attribute to 'Unassigned'
                 attributes = [dict(row) for row in nvivocon.execute(missingvaluesel, addedattribute)]
+                if len(attributes) > 0 and args.verbosity > 1:
+                    print("Assigning default value '" + itemname(addedattribute['DefaultValueId']) + "' to attribute '" + itemname(addedattribute['Attribute']) + "' of " + str(len(attributes)) + " " + name + "(s).")
                 for attribute in attributes:
-                    if args.verbosity > 1:
-                        print("Assigning default value '" + itemname(addedattribute['DefaultValueId']) + "' to attribute '" + itemname(addedattribute['AttributeId']) + "' of " + name + " '" + itemname(attribute['Item']) + "'")
                     attribute.update(addedattribute)
 
                 if len(attributes) > 0:
@@ -1431,6 +1433,7 @@ def Denormalise(args):
                 print("Denormalising node attributes")
 
             attributes = [dict(row) for row in normdb.execute(select([
+                    normNodeAttribute.c.Id,
                     normNodeAttribute.c.Name,
                     normNodeAttribute.c.Description,
                     normNodeAttribute.c.Type,
@@ -1481,7 +1484,7 @@ def Denormalise(args):
                     index += 1
 
                 attributes = [dict(row) for row in nvivocon.execute(select([
-                        nvivoRole.c.Item1_Id.label('AttributeId')
+                        nvivoRole.c.Item1_Id.label('Id')
                     ]).where(and_(
                         nvivoRole.c.Item2_Id == bindparam('CategoryId'),
                         nvivoRole.c.TypeId   == literal_column('13')
@@ -1489,7 +1492,7 @@ def Denormalise(args):
                 index = 0
                 for attribute in attributes:
                     column = layout.appendChild(doc.createElement('Column'))
-                    column.setAttribute('Guid', str(attribute['AttributeId']).lower())
+                    column.setAttribute('Guid', str(attribute['Id']).lower())
                     column.setAttribute('Id',     str(index))
                     column.setAttribute('OrderId',str(index))
                     column.setAttribute('Hidden', 'false')
@@ -1866,6 +1869,7 @@ def Denormalise(args):
                 print("Denormalising source attributes")
 
             attributes = [dict(row) for row in normdb.execute(select([
+                    normSourceAttribute.c.Id,
                     normSourceAttribute.c.Name,
                     normSourceAttribute.c.Description,
                     normSourceAttribute.c.Type,
