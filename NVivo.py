@@ -29,7 +29,7 @@ import argparse
 import uuid
 import re
 import zlib
-import datetime
+from datetime import date, time, datetime
 from dateutil import parser as dateparser
 from PIL import Image
 import tempfile
@@ -38,6 +38,7 @@ from pdfminer.converter import TextConverter
 from pdfminer.layout import LAParams
 from pdfminer.pdfpage import PDFPage
 from cStringIO import StringIO
+from distutils import util
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
@@ -297,15 +298,15 @@ def Normalise(args):
             unassignedlabel    = project['UnassignedLabel']
             notapplicablelabel = project['NotApplicableLabel']
             if args.windows:
-                project['Title']       = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Title']))
+                attribute['True']       = u''.join(map(lambda ch: chr(ord(ch) - 0x377), attribute['True']))
                 project['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Description']))
                 unassignedlabel    = u''.join(map(lambda ch: chr(ord(ch) + 0x377), unassignedlabel))
                 notapplicablelabel = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicablelabel))
 
             # SQLAlchemy should probably handle this...
-            if not isinstance(project['CreatedDate'], datetime.datetime):
+            if not isinstance(project['CreatedDate'], datetime):
                 project['CreatedDate'] = dateparser.parse(project['CreatedDate'])
-            if not isinstance(project['ModifiedDate'], datetime.datetime):
+            if not isinstance(project['ModifiedDate'], datetime):
                 project['ModifiedDate'] = dateparser.parse(project['ModifiedDate'])
 
             normcon.execute(normProject.delete())
@@ -335,9 +336,9 @@ def Normalise(args):
                     nodecategory['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Name']))
                     nodecategory['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Description']))
 
-                if not isinstance(nodecategory['CreatedDate'], datetime.datetime):
+                if not isinstance(nodecategory['CreatedDate'], datetime):
                     nodecategory['CreatedDate'] = dateparser.parse(nodecategory['CreatedDate'])
-                if not isinstance(nodecategory['ModifiedDate'], datetime.datetime):
+                if not isinstance(nodecategory['ModifiedDate'], datetime):
                     nodecategory['ModifiedDate'] = dateparser.parse(nodecategory['ModifiedDate'])
 
             merge_overwrite_or_replace(normcon, normNodeCategory, ['Id'], nodecategories, args.node_categories, args.verbosity)
@@ -380,9 +381,9 @@ def Normalise(args):
                     node['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Name']))
                     node['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Description']))
 
-                if not isinstance(node['CreatedDate'], datetime.datetime):
+                if not isinstance(node['CreatedDate'], datetime):
                     node['CreatedDate'] = dateparser.parse(node['CreatedDate'])
-                if not isinstance(node['ModifiedDate'], datetime.datetime):
+                if not isinstance(node['ModifiedDate'], datetime):
                     node['ModifiedDate'] = dateparser.parse(node['ModifiedDate'])
 
             merge_overwrite_or_replace(normcon, normNode, ['Id'], nodes, args.nodes, args.verbosity)
@@ -435,13 +436,13 @@ def Normalise(args):
                 if args.windows:
                     nodeattrvalue['Attribute'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattrvalue['Attribute']))
                     nodeattrvalue['Value']     = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattrvalue['Value']))
-                if not isinstance(nodeattrvalue['AttrCreatedDate'], datetime.datetime):
+                if not isinstance(nodeattrvalue['AttrCreatedDate'], datetime):
                     nodeattrvalue['AttrCreatedDate'] = dateparser.parse(nodeattrvalue['AttrCreatedDate'])
-                if not isinstance(nodeattrvalue['AttrModifiedDate'], datetime.datetime):
+                if not isinstance(nodeattrvalue['AttrModifiedDate'], datetime):
                     nodeattrvalue['AttrModifiedDate'] = dateparser.parse(nodeattrvalue['AttrModifiedDate'])
-                if not isinstance(nodeattrvalue['CreatedDate'], datetime.datetime):
+                if not isinstance(nodeattrvalue['CreatedDate'], datetime):
                     nodeattrvalue['CreatedDate'] = dateparser.parse(nodeattrvalue['CreatedDate'])
-                if not isinstance(nodeattrvalue['ModifiedDate'], datetime.datetime):
+                if not isinstance(nodeattrvalue['ModifiedDate'], datetime):
                     nodeattrvalue['ModifiedDate'] = dateparser.parse(nodeattrvalue['ModifiedDate'])
 
                 if nodeattrvalue['Attribute'] != lastattribute:
@@ -500,9 +501,9 @@ def Normalise(args):
                     sourcecat['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Name']))
                     sourcecat['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Description']))
 
-                if not isinstance(sourcecat['CreatedDate'], datetime.datetime):
+                if not isinstance(sourcecat['CreatedDate'], datetime):
                     sourcecat['CreatedDate'] = dateparser.parse(sourcecat['CreatedDate'])
-                if not isinstance(sourcecat['ModifiedDate'], datetime.datetime):
+                if not isinstance(sourcecat['ModifiedDate'], datetime):
                     sourcecat['ModifiedDate'] = dateparser.parse(sourcecat['ModifiedDate'])
 
             merge_overwrite_or_replace(normcon, normSourceCategory, ['Id'], sourcecats, args.source_categories, args.verbosity)
@@ -563,9 +564,9 @@ def Normalise(args):
                         except Exception:
                             pass
 
-                if not isinstance(source['CreatedDate'], datetime.datetime):
+                if not isinstance(source['CreatedDate'], datetime):
                     source['CreatedDate'] = dateparser.parse(source['CreatedDate'])
-                if not isinstance(source['ModifiedDate'], datetime.datetime):
+                if not isinstance(source['ModifiedDate'], datetime):
                     source['ModifiedDate'] = dateparser.parse(source['ModifiedDate'])
 
             merge_overwrite_or_replace(normcon, normSource, ['Id'], sources, args.sources, args.verbosity)
@@ -616,13 +617,13 @@ def Normalise(args):
                 if args.windows:
                     sourceattrvalue['Attribute'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattrvalue['Attribute']))
                     sourceattrvalue['Value']     = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattrvalue['Value']))
-                if not isinstance(sourceattrvalue['AttrCreatedDate'], datetime.datetime):
+                if not isinstance(sourceattrvalue['AttrCreatedDate'], datetime):
                     sourceattrvalue['AttrCreatedDate'] = dateparser.parse(sourceattrvalue['AttrCreatedDate'])
-                if not isinstance(sourceattrvalue['AttrModifiedDate'], datetime.datetime):
+                if not isinstance(sourceattrvalue['AttrModifiedDate'], datetime):
                     sourceattrvalue['AttrModifiedDate'] = dateparser.parse(sourceattrvalue['AttrModifiedDate'])
-                if not isinstance(sourceattrvalue['CreatedDate'], datetime.datetime):
+                if not isinstance(sourceattrvalue['CreatedDate'], datetime):
                     sourceattrvalue['CreatedDate'] = dateparser.parse(sourceattrvalue['CreatedDate'])
-                if not isinstance(sourceattrvalue['ModifiedDate'], datetime.datetime):
+                if not isinstance(sourceattrvalue['ModifiedDate'], datetime):
                     sourceattrvalue['ModifiedDate'] = dateparser.parse(sourceattrvalue['ModifiedDate'])
 
                 if sourceattrvalue['Attribute'] != lastattribute:
@@ -692,9 +693,9 @@ def Normalise(args):
                     if tagging['LengthY'] > 0:
                         tagging['Fragment'] += ':' + str(tagging['StartY'] + tagging['LengthY'] - 1)
 
-                if not isinstance(tagging['CreatedDate'], datetime.datetime):
+                if not isinstance(tagging['CreatedDate'], datetime):
                     tagging['CreatedDate'] = dateparser.parse(tagging['CreatedDate'])
-                if not isinstance(tagging['ModifiedDate'], datetime.datetime):
+                if not isinstance(tagging['ModifiedDate'], datetime):
                     tagging['ModifiedDate'] = dateparser.parse(tagging['ModifiedDate'])
 
             merge_overwrite_or_replace(normcon, normTagging, ['Id'], taggings, args.taggings, args.verbosity)
@@ -726,9 +727,9 @@ def Normalise(args):
                     if annotation['LengthY'] > 0:
                         annotation['Fragment'] += ':' + str(annotation['StartY'] + annotation['LengthY'] - 1)
 
-                if not isinstance(annotation['CreatedDate'], datetime.datetime):
+                if not isinstance(annotation['CreatedDate'], datetime):
                     annotation['CreatedDate'] = dateparser.parse(annotation['CreatedDate'])
-                if not isinstance(annotation['ModifiedDate'], datetime.datetime):
+                if not isinstance(annotation['ModifiedDate'], datetime):
                     annotation['ModifiedDate'] = dateparser.parse(annotation['ModifiedDate'])
 
             merge_overwrite_or_replace(normcon, normTagging, ['Id'], annotations, args.annotations, args.verbosity)
@@ -1236,11 +1237,32 @@ def Denormalise(args):
             maxvaluetags = {}
             addedattributes = []
             for value in values:
-                value['PlainTextValue']     = value['Value']
-                if args.windows:
-                    value['Value']     = u''.join(map(lambda ch: chr(ord(ch) + 0x377), value['Value']))
 
                 attribute = next(attribute for attribute in attributes if attribute['Id'] == value['Attribute'])
+                if attribute['Type'] in DataTypeName.values():
+                    datatype = DataTypeName.keys()[DataTypeName.values().index(attribute['Type'])]
+                else:
+                    datatype = 0;
+
+                if attribute['Type'] == 'Boolean':
+                    value['Value'] = u'True' if util.strtobool(value['Value']) else u'False'
+                elif attribute['Type'] == 'Datetime':
+                    if args.mac:
+                        value['Value'] = unicode(date.strftime(dateparser.parse(value['Value']), '%Y-%m-%dT%H:%M:%S'))
+                    else:
+                        value['Value'] = unicode(date.strftime(dateparser.parse(value['Value']), '%Y-%m-%d %H:%M:%SZ'))
+                elif attribute['Type'] == 'Date':
+                    if args.mac:
+                        value['Value'] = unicode(date.strftime(dateparser.parse(value['Value']), '%Y-%m-%d'))
+                    else:
+                        value['Value'] = unicode(date.strftime(dateparser.parse(value['Value']), '%Y-%m-%d 00:00:00Z'))
+                elif attribute['Type'] == 'Time':
+                    value['Value'] = unicode(time.strftime(dateparser.parse(value['Value']).time(), '%H:%M:%S'))
+
+                value['PlainTextValue'] = value['Value']
+                if args.windows:
+                    value['Value'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), value['Value']))
+
                 value['Category'] = itemcategory[value['Item']]
 
                 values = [dict(row) for row in nvivocon.execute(valuesel, value)]
@@ -1248,7 +1270,14 @@ def Denormalise(args):
                     print value
                     print values
                     raise RuntimeError("ERROR: Sanity check!")
+                elif len(values) == 1:  # Attribute exists
+                    valuestatus = dict(values[0])
                 elif len(values) == 0:  # Attribute does not exist
+                    valuestatus = {
+                        'NewValueId':None,
+                        'ExistingValueId':None,
+                    }
+
                     attribute['AttributeId'] = value['Attribute']
                     if value['Category'] not in maxattributetags.keys():
                         maxattributetags[value['Category']] = nvivocon.execute(attrsel, {'Category':value['Category']}).first()['MaxAttributeTag'] or -1
@@ -1275,11 +1304,6 @@ def Denormalise(args):
                             'TypeId':   literal_column('13'),
                             'Tag':      bindparam('Tag')
                         }), attribute)
-
-                    if attribute['Type'] in DataTypeName.values():
-                        datatype = DataTypeName.keys()[DataTypeName.values().index(attribute['Type'])]
-                    else:
-                        datatype = 0;
                     nvivocon.execute(nvivoExtendedItem.insert().values({
                             'Item_Id': bindparam('Id'),
                             'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="DataType" Value="' + str(datatype) + '" /><Property Key="Length" Value="0" /><Property Key="EndNoteFieldTypeId" Value="-1" /></Properties>\'')
@@ -1338,17 +1362,70 @@ def Denormalise(args):
                             'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="False"/></Properties>\'')
                     }), attribute)
 
-                    valuestatus = {
-                        'NewValueId':None,
-                        'ExistingValueId':None,
-                    }
+                    # Boolean values also need True and False values to be created
+                    if attribute['Type'] == 'Boolean':
+                        attribute['FalseValueId'] = uuid.uuid4()
+                        attribute['False']        = u'False'
+                        attribute['TrueValueId']  = uuid.uuid4()
+                        attribute['True']         = u'True'
+                        if args.windows:
+                            attribute['True']  = u''.join(map(lambda ch: chr(ord(ch) + 0x377), attribute['True']))
+                            attribute['False'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), attribute['False']))
+
+                        nvivocon.execute(nvivoItem.insert().values({
+                                'Id':       bindparam('FalseValueId'),
+                                'Name':     bindparam('False'),
+                                'Description': literal_column("''"),
+                                'TypeId':   literal_column('21'),
+                                'System':   literal_column('1'),
+                                'ReadOnly': literal_column('0'),
+                                'InheritPermissions': literal_column('1'),
+                                'ColorArgb': literal_column('0')
+                            }), attribute)
+                        nvivocon.execute(nvivoRole.insert().values({
+                                'Item1_Id': bindparam('Id'),
+                                'Item2_Id': bindparam('FalseValueId'),
+                                'TypeId':   literal_column('6'),
+                                'Tag':      literal_column('2')
+                            }), attribute )
+                        nvivocon.execute(nvivoExtendedItem.insert().values({
+                                'Item_Id': bindparam('FalseValueId'),
+                                'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="False"/></Properties>\'')
+                        }), attribute)
+
+
+                        nvivocon.execute(nvivoItem.insert().values({
+                                'Id':       bindparam('TrueValueId'),
+                                'Name':     bindparam('True'),
+                                'Description': literal_column("''"),
+                                'TypeId':   literal_column('21'),
+                                'System':   literal_column('1'),
+                                'ReadOnly': literal_column('0'),
+                                'InheritPermissions': literal_column('1'),
+                                'ColorArgb': literal_column('0')
+                            }), attribute)
+                        nvivocon.execute(nvivoRole.insert().values({
+                                'Item1_Id': bindparam('Id'),
+                                'Item2_Id': bindparam('TrueValueId'),
+                                'TypeId':   literal_column('6'),
+                                'Tag':      literal_column('2')
+                            }), attribute )
+                        nvivocon.execute(nvivoExtendedItem.insert().values({
+                                'Item_Id': bindparam('TrueValueId'),
+                                'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="False"/></Properties>\'')
+                        }), attribute)
+
+                        # Assign boolean value to one of the two possibilities
+                        if util.strtobool(value['PlainTextValue']):
+                            valuestatus['NewValueId'] = attribute['TrueValueId']
+                        else:
+                            valuestatus['NewValueId'] = attribute['FalseValueId']
+
                     # Catch 'Unassigned' and 'Not Applicable' values manually
                     if value['Value'] == unassignedlabel:
                         valuestatus['NewValueId'] = attribute['UnassignedValueId']
                     elif value['Value'] == notapplicablelabel:
                         valuestatus['NewValueId'] = attribute['NotApplicableValueId']
-                else:
-                    valuestatus = dict(values[0])
 
                 # Create new value if required
                 if operation == 'overwrite' or valuestatus['ExistingValueId'] is None:
