@@ -142,11 +142,11 @@ try:
             elif attributeType == 'Decimal':
                 float(attributeValue)
             elif attributeType == 'Datetime':
-                attributeValue = date.strftime(dateparser.parse(attributeValue), '%Y-%m-%d %H:%M:%SZ')
+                attributeValue = datetime.isoformat(dateparser.parse(attributeValue))
             elif attributeType == 'Date':
-                attributeValue = date.strftime(dateparser.parse(attributeValue), '%Y-%m-%d 00:00:00Z')
+                attributeValue = date.isoformat(dateparser.parse(attributeValue))
             elif attributeType == 'Time':
-                attributeValue = time.strftime(dateparser.parse(attributeValue).time(), '%H:%M:%S')
+                attributeValue = time.isoformat(dateparser.parse(attributeValue).time())
             elif attributeType == 'Boolean':
                 attributeValue = str(bool(util.strtobool(attributeValue)))
             else:
