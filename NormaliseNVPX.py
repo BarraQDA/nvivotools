@@ -76,9 +76,6 @@ tmpoutfilename = tempfile.mktemp()
 if args.outfilename is None:
     args.outfilename = args.infile.name.rsplit('.',1)[0] + '.norm'
 
-# Need to strip path for Wooey script to work
-args.outfilename = os.path.basename(args.outfilename)
-
 import socket
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind(("",0))
