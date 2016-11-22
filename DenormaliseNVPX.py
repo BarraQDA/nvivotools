@@ -46,10 +46,14 @@ parser.add_argument('-t', '--taggings', choices=["skip", "merge"], default="merg
 parser.add_argument('-a', '--annotations', choices=["skip", "merge"], default="merge",
                     help='Annotation action.')
 
+parser.add_argument('-b', '--base', dest='basefile', type=argparse.FileType('rb'), nargs='?',
+                    help="Base NVPX file to insert into")
+
 parser.add_argument('infile', type=argparse.FileType('rb'),
                     help="Input normalised SQLite file (extension .norm)")
-parser.add_argument('outfile', type=argparse.FileType('rb'),
-                    help="NVivo for Mac file to insert into")
+parser.add_argument('outfilename', metavar='outfile', type=str, nargs='?',
+                    help="Output NVPX file")
+
 
 args = parser.parse_args()
 
@@ -71,10 +75,16 @@ tmpinfileptr.write(args.infile.read())
 args.infile.close()
 tmpinfileptr.close()
 
+if args.outfilename is None:
+    args.outfilename = args.infile.name.rsplit('.',1)[0] + '.nvpx'
+
+if args.basefile is None:
+    args.basefile = file(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + ('emptyNVivo10Mac.nvpx' if args.nvivoversion == '10' else 'emptyNVivo11Mac.nvpx'), 'rb')
+
 tmpoutfilename = tempfile.mktemp()
 tmpoutfileptr  = file(tmpoutfilename, 'wb')
-tmpoutfileptr.write(args.outfile.read())
-args.outfile.close()
+tmpoutfileptr.write(args.basefile.read())
+args.basefile.close()
 tmpoutfileptr.close()
 
 import socket
@@ -96,5 +106,5 @@ args.outdb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' 
 
 NVivo.Denormalise(args)
 
-shutil.move(tmpoutfilename, os.path.basename(args.outfile.name))
+shutil.move(tmpoutfilename, args.outfilename)
 os.remove(tmpinfilename)
