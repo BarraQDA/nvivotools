@@ -98,5 +98,5 @@ args.outdb = 'sqlite:///' + tmpoutfilename
 
 NVivo.Normalise(args)
 
-shutil.move(tmpoutfilename, args.outfilename)
+shutil.move(tmpoutfilename, os.path.basename(args.outfilename))
 os.remove(tmpinfilename)
