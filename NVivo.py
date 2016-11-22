@@ -298,7 +298,7 @@ def Normalise(args):
             unassignedlabel    = project['UnassignedLabel']
             notapplicablelabel = project['NotApplicableLabel']
             if args.windows:
-                attribute['True']       = u''.join(map(lambda ch: chr(ord(ch) - 0x377), attribute['True']))
+                project['Title']       = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Title']))
                 project['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Description']))
                 unassignedlabel    = u''.join(map(lambda ch: chr(ord(ch) + 0x377), unassignedlabel))
                 notapplicablelabel = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicablelabel))
@@ -1245,7 +1245,10 @@ def Denormalise(args):
                     datatype = 0;
 
                 if attribute['Type'] == 'Boolean':
-                    value['Value'] = u'True' if util.strtobool(value['Value']) else u'False'
+                    if util.strtobool(value['Value']):
+                        value['Value'] = u'1' if args.mac else u'True'
+                    else:
+                        value['Value'] = u'0' if args.mac else u'False'
                 elif attribute['Type'] == 'Datetime':
                     if args.mac:
                         value['Value'] = unicode(date.strftime(dateparser.parse(value['Value']), '%Y-%m-%dT%H:%M:%S'))
@@ -1365,9 +1368,9 @@ def Denormalise(args):
                     # Boolean values also need True and False values to be created
                     if attribute['Type'] == 'Boolean':
                         attribute['FalseValueId'] = uuid.uuid4()
-                        attribute['False']        = u'False'
+                        attribute['False']        = u'0' if args.mac else u'False'
                         attribute['TrueValueId']  = uuid.uuid4()
-                        attribute['True']         = u'True'
+                        attribute['True']         = u'1' if args.mac else u'True'
                         if args.windows:
                             attribute['True']  = u''.join(map(lambda ch: chr(ord(ch) + 0x377), attribute['True']))
                             attribute['False'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), attribute['False']))
@@ -1408,7 +1411,7 @@ def Denormalise(args):
                                 'Item1_Id': bindparam('Id'),
                                 'Item2_Id': bindparam('TrueValueId'),
                                 'TypeId':   literal_column('6'),
-                                'Tag':      literal_column('2')
+                                'Tag':      literal_column('3')
                             }), attribute )
                         nvivocon.execute(nvivoExtendedItem.insert().values({
                                 'Item_Id': bindparam('TrueValueId'),
@@ -1713,20 +1716,23 @@ def Denormalise(args):
                         raise RuntimeError("Can't find unoconv on path. Please refer to the NVivotools README file.")
 
                 if source['PlainText'] is None:
-                    # Use unoconv to convert to text
-                    p = Popen(massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
-                    err = p.stderr.read()
-                    if err != '':
-                        raise RuntimeError(err)
+                    if source['ObjectTypeName'] == 'TXT':
+                        source['PlainText'] = codecs.open(tmpfilename + '.TXT', 'r', 'utf-8-sig').read()
+                    else:
+                        # Use unoconv to convert to text
+                        p = Popen(massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
+                        err = p.stderr.read()
+                        if err != '':
+                            raise RuntimeError(err)
 
-                    # Read text output from unocode, then massage it by first dropping a final line
-                    # terminator, then changing to Windows (CRLF) or Mac (LFLF) line terminators
-                    source['PlainText'] = codecs.open(tmpfilename + '.txt', 'r', 'utf-8-sig').read()
+                        # Read text output from unocode, then massage it by first dropping a final line
+                        # terminator, then changing to Windows (CRLF) or Mac (LFLF) line terminators
+                        source['PlainText'] = codecs.open(tmpfilename + '.txt', 'r', 'utf-8-sig').read()
+                        os.remove(tmpfilename + '.txt')
+
                     if source['PlainText'].endswith('\n'):
                         source['PlainText'] = source['PlainText'][:-1]
                     source['PlainText'] = source['PlainText'].replace('\n', '\n\n' if args.mac else '\r\n')
-
-                    os.remove(tmpfilename + '.txt')
 
                 # Convert object to DOC/ODT if isn't already
                 if source['ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
