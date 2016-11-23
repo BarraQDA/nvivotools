@@ -49,10 +49,13 @@ parser.add_argument('-t', '--taggings', choices=["skip", "merge"], default="merg
 parser.add_argument('-a', '--annotations', choices=["skip", "merge"], default="merge",
                     help='Annotation action.')
 
+parser.add_argument('-b', '--base', dest='basefile', type=argparse.FileType('rb'), nargs='?',
+                    help="Base NVP file to insert into")
+
 parser.add_argument('infile', type=argparse.FileType('rb'),
-                    help="Input normalised SQLite file (extension .norm)")
-parser.add_argument('outfile', type=argparse.FileType('rb'),
-                    help="NVivo for Mac file to insert into")
+                    help="Input normalised SQLite (.norm) file")
+parser.add_argument('outfilename', metavar='outfile', type=str, nargs='?',
+                    help="Output NVP file")
 
 args = parser.parse_args()
 
@@ -74,16 +77,19 @@ tmpinfileptr.write(args.infile.read())
 args.infile.close()
 tmpinfileptr.close()
 
+if args.basefile is None:
+    args.basefile = file(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + ('emptyNVivo10Win.nvp' if args.nvivoversion == '10' else 'emptyNVivo11Win.nvp'), 'rb')
+
 tmpoutfilename = tempfile.mktemp()
 tmpoutfileptr  = file(tmpoutfilename, 'wb')
-tmpoutfileptr.write(args.outfile.read())
-args.outfile.close()
+tmpoutfileptr.write(args.basefile.read())
+args.basefile.close()
 tmpoutfileptr.close()
 
-curpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'Windows' + os.path.sep
+helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'Windows' + os.path.sep
 
 if args.instance is None:
-    proc = Popen([curpath + 'mssqlInstance.bat'], stdout=PIPE)
+    proc = Popen([helperpath + 'mssqlInstance.bat'], stdout=PIPE)
     args.instance = proc.stdout.readline()[0:-len(os.linesep)]
     if args.verbosity > 0:
         print("Using MSSQL instance: " + args.instance)
@@ -91,7 +97,7 @@ if args.instance is None:
 # Get reasonably distinct yet recognisable DB name
 dbname = 'nt' + str(os.getpid())
 
-proc = Popen([curpath + 'mssqlAttach.bat', tmpoutfilename, dbname, args.instance])
+proc = Popen([helperpath + 'mssqlAttach.bat', tmpoutfilename, dbname, args.instance])
 proc.wait()
 if args.verbosity > 0:
     print("Attached database " + dbname)
@@ -106,10 +112,10 @@ except:
     raise
 
 finally:
-    proc = Popen([curpath + 'mssqlSave.bat', tmpoutfilename, dbname, args.instance])
+    proc = Popen([helperpath + 'mssqlSave.bat', tmpoutfilename, dbname, args.instance])
     proc.wait()
     if args.verbosity > 0:
         print("Saved database " + dbname)
 
-    shutil.move(tmpoutfilename, args.outfile.name)
+    shutil.move(tmpoutfilename, args.outfilename)
     os.remove(tmpinfilename)
