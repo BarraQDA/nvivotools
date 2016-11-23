@@ -57,7 +57,7 @@ echo "Hello world" > source.txt
 
 $dir/editSource.py --name "Source with attributes" --description "Source in first category testing attributes" --category "Source cat one" --attribute "String attribute:string value" --attribute "Integer attribute:17" --attribute "Decimal attribute:3.1415" --attribute "DateTime attribute:2000-01-01 00:01" --attribute "Date attribute:10 Dec 1967" --attribute "Time attribute:16:20" --attribute "Boolean attribute:false" --source source.txt $1
 
-# $dir/editTagging.py --node "Third level node" --source "Source with attributes" --fragment "0:4" $1
+$dir/editTagging.py --node "Third level node" --source "Source with attributes" --fragment "0:4" $1
 
 
 
