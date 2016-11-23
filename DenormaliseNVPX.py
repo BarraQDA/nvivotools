@@ -87,6 +87,7 @@ tmpoutfileptr.write(args.basefile.read())
 args.basefile.close()
 tmpoutfileptr.close()
 
+# Find a free sock for SQL Anywhere server to bind to
 import socket
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.bind(("",0))
