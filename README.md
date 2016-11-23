@@ -14,19 +14,19 @@ The core of NVivotools its ability to convert qualitative research data (sources
 
 3. Interface with the rest of your IT world. Make NVivo part of your tookit, not your whole world.
 
-## Background
+The core of NVivotools is its ability to make sense of NVivo's proprietary file structures. These files are, in face, relational database. The Windows version uses Microsoft SQL Server while the Mac version uses SQL Anywhere. NVivotools is able to minimise the difficulties of working with different database engines by using [SQLAlchemy](http://www.sqlalchemy.org/).
 
-NVivo stores its projects in the form of a relational database. The Windows version uses Microsoft SQL Server while the Mac version uses SQL Anywhere. NVivotools currently only works with Microsoft Windows NVivo files though a Mac version should be fairly simple to write using [sqlalchemy-sqlany](https://github.com/sqlanywhere/sqlalchemy-sqlany).
+## Installation
 
-NVivo files for Windows (with extension .nvp) are simply Microsoft SQL Server files. NVivotools works with them just as NVivo does, by attaching them to SQL Server. Unlike NVivo, NVivotools uses something called [Tabular Data Stream](https://en.wikipedia.org/wiki/Tabular_Data_Stream) (TDS) to communicate with SQL server. This approach has the advantage of abstracting the database access so that NVivotools does not need to know too much about the messy details of SQL Server. It does, however, mean that SQL Server needs to be set up to allow TDS connections.
+The most involved part of the installation concerns the database engine, and is described here in some detail.
 
-I hope this file will be comprehensible not only to those who know more than I do about Windows, SQL Server and the like, but to relative newcomers. I assume that these operations are being performed on a computer with NVivo 10 already installed, but very little else. I also give some pointers for working with NVivo 11.
+### Windows
 
-## Setting up SQL Server
+NVivo files for Windows (with extension .nvp) are simply Microsoft SQL Server files. NVivotools works with them just as NVivo does, by attaching them to SQL Server. Unlike NVivo, NVivotools (or more precisely SQLAlchemy) uses something called [Tabular Data Stream](https://en.wikipedia.org/wiki/Tabular_Data_Stream) (TDS) to communicate with SQL server. This approach has the advantage of abstracting the database access so that NVivotools does not need to know too much about the messy details of SQL Server. It does, however, mean that SQL Server needs to be set up to allow TDS connections.
 
-This is the most difficult part of the process, so I describe it in the greatest detail.
+I hope this file will be comprehensible not only to those who know more than I do about Windows, SQL Server and the like, but to relative newcomers.
 
-### Install Microsoft SQL Server
+#### Install Microsoft SQL Server
 
 Start by accepting that SQL Server, like pretty much everything Microsoft creates, is awful. Each version differs, often in subtle and undocumented ways, that make it incompatible with previous versions. Installation and configuration often require a GUI, making them impossible (or very difficult) to automate. However, SQL Server does have many enthusiastic users who write prolifically about their experiences. So if you have trouble with any of this, the first place to look for help is on the web by googling the text of any error message you need to investigate or concise description of a problem you encounter.
 
@@ -86,9 +86,19 @@ Here are a few links that describe other ways of configuring the SQL Server auth
 - [https://blogs.technet.microsoft.com/sqlman/2011/06/14/tips-tricks-you-have-lost-access-to-sql-server-now-what/](https://blogs.technet.microsoft.com/sqlman/2011/06/14/tips-tricks-you-have-lost-access-to-sql-server-now-what/)
 - [https://www.mssqltips.com/sqlservertip/2538/enabling-dedicated-administrator-connection-in-sql-server-2008-express-edition/](https://www.mssqltips.com/sqlservertip/2538/enabling-dedicated-administrator-connection-in-sql-server-2008-express-edition/)
 
+### Mac
+
+If you have NVivo installed, then NVivotools will automatically use the instance of SQL Anywhere that is bundled with it.  Otherwise, read the following section for instructions on installing SQL Anywhere.
+
+
+
+### Linux and other operating systems
+
+Since NVivo for Mac (`.nvpx`) files are actually SQL Anywhere databases, they can be accessed on any computer on which SQL Anywhere can be installed. This includes Linux (for x86, x64 and ARM), Mac and Windows, plus Solaris SPARC and x64, HP-UX Itanium and IBM AIX.  The [Developer Edition](https://www.sap.com/cmp/syb/crm-xm15-dwn-dt015/index.html) is available free of charge (subject to licence conditions). Simply download and install it, and you are ready for the next step.
+
 ## Install Python
 
-Although I have done my best to make NVivotools work with both Python versions 2 and 3, one of the libraries on which it depends (PDFMiner) currently only supports Python version 2. So for now you will need to install Python 2.
+Although I have done my best to make NVivotools work with both Python versions 2 and 3, one of the libraries on which it depends [PDFMiner](https://github.com/euske/pdfminer) currently only supports Python version 2. So for now you will need to install Python 2.
 
 ### Windows
 
@@ -96,21 +106,19 @@ Install a recent version of Python 2 from [Python Releases for Windows](https://
 
 ### Linux
 
-Use your distro package manager to install Python 2.
+Use your usual package manager to install Python 2.7.
 
 ### Mac
 
-The instructions below have been tested on a fresh Mac OSX version 10.11 (El Capitan). They should work with little or no changes on other versions.
-
-Although OSX ships with a version of Python, it seems to be unable to work correctly with the SQLAlchemy package on which NVivotools depends (more precisely - if anyone knows enough about this stuff to figure it out - it fails to load the dbcapi). There is some suspicion that this problem may be related to OSX's System Integrity Protection (SIP), which was only introduced with El Capitan. It is therefore possible that the following section may not be required on earlier versions of OSX (or if you disable SIP, which we do not recommend).
-
-Instead of using the shipped version of Python, install a recent version of Python 2 from [Python Releases for Mac OS X](https://www.python.org/downloads/mac-osx/). Note that Mac releases of Python appear to lack the `dateutils` module, so you will need to install that one explicitly:
+install a recent version of Python 2 from [Python Releases for Mac OS X](https://www.python.org/downloads/mac-osx/). Since Mac releases of Python appear to lack the `dateutils` module included on other versions, you need to install it explicitly:
 
     pip install --user dateutils
 
-## Installing Python libraries
+Sidenote: Although OSX ships with a version of Python, this version seems to be unable to work correctly with the SQLAlchemy package on which NVivotools depends (more precisely - if anyone knows enough about this stuff to figure it out - it fails to load the `dbcapi`). There is some suspicion that this problem may be related to OSX's System Integrity Protection (SIP), which was only introduced with El Capitan. It is therefore possible that the following section may not be required on earlier versions of OSX (or if you disable SIP, which we do not recommend).
 
-You should use 'pip', even under Linux, to be sure of having up-to-date versions of the libraries. The following commands install the libraries only for the current user, which is the recommended approach at least during the testing phases.
+## Install Python libraries
+
+You should use `pip`, even under Linux, to be sure of having up-to-date versions of the libraries. The following commands install the libraries only for the current user, which is the recommended approach, at least during the testing phases. If you know what you are doing, and have superuser privileges, you may drop `--user` from the following.
 
 Using a command window, first make sure you have an up-to-date version of pip:
 
@@ -132,44 +140,44 @@ User [abers](https://github.com/abers) [found](https:/sre/github.com/BarraQDA/nv
 
 ## Optional extras
 
-In order to convert data among various formats, NVivotools uses a number of helper applications. Depending on the use you plan to make of NVivotools you may or may not need these applications.
-
-These packages are typically trivial to install on Linux systems, but require a little more work under Windows.
+In order to convert data among various formats, NVivotools uses a number of helper applications. If you plan to use NVivotools to load sources into your NVivo projects, you will need the following:
 
 ### LibreOffice/OpenOffice and unoconv
 
-If you are going to import textual data into NVivo, you will need either [LibreOffice](http://www.libreoffice.org) or [OpenOffice](http://www.openoffice.org), plus the [unoconv](http://dag.wiee.rs/home-made/unoconv/) package.
+If you are going to import textual data into NVivo, you will need either [`LibreOffice`](http://www.libreoffice.org) or [`OpenOffice`](http://www.openoffice.org).  Although NVivotools already includes [`unoconv`](http://dag.wiee.rs/home-made/unoconv/), there are some incompatibility between the version of Python (or more precisely the `pyuno` library shipped with LibreOffice/OpenOffice) which may force you to either install an older version of LibreOffice (this appears to be the case on Mac) or a different version of `unoconv` (this seems to happen under Linux).
 
 ### Linux
 
-Simply install the packages using your usual package manager, whether a GUI like `synaptic` on Ubuntu, or command line such as `apt-get` on Debian-based systems.
+Use your usual package manater to install one of `LibreOffice` or `OpenOffice`, plus `unoconv`.  The distribution should take care of Python compatibility issues by installing Python 3 if required.
 
 ### Windows
 
-1. Install one of [LibreOffice](http://www.libreoffice.org) or [OpenOffice](http://www.openoffice.org) by following the links from the website.
-
-2. Download [unoconv](http://dag.wiee.rs/home-made/unoconv/) from its [github release](https://github.com/dagwieers/unoconv/archive/0.7.zip). From this zip file, extract `unoconv-0.7/unoconv` and copy it to the folder where the NVivotools scripts.
+Install one of [LibreOffice](http://www.libreoffice.org) or [OpenOffice](http://www.openoffice.org) by following the links from the website.  The version of `unoconv` shipped with NVivotools seems to work fine under Windows.
 
 ### Mac
 
-According to [this report](https://github.com/dagwieers/unoconv/issues/263#issuecomment-183237795) on Mac OSX you may have to install an [older version](https://downloadarchive.documentfoundation.org/libreoffice/old/4.2.5.2/mac/x86_64/LibreOffice_4.2.5.2_MacOS_x86-64.dmg) of LibreOffice in order for unoconv to work.
+According to [this report](https://github.com/dagwieers/unoconv/issues/263#issuecomment-183237795) you need to install an [older version of LibreOffice](https://downloadarchive.documentfoundation.org/libreoffice/old/4.2.5.2/mac/x86_64/LibreOffice_4.2.5.2_MacOS_x86-64.dmg) in order for `unoconv` to work.
 
-`unoconv` should be installable using `pip`:
+## Use
 
-    pip install --user unoconv
+The core of NVivotools is its ability to transform data into and out of NVivo's proprietary formats.  A number of scripts are provided for use in different operating system environments and provide different degrees of control over the process.  All of the scripts have a basic usage guide which can be seen by calling them with no argument.
 
-and ensure that unoconv is on your path.
+The most generic scripts are [`NormaliseDB.py`](NormaliseDB.py) and [`DenormaliseDB.py`](DenormaliseDB.py), which take an input and output descriptor (in sqlalchemy format, eg `sqlite:///filename.db` or `mssql+pymssql://user:password@sqlservername/database`), and convert the former to the latter. However most users are likely to prefer to use dedicated scripts for converting NVivo for Windows (`.nvp`) or for Mac (`.nvpx`) files.
 
-## And you are ready to go
+### Windows
 
-Until I write a GUI front end for NVivotools, you'll need to use a command line. The main work is done in the two Python scripts [`NormaliseDB.py`](NormaliseDB.py) and [`DenormaliseDB.py`](DenormaliseDB.py), together with the module [`NVivo.py`](NVivo.py) and included script [`DataTypes.py`](DataTypes.py)  These scripts take two arguments (in sqlalchemy format, eg `sqlite:///filename.db` or `mssql+pymssql://user:password@sqlservername/database`) and convert the former to the latter. A useful switch is `-w`/`--windows`, which instructs the scripts to convert certain text fields to or from a strangely garbled format that NVivo for Windows (but not for Mac) uses.
+Two scripts are provided specifically for Windows: [`NormaliseNVP.py`](NormaliseNVP.py) and [`DenormaliseNVP.py`](DenormaliseNVP.py).  These two scripts transform an NVivo project from an `.nvp` file into, and out of, a normalised project (`.norm`) file respectively.
 
-Before you can use these scripts you'll need to get your NVivo file attached to an instance of Microsoft SQL Server. The helper batch scripts in the subdirectory 'Windows' should be of some help. You'll need to put both directories into your PATH to make them work.
+### Mac and Linux
 
-- [`attach.bat`](Windows/attach.bat) attaches a file to an SQL Server instance and allows access to the user 'nvivotools' with password 'nvivotools'. It takes as its first argument the name of the file to attach, a second optional argument is the name to assign the database (the default is 'nvivo') and the third is the name of the SQL Server instance to use (default QSRNVIVO10).
-- [`save.bat`](Windows/save.bat) drops a database and saves it to the given filename. It takes the same arguments as attach.bat  WARNING: This script will overwrite the file if it already exists. Make a backup and/or use a different filename.
-- [`list.bat`](Windows/list.bat) lists databases on a given SQL Server instance.
-- [`drop.bat`](Windows/drop.bat) drops a database without saving it.
-- [`create.bat`](Windows/create.bat) creates an empty database.
-- [`normalise.bat`](Windows/normalise.bat)/[`denormalise.bat`](Windows/denormalise.bat) put the whole lot together. They take two arguments: an NVivo filename and a SQLite filename (respectively in the case of normalise and in the opposite order in the case of denormalise) and call the other scripts to make everything happen.
+The scripts [`NormaliseNVPX.sh`](NormaliseNVPX.sh) and [`DenormaliseNVPX.sh`](DenormaliseNVPX.sh) transform an NVivo project from an `.nvpx` file into, and out of, a normalised project (`.norm`) file respectively.  Note that you need to call these `sh` scripts rather than the equivalently named Python scripts - this is because SQLAnywhere requires certain environment variables to be set before any database work can be done.
 
+## What can you do now?
+
+Once your research data is freed from the clutches of NVivo, you are limited only by your imagination! Here are some that come to mind:
+
+1. Load data into your project. Use scripts including [`EditProject.py`](EditProject.py), [`EditNode.py`](EditNode.py) and so forth to build your project. It's much less tiresome and error-prone than NVivo's GUI, you can also repeat the process as many times as you need to get it right.
+
+2. Extract data from your project. Coming soon: scripts to do this for you.
+
+3. Automate your coding. See the script [`textblobExampleCode.py`](textblobExampleCode.py) for a simple example of the use of Python's Natural Language Toolkit to produce nodes and code sources at those nodes. This [blog entry](http://www.sosciso.de/en/2016/nvivotools/) shows the result of applying the script to NVivo's sample project.
