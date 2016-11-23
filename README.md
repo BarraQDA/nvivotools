@@ -176,7 +176,7 @@ The scripts [`NormaliseNVPX.sh`](NormaliseNVPX.sh) and [`DenormaliseNVPX.sh`](De
 
 Once your research data is freed from the clutches of NVivo, you are limited only by your imagination! Here are some that come to mind:
 
-1. Load data into your project. Use scripts including [`EditProject.py`](EditProject.py), [`EditNode.py`](EditNode.py) and so forth to build your project. It's much less tiresome and error-prone than NVivo's GUI, you can also repeat the process as many times as you need to get it right.
+1. Load data into your project. Use scripts including [`editProject.py`](editProject.py), [`editNode.py`](editNode.py) and so forth to build your project. It's much less tiresome and error-prone than NVivo's GUI, you can also repeat the process as many times as you need to get it right.
 
 2. Extract data from your project. Coming soon: scripts to do this for you.
 
