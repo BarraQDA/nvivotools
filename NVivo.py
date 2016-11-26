@@ -432,10 +432,10 @@ def Normalise(args):
             lastattribute = None
             nodeattrs = []
             for nodeattrvalue in nodeattrvalues:
-                nodeattrvalue['PlainTextName'] = nodeattrvalue['Attribute']
+                nodeattrvalue['PlainTextName'] = nodeattrvalue['Name']
                 if args.windows:
-                    nodeattrvalue['Attribute'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattrvalue['Attribute']))
-                    nodeattrvalue['Value']     = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattrvalue['Value']))
+                    nodeattrvalue['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattrvalue['Name']))
+                    nodeattrvalue['Value'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodeattrvalue['Value']))
                 if not isinstance(nodeattrvalue['AttrCreatedDate'], datetime):
                     nodeattrvalue['AttrCreatedDate'] = dateparser.parse(nodeattrvalue['AttrCreatedDate'])
                 if not isinstance(nodeattrvalue['AttrModifiedDate'], datetime):
@@ -458,7 +458,7 @@ def Normalise(args):
                                 attrlength = None
 
                     # Check for existing attribute with same name
-                    existingattributes = [attr for attr in nodeattrs if attr['Name'] == nodeattrvalue['Attribute']]
+                    existingattributes = [attr for attr in nodeattrs if attr['Id'] == nodeattrvalue['Attribute']]
                     if len(existingattributes) > 0:
                         existingattribute = existingattributes[0]
                         if existingattribute['Type'] != attrtype or existingattribute['Length'] != attrlength:
@@ -613,10 +613,10 @@ def Normalise(args):
             lastattribute = None
             sourceattrs = []
             for sourceattrvalue in sourceattrvalues:
-                sourceattrvalue['PlainTextName'] = sourceattrvalue['Attribute']
+                sourceattrvalue['PlainTextName'] = sourceattrvalue['Name']
                 if args.windows:
-                    sourceattrvalue['Attribute'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattrvalue['Attribute']))
-                    sourceattrvalue['Value']     = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattrvalue['Value']))
+                    sourceattrvalue['Name']  = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattrvalue['Name']))
+                    sourceattrvalue['Value'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourceattrvalue['Value']))
                 if not isinstance(sourceattrvalue['AttrCreatedDate'], datetime):
                     sourceattrvalue['AttrCreatedDate'] = dateparser.parse(sourceattrvalue['AttrCreatedDate'])
                 if not isinstance(sourceattrvalue['AttrModifiedDate'], datetime):
@@ -639,7 +639,7 @@ def Normalise(args):
                                 attrlength = None
 
                     # Check for existing attribute with same name
-                    existingattributes = [attr for attr in sourceattrs if attr['Name'] == sourceattrvalue['Attribute']]
+                    existingattributes = [attr for attr in sourceattrs if attr['Id'] == sourceattrvalue['Attribute']]
                     if len(existingattributes) > 0:
                         existingattribute = existingattributes[0]
                         if existingattribute['Type'] != attrtype or existingattribute['Length'] != attrlength:
