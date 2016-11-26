@@ -23,37 +23,7 @@ import datetime
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
-# Generic merge/overwrite/replace function
-def merge_overwrite_or_replace(conn, table, columns, data, operation, verbosity):
-    newids = [{column:row[column] for column in columns} for row in data]
-    curids = [{column:row[column] for column in columns}
-                for row in conn.execute(select([table.c[column] for column in columns]))]
-
-    if operation == 'replace':
-        idstodelete = [id for id in curids if not id in newids]
-        if len(idstodelete) > 0:
-            delete = table.delete()
-            for column in columns:
-                for id in idstodelete:
-                    id['_' + column] = id[column]
-                delete = delete.where(table.c[column] == bindparam('_' + column))
-            conn.execute(delete, idstodelete)
-
-    if operation == 'overwrite' or operation == 'replace':
-        rowstoupdate = [row for row in data if {column:row[column] for column in columns} in curids]
-        if len(rowstoupdate) > 0:
-            update = table.update()
-            for column in columns:
-                for id in rowstoupdate:
-                    id['_' + column] = id[column]
-                update = update.where(table.c[column] == bindparam('_' + column))
-            conn.execute(update, rowstoupdate)
-
-    rowstoinsert = [row for row in data if not {column:row[column] for column in columns} in curids]
-    if len(rowstoinsert) > 0:
-        conn.execute(table.insert(), rowstoinsert)
-
-def Denormalise(args):
+def Norm2RQDA(args):
     # Initialise DB variables so exception handlers don't freak out
     normdb = None
     rqdadb = None
@@ -68,11 +38,13 @@ def Denormalise(args):
         normProject         = normmd.tables.get('Project')
         normSource          = normmd.tables.get('Source')
         normSourceCategory  = normmd.tables.get('SourceCategory')
+        normSourceAttribute = normmd.tables.get('SourceAttribute')
+        normSourceValue     = normmd.tables.get('SourceValue')
         normTagging         = normmd.tables.get('Tagging')
         normNode            = normmd.tables.get('Node')
         normNodeCategory    = normmd.tables.get('NodeCategory')
-        normSourceAttribute = normmd.tables.get('SourceAttribute')
         normNodeAttribute   = normmd.tables.get('NodeAttribute')
+        normNodeValue       = normmd.tables.get('NodeValue')
 
         if args.outdb is None:
             args.outdb = args.indb.rsplit('.',1)[0] + '.rqda'
@@ -331,7 +303,7 @@ def Denormalise(args):
                 print("Converting source categories")
 
             sourcecats  = [dict(row) for row in normdb.execute(select([
-                    normSourceCategory.c.Id,
+                    normSourceCategory.c.Id.label('Uuid'),
                     normSourceCategory.c.Name.label('name'),
                     normSourceCategory.c.Description.label('memo'),
                     normUser.c.Name.label('owner'),
@@ -341,32 +313,97 @@ def Denormalise(args):
                     normUser.c.Id == normSourceCategory.c.CreatedBy
                 ))]
 
-            filecatid = 1 # This isn't quite right for merging...
-            filecatmap = []
+            lastid = 1
+            filecatid = {}
             for sourcecat in sourcecats:
-                sourcecat['catid'] = filecatid
-                filecatid += 1
-                sourcecat['date']   = sourcecat['CreatedDate'].strftime('%c')
+                sourcecat['catid'] = lastid
+                filecatid[sourcecat['Uuid']] = lastid
+                lastid += 1
+                sourcecat['date']   = sourcecat['CreatedDate']. strftime('%c')
                 sourcecat['dateM']  = sourcecat['ModifiedDate'].strftime('%c')
                 sourcecat['status'] = 1
 
-            merge_overwrite_or_replace(rqdacon, rqdafilecat, ['catid'], sourcecats, args.source_categories, args.verbosity)
+            if len(sourcecats) > 0:
+                rqdacon.execute(rqdafilecat.insert(), sourcecats)
+
+# Sources
+        sources = []     # So still valid even if we skip sources
+        if args.sources != 'skip':
+            if args.verbosity > 0:
+                print("Converting sources")
+
+            sources = [dict(row) for row in normdb.execute(select([
+                    normSource.c.Id.label('Uuid'),
+                    normSource.c.Category,
+                    normSource.c.Name.label('name'),
+                    normSource.c.Description.label('memo'),
+                    normSource.c.Content.label('file'),
+                    normUser.c.Name.label('owner'),
+                    normSource.c.CreatedDate,
+                    normSource.c.ModifiedDate
+                ]).where(
+                    normUser.c.Id == normSource.c.CreatedBy
+                ))]
+
+            lastid = 1
+            sourceid = {}
+            for source in sources:
+                source['id'] = lastid
+                sourceid[source['Uuid']] = lastid
+                lastid += 1
+                source['date']   = source['CreatedDate']. strftime('%c')
+                source['dateM']  = source['ModifiedDate'].strftime('%c')
+                source['status'] = 1
+
+
+            if len(sources) > 0:
+                rqdacon.execute(rqdasource.insert(), sources)
+
+            if args.source_categories != 'skip':
+                treefiles = []
+                for source in sources:
+                    if source['Category'] is not None:
+                        treefiles += [{
+                                'fid':    source['id'],
+                                'catid':  filecatid[source['Category']],
+                                'date':   source['date'],
+                                'dateM':  source['dateM'],
+                                'memo':   None,
+                                'status': 1,
+                                'owner':  source['owner']
+                            }]
+
+                if len(treefiles) > 0:
+                    rqdacon.execute(rqdatreefile.insert(), treefiles)
+
 
 # Source attributes
         if args.source_attributes != 'skip':
             if args.verbosity > 0:
                 print("Converting source attributes")
 
-            sourceattrs  = [dict(row) for row in normdb.execute(select([
-                    normSourceCategory.c.Id,
-                    normSourceCategory.c.Name.label('name'),
-                    normSourceCategory.c.Description.label('memo'),
+            sourcevalues  = [dict(row) for row in normdb.execute(select([
+                    normSource.c.Id.label('SourceUuid'),
+                    normSourceAttribute.c.Name.label('variable'),
+                    normSourceValue.c.Value.label('value'),
                     normUser.c.Name.label('owner'),
-                    normSourceCategory.c.CreatedDate,
-                    normSourceCategory.c.ModifiedDate
-                ]).where(
-                    normUser.c.Id == normSourceCategory.c.CreatedBy
-                ))]
+                    normSourceValue.c.CreatedDate,
+                    normSourceValue.c.ModifiedDate
+                ]).where(and_(
+                    normSourceValue.c.Source == normSource.c.Id,
+                    normSourceAttribute.c.Id == normSourceValue.c.Attribute,
+                    normUser.c.Id == normSourceAttribute.c.CreatedBy
+                )))]
+
+            for sourcevalue in sourcevalues:
+                sourcevalue['fileID'] = sourceid[sourcevalue['SourceUuid']]
+                sourcevalue['date']   = sourcevalue['CreatedDate']. strftime('%c')
+                sourcevalue['dateM']  = sourcevalue['ModifiedDate'].strftime('%c')
+                sourcevalue['status'] = 1
+
+            if len(sourcevalues) > 0:
+                rqdacon.execute(rqdafileAttr.insert(), sourcevalues)
+
 
 
 
