@@ -1857,8 +1857,6 @@ def Denormalise(args):
                     ]))]
             extendeditems = []
 
-
-
             newids = [{'Item_Id':row['Item_Id']} for row in sources]
             curids = [{'Item_Id':row['Item_Id']} for row in nvivocon.execute(select([
                     nvivoSource.c.Item_Id
