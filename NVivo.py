@@ -72,7 +72,6 @@ def merge_overwrite_or_replace(conn, table, columns, data, operation, verbosity)
     if len(rowstoinsert) > 0:
         conn.execute(table.insert(), rowstoinsert)
 
-
 def Normalise(args):
     # Initialise DB variables so exception handlers don't freak out
     nvivodb = None
@@ -904,7 +903,6 @@ def Denormalise(args):
                 res = u''
             return res
 
-
         # Function to handle node or source categories
 
         def skip_merge_or_overwrite_categories(normtable, itemtype, name, operation):
@@ -985,7 +983,6 @@ def Denormalise(args):
                                 'Layout' : literal_column('\'\'')
                         }), rowstoinsert)
 
-
 # Node Categories
         skip_merge_or_overwrite_categories(normNodeCategory, '52', 'case' if args.nvivoversion == '11' else 'node', args.node_categories)
 
@@ -1053,7 +1050,6 @@ def Denormalise(args):
                         node['HierarchicalName'] = parentnode['Name'] + u'\\' + node['HierarchicalName']
                         parent = parentnode['Parent']
                     node['HierarchicalName'] = u'Nodes\\\\' + node['HierarchicalName']
-
 
             def tagchildnodes(TopParent, Parent, AggregateList, depth):
                 tag = depth << 16
@@ -1396,7 +1392,6 @@ def Denormalise(args):
                                 'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="False"/></Properties>\'')
                         }), attribute)
 
-
                         nvivocon.execute(nvivoItem.insert().values({
                                 'Id':       bindparam('TrueValueId'),
                                 'Name':     bindparam('True'),
@@ -1596,7 +1591,6 @@ def Denormalise(args):
                 nvivocon.execute(nvivoCategory.update(
                         nvivoCategory.c.Item_Id == bindparam('CategoryId')
                     ), categories)
-
 
         # Node category layouts
         if args.nodes != 'skip' or args.node_categories != 'skip' or args.node_attributes != 'skip':
