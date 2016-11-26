@@ -18,35 +18,35 @@
 
 import argparse
 
-parser = argparse.ArgumentParser(description='Create an RQDA file from a normalised SQLite file.')
+parser = argparse.ArgumentParser(description='Convert a normalised NVivo project to RQDA.')
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
 
 parser.add_argument('-u', '--users', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='User action.')
-parser.add_argument('-p', '--project', choices=["skip", "merge", "overwrite"], default="merge",
+parser.add_argument('-p', '--project', choices=["skip", "replace"], default="replace",
                     help='Project action.')
-parser.add_argument('-nc', '--node-categories', choices=["skip", "merge", "overwrite"], default="merge",
+parser.add_argument('-nc', '--node-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Node category action.')
-parser.add_argument('-n', '--nodes', choices=["skip", "merge"], default="merge",
+parser.add_argument('-n', '--nodes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Node action.')
-parser.add_argument('-na', '--node-attributes', choices=["skip", "merge", "overwrite"], default="merge",
+parser.add_argument('-na', '--node-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Node attribute table action.')
-parser.add_argument('-sc', '--source-categories', choices=["skip", "merge", "overwrite"], default="merge",
+parser.add_argument('-sc', '--source-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Source category action.')
-parser.add_argument('--sources', choices=["skip", "merge", "overwrite"], default="merge",
+parser.add_argument('-s', '--sources', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Source action.')
-parser.add_argument('-sa', '--source-attributes', choices=["skip", "merge", "overwrite"], default="merge",
+parser.add_argument('-sa', '--source-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Source attribute action.')
-parser.add_argument('-t', '--taggings', choices=["skip", "merge"], default="merge",
+parser.add_argument('-t', '--taggings', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Tagging action.')
-parser.add_argument('-a', '--annotations', choices=["skip", "merge"], default="merge",
+parser.add_argument('-a', '--annotations', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Annotation action.')
 
-parser.add_argument('infile', type=str,
-                    help="Input normalised SQLite file (extension .norm)")
-parser.add_argument('outfile', type=str, nargs='?',
-                    help="RQDA file to create.")
+parser.add_argument('infile', type=argparse.FileType('rb'),
+                    help="Input normalised (.norm) file")
+parser.add_argument('outfilename', type=str, nargs='?',
+                    help="Output RQDA file")
 
 args = parser.parse_args()
 
@@ -54,29 +54,24 @@ import RQDA
 import os
 import shutil
 import signal
-from subprocess import Popen, PIPE
 import tempfile
 import time
 
-try:
-    if args.infile != '-':
-        args.indb = 'sqlite:///' + args.infile
+tmpinfilename = tempfile.mktemp()
+tmpinfileptr  = file(tmpinfilename, 'wb')
+tmpinfileptr.write(args.infile.read())
+args.infile.close()
+tmpinfileptr.close()
 
-        if args.outfile is None:
-            args.outfile = args.infile.rsplit('.',1)[0] + '.rqda'
-    else:
-        args.indb = '-'
+tmpoutfilename = tempfile.mktemp()
 
-    tmpoutfilename = tempfile.mktemp()
-    tmpoutfileptr  = file(tmpoutfilename, 'wb')
-    if os.path.isfile(args.outfile):
-        shutil.copy(args.outfile, tmpoutfilename)
-    args.outdb = 'sqlite:///' + tmpoutfilename
+if args.outfilename is None:
+    args.outfilename = args.infile.name.rsplit('.',1)[0] + '.rqda'
 
-    RQDA.Denormalise(args)
+args.indb  = 'sqlite:///' + tmpinfilename
+args.outdb = 'sqlite:///' + tmpoutfilename
 
-    shutil.move(tmpoutfilename, args.outfile)
+RQDA.Norm2RQDA(args)
 
-except:
-    raise
-    os.remove(tmpoutfilename)
+shutil.move(tmpoutfilename, os.path.basename(args.outfilename))
+os.remove(tmpinfilename)
