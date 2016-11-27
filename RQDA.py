@@ -327,7 +327,6 @@ def Norm2RQDA(args):
                 rqdacon.execute(rqdafilecat.insert(), sourcecats)
 
 # Sources
-        sources = []     # So still valid even if we skip sources
         if args.sources != 'skip':
             if args.verbosity > 0:
                 print("Converting sources")
@@ -359,6 +358,7 @@ def Norm2RQDA(args):
             if len(sources) > 0:
                 rqdacon.execute(rqdasource.insert(), sources)
 
+            # Map NVivo classifications to RQDA categories
             if args.source_categories != 'skip':
                 treefiles = []
                 for source in sources:
@@ -404,8 +404,150 @@ def Norm2RQDA(args):
             if len(sourcevalues) > 0:
                 rqdacon.execute(rqdafileAttr.insert(), sourcevalues)
 
+# Node categories
+        if args.node_categories != 'skip':
+            if args.verbosity > 0:
+                print("Converting node categories")
+
+            codecats  = [dict(row) for row in normdb.execute(select([
+                    normNodeCategory.c.Id.label('Uuid'),
+                    normNodeCategory.c.Name.label('name'),
+                    normNodeCategory.c.Description.label('memo'),
+                    normUser.c.Name.label('owner'),
+                    normNodeCategory.c.CreatedDate,
+                    normNodeCategory.c.ModifiedDate
+                ]).where(
+                    normUser.c.Id == normNodeCategory.c.CreatedBy
+                ))]
+
+            lastid = 1
+            codecatid = {}
+            codecatname = {}
+            for codecat in codecats:
+                codecat['catid'] = lastid
+                codecatid[codecat['Uuid']] = lastid
+                codecatname[codecat['Uuid']] = codecat['name']
+                lastid += 1
+                codecat['date']   = codecat['CreatedDate']. strftime('%c')
+                codecat['dateM']  = codecat['ModifiedDate'].strftime('%c')
+                codecat['status'] = 1
+
+            if len(codecats) > 0:
+                rqdacon.execute(rqdacodecat.insert(), codecats)
+
+# Nodes
+        if args.nodes != 'skip':
+            if args.verbosity > 0:
+                print("Converting nodes")
+
+            # Nodes without any attributes are mapped to RQDA codes, those with attributes
+            # are mapped to RQDA cases.
+            nodes = [dict(row) for row in normdb.execute(select([
+                    normNode.c.Id.label('Uuid'),
+                    normNode.c.Category,
+                    normNode.c.Name.label('name'),
+                    normNode.c.Description.label('memo'),
+                    normUser.c.Name.label('owner'),
+                    normNode.c.CreatedDate,
+                    normNode.c.ModifiedDate,
+                    func.count(normNodeValue.c.Node).label('ValueCount')
+                ]).where(
+                    normUser.c.Id == normNode.c.CreatedBy
+                ).group_by(
+                    normNode.c.Id
+                ).select_from(
+                    normNode.outerjoin(
+                    normNodeValue,
+                    normNodeValue.c.Node == normNode.c.Id
+                )))]
+
+            lastcodeid = 1
+            lastcaseid = 1
+            codeid = {}
+            caseid = {}
+            codes = []
+            cases = []
+            for node in nodes:
+                if node['ValueCount'] == 0:
+                    node['id'] = lastcodeid
+                    codeid[node['Uuid']] = lastcodeid
+                    lastcodeid += 1
+                    node['date']   = node['CreatedDate']. strftime('%c')
+                    node['dateM']  = node['ModifiedDate'].strftime('%c')
+                    node['status'] = 1
+                    codes += [node]
+                else:
+                    node['id'] = lastcaseid
+                    caseid[node['Uuid']] = lastcaseid
+                    lastcaseid += 1
+                    node['date']   = node['CreatedDate']. strftime('%c')
+                    node['dateM']  = node['ModifiedDate'].strftime('%c')
+                    node['status'] = 1
+                    cases += [node]
+
+            if len(codes) > 0:
+                rqdacon.execute(rqdafreecode.insert(), codes)
+
+            if len(cases) > 0:
+                rqdacon.execute(rqdacases.insert(), cases)
+
+            # Map NVivo classifications to RQDA categories
+            if args.node_categories != 'skip':
+                treefiles = []
+                for code in codes:
+                    if code['Category'] is not None:
+                        treefiles += [{
+                                'cid':    code['id'],
+                                'catid':  codecatid[code['Category']],
+                                'date':   code['date'],
+                                'dateM':  code['dateM'],
+                                'memo':   None,
+                                'status': 1,
+                                'owner':  code['owner']
+                            }]
+
+                if len(treefiles) > 0:
+                    rqdacon.execute(rqdatreecode.insert(), treefiles)
+
+                # Make an attribute for NVivo Classification
+                casecatattrs = []
+                for case in cases:
+                    if case['Category'] is not None:
+                        casecatattrs += [{
+                                'variable': u'Category',
+                                'value':    codecatname[case['Category']],
+                                'caseID':   case['id'],
+                                'date':     case['date'],
+                                'dateM':    case['dateM'],
+                                'status':   1,
+                                'owner':    case['owner']
+                            }]
+                if len(casecatattrs) > 0:
+                    rqdacon.execute(rqdacaseAttr.insert(), casecatattrs)
 
 
+
+            if args.node_attributes != 'skip':
+                caseattrs = [dict(row) for row in normdb.execute(select([
+                        normNodeValue.c.Node.label('NodeUuid'),
+                        normNodeAttribute.c.Name.label('variable'),
+                        normNodeValue.c.Value.label('value'),
+                        normUser.c.Name.label('owner'),
+                        normNodeValue.c.CreatedDate,
+                        normNodeValue.c.ModifiedDate,
+                    ]).where(and_(
+                        normNodeAttribute.c.Id == normNodeValue.c.Attribute,
+                        normUser.c.Id == normNodeValue.c.CreatedBy
+                    )))]
+
+                for caseattr in caseattrs:
+                    caseattr['caseID'] = caseid[caseattr['NodeUuid']]
+                    caseattr['date']   = caseattr['CreatedDate']. strftime('%c')
+                    caseattr['dateM']  = caseattr['ModifiedDate'].strftime('%c')
+                    caseattr['status'] = 1
+
+                if len(caseattrs) > 0:
+                    rqdacon.execute(rqdacaseAttr.insert(), caseattrs)
 
 # All done.
         rqdatr.commit()
