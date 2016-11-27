@@ -1211,7 +1211,7 @@ def Denormalise(args):
                 )).group_by(
                     nvivoCategoryRole.c.Item1_Id
                 ).having(
-                    func.count(nvivoValueRole.c.Item1_Id).label('ValueCount') == 0
+                    func.count(nvivoValueRole.c.Item1_Id) == 0
                 ).select_from(
                     nvivoCategoryRole.outerjoin(
                     nvivoValueRole.join(
