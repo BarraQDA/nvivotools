@@ -30,8 +30,10 @@ parser.add_argument('-nc', '--node-categories', choices=["skip", "merge", "overw
                     help='Node category action.')
 parser.add_argument('-n', '--nodes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Node action.')
-parser.add_argument('-na', '--node-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
-                    help='Node attribute table action.')
+parser.add_argument('-c', '--cases', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+                    help='case action.')
+parser.add_argument('-ca', '--case-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+                    help='Case attribute table action.')
 parser.add_argument('-sc', '--source-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Source category action.')
 parser.add_argument('-s', '--sources', choices=["skip", "merge", "overwrite", "replace"], default="merge",
