@@ -411,7 +411,6 @@ def Norm2RQDA(args):
                     rqdaattributes.c.name == bindparam('variable')
                 ), value).first()
             if attribute is None:
-                print "   Inserting..."
                 rqdacon.execute(rqdaattributes.insert(), {
                         'name':   value['variable'],
                         'class':  attrclass,
@@ -607,7 +606,6 @@ def Norm2RQDA(args):
                     casevalue['date']   = casevalue['CreatedDate']. strftime('%c')
                     casevalue['dateM']  = casevalue['ModifiedDate'].strftime('%c')
                     casevalue['status'] = 1
-                    print casevalue['variable']
                     create_or_test_attribute(casevalue)
 
                 if len(casevalues) > 0:
@@ -688,7 +686,7 @@ def Norm2RQDA(args):
 
 ###############################################################################
 
-def Normalise(args):
+def RQDA2Norm(args):
     # Initialise DB variables so exception handlers don't freak out
     rqdadb = None
     normdb = None
@@ -830,7 +828,7 @@ def Normalise(args):
                 Column('Content',       String(16384)),
                 Column('ObjectType',    String(256)),
                 Column('SourceType',    Integer),
-                Column('Object',        LargeBinary,    nullable=False),
+                Column('Object',        LargeBinary),
                 Column('Thumbnail',     LargeBinary),
             #Column('Waveform',      LargeBinary,    nullable=False),
                 Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
@@ -890,10 +888,123 @@ def Normalise(args):
         normcon = normdb.connect()
         normtr = normcon.begin()
 
+# Function to find or create users
+        def find_or_create_user(name):
+            user = normcon.execute(select([
+                    normUser.c.Id
+                ]).where(
+                    normUser.c.Name == bindparam('Name')
+                ), {
+                    'Name': name
+                }).first()
+            if user is not None:
+                return user['Id']
+            else:
+                userid = uuid.uuid4()
+                normcon.execute(normUser.insert(), {
+                        'Id': userid,
+                        'Name': name
+                    })
+                return userid
+
 # Project
         if args.project != 'skip':
             if args.verbosity > 0:
                 print("Converting project")
+
+            project = dict(rqdadb.execute(select([
+                    rqdaproject.c.databaseversion,
+                    rqdaproject.c.date,
+                    rqdaproject.c.dateM,
+                    rqdaproject.c.memo.label('Description'),
+                    rqdaproject.c.about.label('Title'),
+                    rqdaproject.c.imageDir
+                ])).first())
+
+            if project['databaseversion'] != 'DBVersion:0.1':
+                raise RuntimeError("Incompatible version of RQDA file: " + project['databaseversion'])
+
+            project['CreatedBy']    = find_or_create_user('Default User')
+            project['CreatedDate']  = dateparser.parse(project['date'])
+            project['ModifiedBy']   = project['CreatedBy']
+            project['ModifiedDate'] = dateparser.parse(project['dateM'])
+
+            normcon.execute(normProject.delete())
+            normcon.execute(normProject.insert().values({
+                    'Version': '0.2'
+                }), project)
+
+# Source categories
+        if args.source_categories != 'skip':
+            if args.verbosity > 0:
+                print("Converting source categories")
+
+            sourcecats  = [dict(row) for row in rqdadb.execute(select([
+                    rqdafilecat.c.catid,
+                    rqdafilecat.c.name.label('Name'),
+                    rqdafilecat.c.memo.label('Description'),
+                    rqdafilecat.c.owner,
+                    rqdafilecat.c.date,
+                    rqdafilecat.c.dateM
+                ]).where(
+                    rqdafilecat.c.status == literal_column('1')
+                ))]
+
+            sourcecatuuid = {}
+            for sourcecat in sourcecats:
+                sourcecat['Id'] = uuid.uuid4()
+                sourcecatuuid[sourcecat['catid']] = sourcecat['Id']
+                sourcecat['CreatedBy']    = find_or_create_user(sourcecat['owner'])
+                sourcecat['CreatedDate']  = dateparser.parse(sourcecat['date'])
+                sourcecat['ModifiedBy']   = sourcecat['CreatedBy']
+                sourcecat['ModifiedDate'] = dateparser.parse(sourcecat['dateM'])
+
+            if len(sourcecats) > 0:
+                normcon.execute(normSourceCategory.insert(), sourcecats)
+
+# Source categories
+        if args.sources != 'skip':
+            if args.verbosity > 0:
+                print("Converting sources")
+
+            sources  = [dict(row) for row in rqdadb.execute(select([
+                    rqdasource.c.id.label('fid'),
+                    rqdasource.c.name.label('Name'),
+                    rqdasource.c.memo.label('Description'),
+                    rqdasource.c.file.label('Content'),
+                    rqdasource.c.owner,
+                    rqdasource.c.date,
+                    rqdasource.c.dateM
+                ]).where(
+                    rqdasource.c.status == literal_column('1')
+                ))]
+
+            sourceuuid = {}
+            for source in sources:
+                source['Id'] = uuid.uuid4()
+                sourceuuid[source['fid']] = source['Id']
+                source['ObjectType'] = 'TXT'
+                #source['Object'] = buffer(source['Content'])
+                source['CreatedBy']    = find_or_create_user(source['owner'])
+                source['CreatedDate']  = dateparser.parse(source['date'])
+                source['ModifiedBy']   = source['CreatedBy']
+                source['ModifiedDate'] = dateparser.parse(source['dateM'])
+                source['Category']     = None
+                sourcecats = [dict(row) for row in rqdadb.execute(select([
+                        rqdatreefile.c.catid
+                    ]).where(
+                        rqdatreefile.c.fid == bindparam('fid')
+                    ), {
+                        'fid': source['fid']
+                    })]
+                if len(sourcecats) > 1:
+                    print("WARNING: Source: " + source['Name'] + " belongs to more than one category. Only first category will be retained")
+                if len(sourcecats) > 0:
+                    source['Category'] = sourcecatuuid[sourcecats[0]['catid']]
+
+                normcon.execute(normSource.insert(), source)
+            #if len(sources) > 0:
+                #normcon.execute(normSource.insert(), sources)
 
 # All done.
         normtr.commit()
