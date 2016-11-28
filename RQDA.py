@@ -19,8 +19,10 @@
 from sqlalchemy import *
 from sqlalchemy import exc
 import os
-import datetime
 import re
+from datetime import date, time, datetime
+from dateutil import parser as dateparser
+from distutils import util
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
@@ -289,7 +291,7 @@ def Norm2RQDA(args):
                         normProject.c.CreatedDate,
                         normProject.c.ModifiedDate
                     ])).first())
-                project['About'] = project['Title'] +' Imported by NVivotools ' + datetime.datetime.now().strftime('%c')
+                project['About'] = project['Title'] +' Imported by NVivotools ' + datetime.now().strftime('%c')
 
                 project['date']  = project['CreatedDate'].strftime('%c')
                 project['dateM'] = project['ModifiedDate'].strftime('%c')
@@ -382,15 +384,59 @@ def Norm2RQDA(args):
                 if len(treefiles) > 0:
                     rqdacon.execute(rqdatreefile.insert(), treefiles)
 
+        def create_or_test_attribute(value):
+            attrclass = None
+            if value['Type'] == 'Text':
+                attrclass = 'character'
+            elif value['Type'] == 'Integer':
+                attrclass = 'numeric'
+            elif value['Type'] == 'Decimal':
+                attrclass = 'numeric'
+            elif value['Type'] == 'DateTime':
+                attrclass = 'numeric'
+                value['value'] = unicode(date.strftime(dateparser.parse(value['value']), '%Y%m%d%H%M%S'))
+            elif value['Type'] == 'Date':
+                attrclass = 'numeric'
+                value['value'] = unicode(date.strftime(dateparser.parse(value['value']), '%Y%m%d'))
+            elif value['Type'] == 'Time':
+                attrclass = 'numeric'
+                value['value'] = unicode(time.strftime(dateparser.parse(value['value']).time(), '%H%M%S'))
+            elif value['Type'] == 'Boolean':
+                attrclass = 'numeric'
+                value['value'] = util.strtobool(value['value'])
+
+            attribute = rqdacon.execute(select([
+                    rqdaattributes.c['class']
+                ]).where(
+                    rqdaattributes.c.name == bindparam('variable')
+                ), value).first()
+            if attribute is None:
+                print "   Inserting..."
+                rqdacon.execute(rqdaattributes.insert(), {
+                        'name':   value['variable'],
+                        'class':  attrclass,
+                        'status': 1,
+                        'date':   value['AttributeCreatedDate']. strftime('%c'),
+                        'dateM':  value['AttributeModifiedDate'].strftime('%c'),
+                        'owner':  value['attributeowner']
+                    })
+            else:
+                if attribute['class'] != attrclass:
+                    print("WARNING: Inconsistent type for attribute: " + value['variable'])
 
 # Source attributes
         if args.source_attributes != 'skip':
             if args.verbosity > 0:
                 print("Converting source attributes")
 
-            sourcevalues  = [dict(row) for row in normdb.execute(select([
+            normAttributeUser = normUser.alias(name='AttributeUser')
+            sourcevalues = [dict(row) for row in normdb.execute(select([
                     normSourceValue.c.Source.label('SourceUuid'),
                     normSourceAttribute.c.Name.label('variable'),
+                    normSourceAttribute.c.Type,
+                    normAttributeUser.c.Name.label('attributeowner'),
+                    normSourceAttribute.c.CreatedDate.label('AttributeCreatedDate'),
+                    normSourceAttribute.c.ModifiedDate.label('AttributeModifiedDate'),
                     normSourceValue.c.Value.label('value'),
                     normUser.c.Name.label('owner'),
                     normSourceValue.c.CreatedDate,
@@ -399,7 +445,8 @@ def Norm2RQDA(args):
                     normSource.c.Id == normSourceValue.c.Source,
                     normSource.c.Content.isnot(None),
                     normSourceAttribute.c.Id == normSourceValue.c.Attribute,
-                    normUser.c.Id == normSourceAttribute.c.CreatedBy
+                    normUser.c.Id == normSourceValue.c.CreatedBy,
+                    normAttributeUser.c.Id == normSourceAttribute.c.CreatedBy
                 )))]
 
             for sourcevalue in sourcevalues:
@@ -407,6 +454,8 @@ def Norm2RQDA(args):
                 sourcevalue['date']   = sourcevalue['CreatedDate']. strftime('%c')
                 sourcevalue['dateM']  = sourcevalue['ModifiedDate'].strftime('%c')
                 sourcevalue['status'] = 1
+
+                create_or_test_attribute(sourcevalue)
 
             if len(sourcevalues) > 0:
                 rqdacon.execute(rqdafileAttr.insert(), sourcevalues)
@@ -535,26 +584,34 @@ def Norm2RQDA(args):
 
 
             if args.node_attributes != 'skip':
-                caseattrs = [dict(row) for row in normdb.execute(select([
+                normAttributeUser = normUser.alias(name='AttributeUser')
+                casevalues = [dict(row) for row in normdb.execute(select([
                         normNodeValue.c.Node.label('NodeUuid'),
                         normNodeAttribute.c.Name.label('variable'),
+                        normNodeAttribute.c.Type,
+                        normAttributeUser.c.Name.label('attributeowner'),
+                        normNodeAttribute.c.CreatedDate.label('AttributeCreatedDate'),
+                        normNodeAttribute.c.ModifiedDate.label('AttributeModifiedDate'),
                         normNodeValue.c.Value.label('value'),
                         normUser.c.Name.label('owner'),
                         normNodeValue.c.CreatedDate,
-                        normNodeValue.c.ModifiedDate,
+                        normNodeValue.c.ModifiedDate
                     ]).where(and_(
                         normNodeAttribute.c.Id == normNodeValue.c.Attribute,
-                        normUser.c.Id == normNodeValue.c.CreatedBy
+                        normUser.c.Id == normNodeValue.c.CreatedBy,
+                        normAttributeUser.c.Id == normNodeAttribute.c.CreatedBy
                     )))]
 
-                for caseattr in caseattrs:
-                    caseattr['caseID'] = caseid[caseattr['NodeUuid']]
-                    caseattr['date']   = caseattr['CreatedDate']. strftime('%c')
-                    caseattr['dateM']  = caseattr['ModifiedDate'].strftime('%c')
-                    caseattr['status'] = 1
+                for casevalue in casevalues:
+                    casevalue['caseID'] = caseid[casevalue['NodeUuid']]
+                    casevalue['date']   = casevalue['CreatedDate']. strftime('%c')
+                    casevalue['dateM']  = casevalue['ModifiedDate'].strftime('%c')
+                    casevalue['status'] = 1
+                    print casevalue['variable']
+                    create_or_test_attribute(casevalue)
 
-                if len(caseattrs) > 0:
-                    rqdacon.execute(rqdacaseAttr.insert(), caseattrs)
+                if len(casevalues) > 0:
+                    rqdacon.execute(rqdacaseAttr.insert(), casevalues)
 
 # Tagging
         if args.taggings != 'skip':
@@ -624,7 +681,231 @@ def Norm2RQDA(args):
 
     except:
         raise
+        if not rqdatr is None:
+            rqdatr.rollback()
+        rqdadb.dispose()
+        normdb.dispose()
+
+###############################################################################
+
+def Normalise(args):
+    # Initialise DB variables so exception handlers don't freak out
+    rqdadb = None
+    normdb = None
+    normtr = None
+
+    try:
+        if args.indb != '-':
+            rqdadb = create_engine(args.indb)
+            rqdamd = MetaData(bind=rqdadb)
+
+            rqdaproject     = Table('project',     rqdamd, autoload=True)
+            rqdasource      = Table('source',      rqdamd, autoload=True)
+            rqdafileAttr    = Table('fileAttr',    rqdamd, autoload=True)
+            rqdafilecat     = Table('filecat',     rqdamd, autoload=True)
+            rqdaannotation  = Table('annotation',  rqdamd, autoload=True)
+            rqdaattributes  = Table('attributes',  rqdamd, autoload=True)
+            rqdacaseAttr    = Table('caseAttr',    rqdamd, autoload=True)
+            rqdacaselinkage = Table('caselinkage', rqdamd, autoload=True)
+            rqdacases       = Table('cases',       rqdamd, autoload=True)
+            rqdacodecat     = Table('codecat',     rqdamd, autoload=True)
+            rqdacoding      = Table('coding',      rqdamd, autoload=True)
+            rqdafreecode    = Table('freecode',    rqdamd, autoload=True)
+            rqdajournal     = Table('journal',     rqdamd, autoload=True)
+            rqdatreecode    = Table('treecode',    rqdamd, autoload=True)
+            rqdatreefile    = Table('treefile',    rqdamd, autoload=True)
+        else:
+            rqdadb = None
+
+        if args.outdb is None:
+            args.outdb = args.indb.rsplit('.',1)[0] + '.norm'
+        normdb = create_engine(args.outdb)
+        normmd = MetaData(bind=normdb)
+
+# Create the normalised database structure
+        try:
+            normUser = Table('User', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normUser = Table('User', normmd,
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Name',          String(256)))
+            normUser.create(normdb)
+
+        try:
+            normProject = Table('Project', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normProject = Table('Project', normmd,
+                Column('Version',       String(16)),
+                Column('Title',         String(256),                            nullable=False),
+                Column('Description',   String(2048)),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id"),  nullable=False),
+                Column('CreatedDate',   DateTime,                               nullable=False),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id"),  nullable=False),
+                Column('ModifiedDate',  DateTime,                               nullable=False))
+            normProject.create(normdb)
+
+        try:
+            normNodeCategory = Table('NodeCategory', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normNodeCategory = Table('NodeCategory', normmd,
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Name',          String(256)),
+                Column('Description',   String(512)),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normNodeCategory.create(normdb)
+
+        try:
+            normNode = Table('Node', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normNode = Table('Node', normmd,
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Parent',        UUID(),         ForeignKey("Node.Id")),
+                Column('Category',      UUID(),         ForeignKey("NodeCategory.Id")),
+                Column('Name',          String(256)),
+                Column('Description',   String(512)),
+                Column('Color',         Integer),
+                Column('Aggregate',     Boolean),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normNode.create(normdb)
+
+        try:
+            normNodeAttribute = Table('NodeAttribute', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normNodeAttribute = Table('NodeAttribute', normmd,
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Name',          String(256)),
+                Column('Description',   String(512)),
+                Column('Type',          String(16)),
+                Column('Length',        Integer),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normNodeAttribute.create(normdb)
+
+        try:
+            normNodeValue = Table('NodeValue', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normNodeValue = Table('NodeValue', normmd,
+                Column('Node',          UUID(),         ForeignKey("Node.Id"),      primary_key=True),
+                Column('Attribute',     UUID(),         ForeignKey("NodeAttribute.Id"),
+                                                                                    primary_key=True),
+                Column('Value',         String(256)),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normNodeValue.create(normdb)
+
+        try:
+            normSourceCategory = Table('SourceCategory', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normSourceCategory = Table('SourceCategory', normmd,
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Name',          String(256)),
+                Column('Description',   String(512)),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normSourceCategory.create(normdb)
+
+
+
+        try:
+            normSource = Table('Source', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normSource = Table('Source', normmd,
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Category',      UUID(),         ForeignKey("SourceCategory.Id")),
+                Column('Name',          String(256)),
+                Column('Description',   String(512)),
+                Column('Color',         Integer),
+                Column('Content',       String(16384)),
+                Column('ObjectType',    String(256)),
+                Column('SourceType',    Integer),
+                Column('Object',        LargeBinary,    nullable=False),
+                Column('Thumbnail',     LargeBinary),
+            #Column('Waveform',      LargeBinary,    nullable=False),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normSource.create(normdb)
+
+        try:
+            normSourceAttribute = Table('SourceAttribute', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normSourceAttribute = Table('SourceAttribute', normmd,
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Name',          String(256)),
+                Column('Description',   String(512)),
+                Column('Type',          String(16)),
+                Column('Length',        Integer),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normSourceAttribute.create(normdb)
+
+        try:
+            normSourceValue = Table('SourceValue', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normSourceValue = Table('SourceValue', normmd,
+                Column('Source',        UUID(),         ForeignKey("Source.Id"),    primary_key=True),
+                Column('Attribute',     UUID(),         ForeignKey("SourceAttribute.Id"),
+                                                                                    primary_key=True),
+                Column('Value',         String(256)),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normSourceValue.create(normdb)
+
+        try:
+            normTagging = Table('Tagging', normmd, autoload=True)
+        except exc.NoSuchTableError:
+            normTagging = Table('Tagging', normmd,
+                Column('Id',            UUID(),         primary_key=True),
+                Column('Source',        UUID(),         ForeignKey("Source.Id")),
+                Column('Node',          UUID(),         ForeignKey("Node.Id")),
+                Column('Fragment',      String(256)),
+                Column('Memo',          String(256)),
+                Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
+                Column('CreatedDate',   DateTime),
+                Column('ModifiedBy',    UUID(),         ForeignKey("User.Id")),
+                Column('ModifiedDate',  DateTime))
+            normTagging.create(normdb)
+
+        if rqdadb is None:     # that is, if all we are doing is making an empty norm file
+            normdb.dispose()
+            return
+
+        normcon = normdb.connect()
+        normtr = normcon.begin()
+
+# Project
+        if args.project != 'skip':
+            if args.verbosity > 0:
+                print("Converting project")
+
+# All done.
+        normtr.commit()
+        normtr = None
+        normcon.close()
+        normdb.dispose()
+
+        rqdadb.dispose()
+
+    except:
+        raise
         if not normtr is None:
             normtr.rollback()
         normdb.dispose()
-        normdb.dispose()
+        rqdadb.dispose()
