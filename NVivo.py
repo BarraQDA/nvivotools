@@ -206,7 +206,7 @@ def Normalise(args):
                 Column('Content',       String(16384)),
                 Column('ObjectType',    String(256)),
                 Column('SourceType',    Integer),
-                Column('Object',        LargeBinary,    nullable=False),
+                Column('Object',        LargeBinary),
                 Column('Thumbnail',     LargeBinary),
             #Column('Waveform',      LargeBinary,    nullable=False),
                 Column('CreatedBy',     UUID(),         ForeignKey("User.Id")),
