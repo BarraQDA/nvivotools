@@ -20,6 +20,7 @@ from sqlalchemy import *
 from sqlalchemy import exc
 import os
 import datetime
+import re
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
@@ -340,15 +341,20 @@ def Norm2RQDA(args):
                     normUser.c.Name.label('owner'),
                     normSource.c.CreatedDate,
                     normSource.c.ModifiedDate
-                ]).where(
+                ]).where(and_(
+                    normSource.c.Content.isnot(None),
                     normUser.c.Id == normSource.c.CreatedBy
-                ))]
+                )))]
 
             lastid = 1
             sourceid = {}
+            sourcename = {}
+            sourcetext = {}
             for source in sources:
                 source['id'] = lastid
                 sourceid[source['Uuid']] = lastid
+                sourcename[source['Uuid']] = source['name']
+                sourcetext[source['Uuid']] = source['file']
                 lastid += 1
                 source['date']   = source['CreatedDate']. strftime('%c')
                 source['dateM']  = source['ModifiedDate'].strftime('%c')
@@ -383,14 +389,15 @@ def Norm2RQDA(args):
                 print("Converting source attributes")
 
             sourcevalues  = [dict(row) for row in normdb.execute(select([
-                    normSource.c.Id.label('SourceUuid'),
+                    normSourceValue.c.Source.label('SourceUuid'),
                     normSourceAttribute.c.Name.label('variable'),
                     normSourceValue.c.Value.label('value'),
                     normUser.c.Name.label('owner'),
                     normSourceValue.c.CreatedDate,
                     normSourceValue.c.ModifiedDate
                 ]).where(and_(
-                    normSourceValue.c.Source == normSource.c.Id,
+                    normSource.c.Id == normSourceValue.c.Source,
+                    normSource.c.Content.isnot(None),
                     normSourceAttribute.c.Id == normSourceValue.c.Attribute,
                     normUser.c.Id == normSourceAttribute.c.CreatedBy
                 )))]
@@ -548,6 +555,64 @@ def Norm2RQDA(args):
 
                 if len(caseattrs) > 0:
                     rqdacon.execute(rqdacaseAttr.insert(), caseattrs)
+
+# Tagging
+        if args.taggings != 'skip':
+            if args.verbosity > 0:
+                print("Converting taggings")
+
+            taggings = [dict(row) for row in normdb.execute(select([
+                    normTagging.c.Id,
+                    normTagging.c.Source.label('SourceUuid'),
+                    normTagging.c.Node,
+                    normTagging.c.Memo.label('memo'),
+                    normTagging.c.Fragment,
+                    normUser.c.Name.label('owner'),
+                    normTagging.c.CreatedDate,
+                    normTagging.c.ModifiedDate
+                ]).where(and_(
+                    normSource.c.Id == normTagging.c.Source,
+                    normSource.c.Content.isnot(None),
+                    normUser.c.Id == normTagging.c.CreatedBy
+                )))]
+
+            annotations = []
+            codings = []
+            caselinkages = []
+            for tagging in taggings:
+                tagging['date']   = tagging['CreatedDate']. strftime('%c')
+                tagging['dateM']  = tagging['ModifiedDate'].strftime('%c')
+                tagging['status'] = 1
+                matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
+                if matchfragment is None:
+                    print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + sourcename[tagging['SourceUuid']])
+                    continue
+
+                if tagging['Node'] is None:
+                    tagging['annotation'] = tagging['memo']
+                    tagging['fid']        = sourceid[tagging['SourceUuid']]
+                    tagging['position']   = int(matchfragment.group(1))
+                    annotations += [tagging]
+                elif tagging['Node'] in codeid.keys():
+                    tagging['cid']      = codeid[tagging['Node']]
+                    tagging['fid']      = sourceid[tagging['SourceUuid']]
+                    tagging['selfirst'] = int(matchfragment.group(1))
+                    tagging['selend']   = int(matchfragment.group(2))
+                    tagging['seltext']  = sourcetext[tagging['SourceUuid']][tagging['selfirst']:tagging['selend']+1]
+                    codings += [tagging]
+                else:
+                    tagging['caseid']   = caseid[tagging['Node']]
+                    tagging['fid']      = sourceid[tagging['SourceUuid']]
+                    tagging['selfirst'] = int(matchfragment.group(1))
+                    tagging['selend']   = int(matchfragment.group(2))
+                    caselinkages += [tagging]
+
+            if len(annotations) > 0:
+                rqdacon.execute(rqdaannotation.insert(), annotations)
+            if len(codings) > 0:
+                rqdacon.execute(rqdacoding.insert(), codings)
+            if len(caselinkages) > 0:
+                rqdacon.execute(rqdacaselinkage.insert(), caselinkages)
 
 # All done.
         rqdatr.commit()
