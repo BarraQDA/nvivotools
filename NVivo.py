@@ -575,10 +575,10 @@ def Normalise(args):
             if args.verbosity > 0:
                 print("Normalising source attributes")
 
-            nvivoNameItem     = nvivoItem.alias(name='NameItem')
-            nvivoNameRole     = nvivoRole.alias(name='NameRole')
-            nvivoValueItem    = nvivoItem.alias(name='ValueItem')
-            nvivoValueRole    = nvivoRole.alias(name='ValueRole')
+            nvivoNameItem  = nvivoItem.alias(name='NameItem')
+            nvivoNameRole  = nvivoRole.alias(name='NameRole')
+            nvivoValueItem = nvivoItem.alias(name='ValueItem')
+            nvivoValueRole = nvivoRole.alias(name='ValueRole')
 
             sourceattrvalues  = [dict(row) for row in nvivodb.execute(select([
                     nvivoSource.c.Item_Id.label('Source'),
