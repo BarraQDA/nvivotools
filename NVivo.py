@@ -1976,7 +1976,6 @@ def Denormalise(args):
 
             sources = [dict(row) for row in nvivocon.execute(select([
                     nvivoSource.c.Item_Id,
-                    nvivoItem.c.Name,
                     nvivoSource.c.PlainText
                 ]).where(
                     nvivoItem.c.Id == nvivoSource.c.Item_Id
@@ -2003,8 +2002,7 @@ def Denormalise(args):
                 tagging['ClusterId'] = None
                 matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
                 if matchfragment is None:
-                    source = next(source for source in sources if source['Item_Id'] == tagging['Source'])
-                    print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + source['Name'] )
+                    print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + itemname(tagging['Source']) )
                     taggings.remove(tagging)
                     continue
 
