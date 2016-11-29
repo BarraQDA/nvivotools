@@ -164,6 +164,15 @@ The core of NVivotools is its ability to transform data into and out of NVivo's 
 
 The most generic scripts are [`NormaliseDB.py`](NormaliseDB.py) and [`DenormaliseDB.py`](DenormaliseDB.py), which take an input and output descriptor (in sqlalchemy format, eg `sqlite:///filename.db` or `mssql+pymssql://user:password@sqlservername/database`), and convert the former to the latter. However most users are likely to prefer to use dedicated scripts for converting NVivo for Windows (`.nvp`) or for Mac (`.nvpx`) files.
 
+### **NEW** Convert between NVivo and RQDA
+
+Scripts to convert to and from [RQDA](http://rqda.r-forge.r-project.org/) The following scripts are available for converting between NVivo and RQDA formats.  As usual, calling the script with no arguments prints the usage, and scripts whose name contains `NVP` refer to the NVivo for Windows and need to be run under Windows. The other scripts can be run on Mac, Linux or any similar machine with SQL Anywhere installed.
+
+* [`NVPX2RQDA.sh`](NVPX2RQDA.sh)
+* [`RQDA2NVPX.sh`](RQDA2NVPX.sh)
+* [`NVP2RQDA.py`](NVP2RQDA.py)
+* [`RQDA2NVP.py`](RQDA2NVP.py)
+
 ### Windows
 
 Two scripts are provided specifically for Windows: [`NormaliseNVP.py`](NormaliseNVP.py) and [`DenormaliseNVP.py`](DenormaliseNVP.py).  These two scripts transform an NVivo project from an `.nvp` file into, and out of, a normalised project (`.norm`) file respectively.
