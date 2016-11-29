@@ -1238,7 +1238,6 @@ def Denormalise(args):
             maxvaluetags = {}
             addedattributes = []
             for value in values:
-
                 attribute = next(attribute for attribute in attributes if attribute['Id'] == value['Attribute'])
                 if attribute['Type'] in DataTypeName.values():
                     datatype = DataTypeName.keys()[DataTypeName.values().index(attribute['Type'])]
