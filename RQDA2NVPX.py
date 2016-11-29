@@ -30,27 +30,27 @@ parser.add_argument('-v', '--verbosity', type=int, default=1)
 parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
                     help='NVivo version (10 or 11)')
 
-parser.add_argument('-u', '--users', choices=["skip", "overwrite"], default="merge",
+parser.add_argument('-u', '--users', choices=["skip", "overwrite"], default="overwrite",
                     help='User action.')
 parser.add_argument('-p', '--project', choices=["skip", "overwrite"], default="overwrite",
                     help='Project action.')
-parser.add_argument('-nc', '--node-categories', choices=["skip", "overwrite"], default="merge",
+parser.add_argument('-nc', '--node-categories', choices=["skip", "overwrite"], default="overwrite",
                     help='Node category action.')
-parser.add_argument('-n', '--nodes', choices=["skip", "overwrite"], default="merge",
+parser.add_argument('-n', '--nodes', choices=["skip", "overwrite"], default="overwrite",
                     help='Node action.')
-parser.add_argument('-c', '--cases', choices=["skip", "overwrite"], default="merge",
+parser.add_argument('-c', '--cases', choices=["skip", "overwrite"], default="overwrite",
                     help='case action.')
-parser.add_argument('-ca', '--case-attributes', choices=["skip", "overwrite"], default="merge",
+parser.add_argument('-ca', '--case-attributes', choices=["skip", "overwrite"], default="overwrite",
                     help='Case attribute table action.')
-parser.add_argument('-sc', '--source-categories', choices=["skip", "overwrite"], default="merge",
+parser.add_argument('-sc', '--source-categories', choices=["skip", "overwrite"], default="overwrite",
                     help='Source category action.')
-parser.add_argument('-s', '--sources', choices=["skip", "overwrite"], default="merge",
+parser.add_argument('-s', '--sources', choices=["skip", "overwrite"], default="overwrite",
                     help='Source action.')
-parser.add_argument('-sa', '--source-attributes', choices=["skip", "overwrite"], default="merge",
+parser.add_argument('-sa', '--source-attributes', choices=["skip", "overwrite"], default="overwrite",
                     help='Source attribute action.')
-parser.add_argument('-t', '--taggings', choices=["skip", "overwrite"], default="merge",
+parser.add_argument('-t', '--taggings', choices=["skip", "overwrite"], default="overwrite",
                     help='Tagging action.')
-parser.add_argument('-a', '--annotations', choices=["skip", "overwrite"], default="merge",
+parser.add_argument('-a', '--annotations', choices=["skip", "overwrite"], default="overwrite",
                     help='Annotation action.')
 
 parser.add_argument('-b', '--base', dest='basefile', type=argparse.FileType('rb'), nargs='?',
