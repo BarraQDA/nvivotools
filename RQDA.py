@@ -1194,37 +1194,70 @@ def RQDA2Norm(args):
                 )))]
 
             caseattributeuuid = {}
-            for casevalue in casevalues:
-                casevalue['Node']         = caseuuid[casevalue['caseid']]
-                casevalue['CreatedBy']    = find_or_create_user(casevalue['owner'])
-                casevalue['CreatedDate']  = dateparser.parse(casevalue['date'])
-                casevalue['ModifiedBy']   = casevalue['CreatedBy']
-                casevalue['ModifiedDate'] = dateparser.parse(casevalue['dateM'])
+            for casevalue in casevalues[:]: # Take copy of list so we can remove items
+                casevalue['Node']                  = caseuuid[casevalue['caseid']]
+                casevalue['CreatedBy']             = find_or_create_user(casevalue['owner'])
+                casevalue['CreatedDate']           = dateparser.parse(casevalue['date'])
+                casevalue['ModifiedBy']            = casevalue['CreatedBy']
+                casevalue['ModifiedDate']          = dateparser.parse(casevalue['dateM'])
+                casevalue['AttributeOwner']        = find_or_create_user(casevalue['attributeowner'])
+                casevalue['AttributeCreatedDate']  = dateparser.parse(casevalue['attributedate'])
+                casevalue['AttributeModifiedDate'] = dateparser.parse(casevalue['attributedateM'])
 
-                if casevalue['Name'] not in caseattributeuuid.keys():
-                    caseattribute = normcon.execute(select([
-                            normSourceAttribute.c.Id
+                # Catch reserved attribute 'Category'
+                if casevalue['Name'] == 'Category':
+                    # See if the category already exists
+                    nodecat = normcon.execute(select([
+                            normNodeCategory.c.Id
                         ]).where(
-                            normSourceAttribute.c.Name == bindparam('Name')
-                        ), casevalue).first()
-                    if caseattribute is None:
-                        caseattributeuuid[casevalue['Name']] = uuid.uuid4()
-                        casevalue['AttributeOwner']    = find_or_create_user(casevalue['attributeowner'])
-                        casevalue['AttributeCreatedDate']  = dateparser.parse(casevalue['attributedate'])
-                        casevalue['AttributeModifiedDate'] = dateparser.parse(casevalue['attributedateM'])
-
-                        normcon.execute(normNodeAttribute.insert().values({
-                                'Id': caseattributeuuid[casevalue['Name']],
-                                'Type': 'Decimal' if casevalue['class'] == 'numeric' else 'Text',
-                                'CreatedBy': casevalue['AttributeOwner'],
-                                'CreatedDate': casevalue['AttributeCreatedDate'],
-                                'ModifiedBy': casevalue['AttributeOwner'],
-                                'ModifiedDate': casevalue['AttributeModifiedDate']
-                            }), casevalue)
+                            normNodeCategory.c.Name == bindparam('Name')
+                        ), {
+                            'Name': casevalue['Value']
+                        }).first()
+                    if nodecat is not None:
+                        catuuid = nodecat['Id']
                     else:
-                        caseattributeuuid[casevalue['Name']] = caseattribute['Id']
+                        catuuid = uuid.uuid4()
+                        normcon.execute(normNodeCategory.insert(), {
+                                'Id':           catuuid,
+                                'Name':         casevalue['Value'],
+                                'Description':  'Category created from RQDA node attribute',
+                                'CreatedBy':    casevalue['AttributeOwner'],
+                                'CreatedDate':  casevalue['AttributeCreatedDate'],
+                                'ModifiedBy':   casevalue['AttributeOwner'],
+                                'ModifiedDate': casevalue['AttributeModifiedDate']
+                            })
 
-                casevalue['Attribute'] = caseattributeuuid[casevalue['Name']]
+                    normcon.execute(normNode.update(
+                            normNode.c.Id == bindparam('Node')
+                        ), {
+                            'Node':     caseuuid[casevalue['caseid']],
+                            'Category': nodecat['Id']
+                        })
+
+                    casevalues.remove(casevalue)
+                else:
+                    if casevalue['Name'] not in caseattributeuuid.keys():
+                        caseattribute = normcon.execute(select([
+                                normSourceAttribute.c.Id
+                            ]).where(
+                                normSourceAttribute.c.Name == bindparam('Name')
+                            ), casevalue).first()
+                        if caseattribute is None:
+                            caseattributeuuid[casevalue['Name']] = uuid.uuid4()
+
+                            normcon.execute(normNodeAttribute.insert().values({
+                                    'Id': caseattributeuuid[casevalue['Name']],
+                                    'Type': 'Decimal' if casevalue['class'] == 'numeric' else 'Text',
+                                    'CreatedBy': casevalue['AttributeOwner'],
+                                    'CreatedDate': casevalue['AttributeCreatedDate'],
+                                    'ModifiedBy': casevalue['AttributeOwner'],
+                                    'ModifiedDate': casevalue['AttributeModifiedDate']
+                                }), casevalue)
+                        else:
+                            caseattributeuuid[casevalue['Name']] = caseattribute['Id']
+
+                    casevalue['Attribute'] = caseattributeuuid[casevalue['Name']]
 
             if len(casevalues) > 0:
                 normcon.execute(normNodeValue.insert(), casevalues)
