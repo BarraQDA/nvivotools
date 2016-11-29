@@ -59,4 +59,4 @@ if [ "$found" != "1" ]; then
 fi
 
 # Call python explicitly here, otherwise env will drop our environment.
-python `dirname $0`/RQDA2NVPX.py "$@"
+python `dirname $0`/RQDA2NVPX.py --cmdline "$@"

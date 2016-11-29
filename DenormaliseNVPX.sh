@@ -59,4 +59,4 @@ if [ "$found" != "1" ]; then
 fi
 
 # Call python explicitly here, otherwise env will drop our environment.
-python `dirname $0`/DenormaliseNVPX.py "$@"
+python `dirname $0`/DenormaliseNVPX.py --cmdline "$@"

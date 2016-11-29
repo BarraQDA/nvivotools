@@ -20,6 +20,11 @@ import argparse
 
 parser = argparse.ArgumentParser(description='Convert an NVivo for Mac (.nvpx) file into an RQDA project.')
 
+# --cmdline argument means retain full output file path name, otherwise strip directory,
+# so that things work under Wooey.
+parser.add_argument('--cmdline', action='store_true',
+                    help=argparse.SUPPRESS)
+
 parser.add_argument('-v', '--verbosity', type=int, default=1)
 
 parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
@@ -115,5 +120,8 @@ args.case_attributes = args.node_attributes
 
 RQDA.Norm2RQDA(args)
 
-shutil.move(tmpoutfilename, os.path.basename(args.outfilename))
+if not args.cmdline:
+    args.outfilename = os.path.basename(args.outfilename)
+
+shutil.move(tmpoutfilename, args.outfilename)
 os.remove(tmpnormfilename)
