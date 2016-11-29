@@ -30,7 +30,7 @@ parser.add_argument('-i', '--instance', type=str, nargs='?',
 
 parser.add_argument('-u', '--users', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='User action.')
-parser.add_argument('-p', '--project', choices=["skip", "overwrite"], default="replace",
+parser.add_argument('-p', '--project', choices=["skip", "overwrite"], default="overwrite",
                     help='Project action.')
 parser.add_argument('-nc', '--node-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Node category action.')

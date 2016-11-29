@@ -30,7 +30,7 @@ parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
 
 parser.add_argument('-u', '--users', choices=["skip", "overwrite"], default="merge",
                     help='User action.')
-parser.add_argument('-p', '--project', choices=["skip", "overwrite"], default="replace",
+parser.add_argument('-p', '--project', choices=["skip", "overwrite"], default="overwrite",
                     help='Project action.')
 parser.add_argument('-nc', '--node-categories', choices=["skip", "overwrite"], default="merge",
                     help='Node category action.')
