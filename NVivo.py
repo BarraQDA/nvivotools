@@ -1161,6 +1161,11 @@ def Denormalise(args):
             for item in uniqueitems:
                 itemselresult = nvivocon.execute(itemsel, {'Item':item}).first()
                 itemcategory[item] = itemselresult['Category']
+            for value in values:
+                value['Category'] = itemcategory[value['Item']]
+                if value['Category'] is None:
+                    print("WARNING: " + name + " '" + itemname(value['Item']) + "' has no category, attribute '" + attribute['PlainTextName'] + "' cannot be stored.")
+                    continue
 
             attrsel = select([
                     func.max(nvivoCountAttributeRole.c.Tag).label('MaxAttributeTag')
@@ -1262,31 +1267,42 @@ def Denormalise(args):
                 if args.windows:
                     value['Value'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), value['Value']))
 
-                value['Category'] = itemcategory[value['Item']]
-
-                values = [dict(row) for row in nvivocon.execute(valuesel, value)]
-                if len(values) > 1:
-                    print value
-                    print values
+                curvalues = [dict(row) for row in nvivocon.execute(valuesel, value)]
+                if len(curvalues) > 1:
                     raise RuntimeError("ERROR: Sanity check!")
-                elif len(values) == 1:  # Attribute exists
-                    valuestatus = dict(values[0])
-                elif len(values) == 0:  # Attribute does not exist
+                elif len(curvalues) == 1:  # Attribute exists
+                    valuestatus = dict(curvalues[0])
+                else:  # Attribute does not exist
                     valuestatus = {
                         'NewValueId':None,
                         'ExistingValueId':None,
                     }
 
-                    attribute['AttributeId'] = value['Attribute']
                     if value['Category'] not in maxattributetags.keys():
                         maxattributetags[value['Category']] = nvivocon.execute(attrsel, {'Category':value['Category']}).first()['MaxAttributeTag'] or -1
                     maxattributetags[value['Category']] += 1
-                    attribute['Tag'] = maxattributetags[value['Category']]
-                    attribute['Category'] = value['Category']
-                    maxvaluetags[(value['Category'], attribute['Id'])] = 1
 
-                    if args.verbosity > 1:
-                        print("Creating " + name + " attribute '" + attribute['PlainTextName'] + "' for category '" + itemname(value['Category']) + "' with tag: " + str(attribute['Tag']))
+                    # NVivo doesn't like attributes being shared across categories, so test whether
+                    # attribute has already been created.
+                    curitem = nvivocon.execute(select([
+                            nvivoItem.c.Name
+                        ]).where(
+                            nvivoItem.c.Id == bindparam('Id')
+                        ), attribute).first()
+                    if curitem is not None:
+                        # Need to adjust every instance of this attribute/category combination
+                        if args.verbosity > 1:
+                            print("Duplicating " + name + " attribute '" + attribute['PlainTextName'] + "' for category '" + itemname(value['Category']) + "' with tag: " + str(maxattributetags[value['Category']]))
+                        attribute = attribute.copy()
+                        attributes += [attribute]
+                        attribute['Id'] = uuid.uuid4()
+                        existingattr = value['Attribute']
+                        for valueiter in values:
+                            if valueiter['Attribute'] == existingattr and valueiter['Category'] == value['Category']:
+                                valueiter['Attribute'] = attribute['Id']
+                    else:
+                        if args.verbosity > 1:
+                            print("Creating " + name + " attribute '" + attribute['PlainTextName'] + "' for category '" + itemname(value['Category']) + "' with tag: " + str(maxattributetags[value['Category']]))
 
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('Id'),
@@ -1297,6 +1313,11 @@ def Denormalise(args):
                             'ReadOnly': literal_column('0'),
                             'InheritPermissions': literal_column('1')
                         }), attribute)
+
+                    attribute['Tag'] = maxattributetags[value['Category']]
+                    attribute['Category'] = value['Category']
+                    maxvaluetags[(value['Category'], attribute['Id'])] = 1
+
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Id'),
                             'Item2_Id': bindparam('Category'),
@@ -1684,12 +1705,21 @@ def Denormalise(args):
                     source['SourceType'] = 2  # or 3 or 4?
 
                 tmpfilename = tempfile.mktemp()
-                tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
-                tmpfile.write(source['Object'])
+                if source['Object'] is not None:
+                    tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
+                    tmpfile.write(source['Object'])
+                elif source['ObjectTypeName'] == 'TXT' and source['PlainText'] is not None:
+                    tmpfile = codecs.open(tmpfilename + '.' + source['ObjectTypeName'], 'w', 'utf-8-sig')
+                    tmpfile.write(source['PlainText'])
+                else:
+                    raise RuntimeError("Source '" + source['PlainTextName'] + "' is missing")
+
                 tmpfile.close()
 
                 # Look for unoconvcmd just once
                 if massagesource.unoconvcmd is None:
+                    if args.verbosity > 1:
+                        print("Searching for unoconv executable.")
                     # Look first on path for OS installed version, otherwise use our copy
                     for path in os.environ["PATH"].split(os.pathsep):
                         unoconvpath = os.path.join(path, 'unoconv')
@@ -1729,6 +1759,7 @@ def Denormalise(args):
                     source['PlainText'] = source['PlainText'].replace('\n', '\n\n' if args.mac else '\r\n')
 
                 # Convert object to DOC/ODT if isn't already
+                source['Object'] = ''
                 if source['ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
                     destformat = 'odt' if args.mac else 'doc'
                     p = Popen(massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
@@ -1738,7 +1769,6 @@ def Denormalise(args):
                         raise RuntimeError(err)
 
                     source['Object'] = file(tmpfilename + '.' + destformat, 'rb').read()
-
                     os.remove(tmpfilename + '.' + destformat)
 
                 os.remove(tmpfilename + '.' + source['ObjectTypeName'])
@@ -1826,9 +1856,7 @@ def Denormalise(args):
                     {'Name':headsourcename}
                 ).first()
             if headsource is None:
-                raise RuntimeError("""
-    NVivo file contains no head Internal source.
-    """)
+                raise RuntimeError("NVivo file contains no head Internal source.")
             else:
                 if args.verbosity > 1:
                     print("Found head source Id: " + str(headsource['Id']))
