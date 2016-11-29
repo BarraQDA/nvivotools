@@ -18,52 +18,55 @@
 
 import argparse
 
-parser = argparse.ArgumentParser(description='Normalise an NVivo for Mac file.')
+parser = argparse.ArgumentParser(description='Convert an NVivo for Mac (.nvpx) file into an RQDA project.')
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
 
 parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
                     help='NVivo version (10 or 11)')
 
-parser.add_argument('-u', '--users', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-u', '--users', choices=["skip", "overwrite"], default="merge",
                     help='User action.')
 parser.add_argument('-p', '--project', choices=["skip", "overwrite"], default="replace",
                     help='Project action.')
-parser.add_argument('-nc', '--node-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-nc', '--node-categories', choices=["skip", "overwrite"], default="merge",
                     help='Node category action.')
-parser.add_argument('-n', '--nodes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-n', '--nodes', choices=["skip", "overwrite"], default="merge",
                     help='Node action.')
-parser.add_argument('-na', '--node-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
-                    help='Node attribute table action.')
-parser.add_argument('-sc', '--source-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-c', '--cases', choices=["skip", "overwrite"], default="merge",
+                    help='case action.')
+parser.add_argument('-ca', '--node-attributes', choices=["skip", "overwrite"], default="merge",
+                    help='Case attribute table action.')
+parser.add_argument('-sc', '--source-categories', choices=["skip", "overwrite"], default="merge",
                     help='Source category action.')
-parser.add_argument('-s', '--sources', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-s', '--sources', choices=["skip", "overwrite"], default="merge",
                     help='Source action.')
-parser.add_argument('-sa', '--source-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-sa', '--source-attributes', choices=["skip", "overwrite"], default="merge",
                     help='Source attribute action.')
-parser.add_argument('-t', '--taggings', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-t', '--taggings', choices=["skip", "overwrite"], default="merge",
                     help='Tagging action.')
-parser.add_argument('-a', '--annotations', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-a', '--annotations', choices=["skip", "overwrite"], default="merge",
                     help='Annotation action.')
 
 parser.add_argument('infile', type=argparse.FileType('rb'),
                     help="Input NVivo for Mac file (extension .nvpx)")
 parser.add_argument('outfilename', type=str, nargs='?',
-                    help="Output normalised SQLite file")
+                    help="Output RQDA file")
 
 args = parser.parse_args()
 
 # Fill in extra arguments that NVivo module expects
-args.mac     = True
-args.windows = False
+args.mac       = True
+args.windows   = False
 
 import NVivo
+import RQDA
 import os
 import shutil
 import signal
-from subprocess import Popen, PIPE
 import tempfile
 import time
+from subprocess import Popen, PIPE
 
 tmpinfilename = tempfile.mktemp()
 tmpinfileptr  = file(tmpinfilename, 'wb')
@@ -71,10 +74,10 @@ tmpinfileptr.write(args.infile.read())
 args.infile.close()
 tmpinfileptr.close()
 
-tmpoutfilename = tempfile.mktemp()
-
 if args.outfilename is None:
-    args.outfilename = args.infile.name.rsplit('.',1)[0] + '.norm'
+    args.outfilename = args.infile.name.rsplit('.',1)[0] + '.rqda'
+
+tmpnormfilename = tempfile.mktemp()
 
 # Find a free sock for SQL Anywhere server to bind to
 import socket
@@ -84,7 +87,7 @@ freeport = str(s.getsockname()[1])
 s.close()
 
 DEVNULL = open(os.devnull, 'wb')
-dbproc = Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport], stdout=PIPE, stdin=DEVNULL)
+dbproc = Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga', '-xd',  tmpinfilename, '-n', 'NVivo'+freeport], stdout=PIPE, stdin=DEVNULL)
 
 # Wait until SQL Anywhere engine starts...
 while dbproc.poll() is None:
@@ -96,9 +99,21 @@ if args.verbosity > 0:
     print("Started database server on port " + freeport)
 
 args.indb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' + freeport + '/NVivo' + freeport
-args.outdb = 'sqlite:///' + tmpoutfilename
+args.outdb = 'sqlite:///' + tmpnormfilename
 
 NVivo.Normalise(args)
 
-shutil.move(tmpoutfilename, os.path.basename(args.outfilename))
 os.remove(tmpinfilename)
+
+tmpoutfilename = tempfile.mktemp()
+
+args.indb  = 'sqlite:///' + tmpnormfilename
+args.outdb = 'sqlite:///' + tmpoutfilename
+
+# Small hack
+args.case_attributes = args.node_attributes
+
+RQDA.Norm2RQDA(args)
+
+shutil.move(tmpoutfilename, os.path.basename(args.outfilename))
+os.remove(tmpnormfilename)

@@ -18,9 +18,16 @@
 
 import argparse
 
-parser = argparse.ArgumentParser(description='Convert a normalised NVivo project to RQDA.')
+parser = argparse.ArgumentParser(description='Convert an RQDA project to NVivo format.')
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
+
+parser.add_argument('-w', '--windows', action='store_true',
+                    help='Correct NVivo for Windows string coding. Use if offloaded file will be used with Windows version of NVivo.')
+parser.add_argument('-m', '--mac',  action='store_true',
+                    help='Use NVivo for Mac database format.')
+parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
+                    help='NVivo version (10 or 11)')
 
 parser.add_argument('-u', '--users', choices=["skip", "overwrite"], default="merge",
                     help='User action.')
@@ -30,8 +37,10 @@ parser.add_argument('-nc', '--node-categories', choices=["skip", "overwrite"], d
                     help='Node category action.')
 parser.add_argument('-n', '--nodes', choices=["skip", "overwrite"], default="merge",
                     help='Node action.')
-parser.add_argument('-na', '--node-attributes', choices=["skip", "overwrite"], default="merge",
-                    help='Node attribute table action.')
+parser.add_argument('-c', '--cases', choices=["skip", "overwrite"], default="merge",
+                    help='case action.')
+parser.add_argument('-ca', '--case-attributes', choices=["skip", "overwrite"], default="merge",
+                    help='Case attribute table action.')
 parser.add_argument('-sc', '--source-categories', choices=["skip", "overwrite"], default="merge",
                     help='Source category action.')
 parser.add_argument('-s', '--sources', choices=["skip", "overwrite"], default="merge",
@@ -43,13 +52,14 @@ parser.add_argument('-t', '--taggings', choices=["skip", "overwrite"], default="
 parser.add_argument('-a', '--annotations', choices=["skip", "overwrite"], default="merge",
                     help='Annotation action.')
 
-parser.add_argument('infile', type=argparse.FileType('rb'),
-                    help="Input normalised (.norm) file")
-parser.add_argument('outfilename', type=str, nargs='?',
-                    help="Output RQDA file")
+parser.add_argument('inrqdadb', type=str,
+                    help="Input database")
+parser.add_argument('outnvivodb', type=str, nargs='?',
+                    help="Output database, structure must already exist")
 
 args = parser.parse_args()
 
+import NVivo
 import RQDA
 import os
 import shutil
@@ -57,21 +67,19 @@ import signal
 import tempfile
 import time
 
-tmpinfilename = tempfile.mktemp()
-tmpinfileptr  = file(tmpinfilename, 'wb')
-tmpinfileptr.write(args.infile.read())
-args.infile.close()
-tmpinfileptr.close()
+if args.outnvivodb is None:
+    args.outnvivodb = args.inrqdadb.rsplit('.',1)[0] + '.nvivo'
 
-tmpoutfilename = tempfile.mktemp()
+tmpnormfilename = tempfile.mktemp()
 
-if args.outfilename is None:
-    args.outfilename = args.infile.name.rsplit('.',1)[0] + '.rqda'
+args.indb  = args.inrqdadb
+args.outdb = 'sqlite:///' + tmpnormfilename
+RQDA.RQDA2Norm(args)
 
-args.indb  = 'sqlite:///' + tmpinfilename
-args.outdb = 'sqlite:///' + tmpoutfilename
+args.node_attributes = args.case_attributes
 
-RQDA.Norm2RQDA(args)
+args.indb  = 'sqlite:///' + tmpnormfilename
+args.outdb = args.outnvivodb
+NVivo.Denormalise(args)
 
-shutil.move(tmpoutfilename, os.path.basename(args.outfilename))
-os.remove(tmpinfilename)
+os.remove(tmpnormfilename)

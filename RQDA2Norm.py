@@ -22,27 +22,27 @@ parser = argparse.ArgumentParser(description='Convert an RQDA project to normali
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
 
-parser.add_argument('-u', '--users', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-u', '--users', choices=["skip", "overwrite"], default="merge",
                     help='User action.')
-parser.add_argument('-p', '--project', choices=["skip", "replace"], default="replace",
+parser.add_argument('-p', '--project', choices=["skip", "overwrite"], default="replace",
                     help='Project action.')
-parser.add_argument('-nc', '--node-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-nc', '--node-categories', choices=["skip", "overwrite"], default="merge",
                     help='Node category action.')
-parser.add_argument('-n', '--nodes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-n', '--nodes', choices=["skip", "overwrite"], default="merge",
                     help='Node action.')
-parser.add_argument('-c', '--cases', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-c', '--cases', choices=["skip", "overwrite"], default="merge",
                     help='case action.')
-parser.add_argument('-ca', '--case-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-ca', '--case-attributes', choices=["skip", "overwrite"], default="merge",
                     help='Case attribute table action.')
-parser.add_argument('-sc', '--source-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-sc', '--source-categories', choices=["skip", "overwrite"], default="merge",
                     help='Source category action.')
-parser.add_argument('-s', '--sources', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-s', '--sources', choices=["skip", "overwrite"], default="merge",
                     help='Source action.')
-parser.add_argument('-sa', '--source-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-sa', '--source-attributes', choices=["skip", "overwrite"], default="merge",
                     help='Source attribute action.')
-parser.add_argument('-t', '--taggings', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-t', '--taggings', choices=["skip", "overwrite"], default="merge",
                     help='Tagging action.')
-parser.add_argument('-a', '--annotations', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+parser.add_argument('-a', '--annotations', choices=["skip", "overwrite"], default="merge",
                     help='Annotation action.')
 
 parser.add_argument('infile', type=argparse.FileType('rb'),

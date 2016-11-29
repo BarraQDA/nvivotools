@@ -102,20 +102,15 @@ proc.wait()
 if args.verbosity > 0:
     print("Attached database " + dbname)
 
-try:
-    args.indb = 'sqlite:///' + tmpinfilename
-    args.outdb = 'mssql+pymssql://nvivotools:nvivotools@localhost/' + dbname
+args.indb = 'sqlite:///' + tmpinfilename
+args.outdb = 'mssql+pymssql://nvivotools:nvivotools@localhost/' + dbname
 
-    NVivo.Denormalise(args)
+NVivo.Denormalise(args)
 
-except:
-    raise
+proc = Popen([helperpath + 'mssqlSave.bat', tmpoutfilename, dbname, args.instance])
+proc.wait()
+if args.verbosity > 0:
+    print("Saved database " + dbname)
 
-finally:
-    proc = Popen([helperpath + 'mssqlSave.bat', tmpoutfilename, dbname, args.instance])
-    proc.wait()
-    if args.verbosity > 0:
-        print("Saved database " + dbname)
-
-    shutil.move(tmpoutfilename, args.outfilename)
-    os.remove(tmpinfilename)
+shutil.move(tmpoutfilename, args.outfilename)
+os.remove(tmpinfilename)
