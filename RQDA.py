@@ -1239,9 +1239,9 @@ def RQDA2Norm(args):
                 else:
                     if casevalue['Name'] not in caseattributeuuid.keys():
                         caseattribute = normcon.execute(select([
-                                normSourceAttribute.c.Id
+                                normNodeAttribute.c.Id
                             ]).where(
-                                normSourceAttribute.c.Name == bindparam('Name')
+                                normNodeAttribute.c.Name == bindparam('Name')
                             ), casevalue).first()
                         if caseattribute is None:
                             caseattributeuuid[casevalue['Name']] = uuid.uuid4()
