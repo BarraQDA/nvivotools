@@ -13,14 +13,15 @@ parser = argparse.ArgumentParser(description='Mass twitter search.')
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
 
-parser.add_argument('-s', '--search', type=str, help='Search string.')
-parser.add_argument('-c', '--count',  type=int, help='Number of tweets to return')
+parser.add_argument('-c', '--count',  type=int, help='Number of tweets to return', default=100)
 
 parser.add_argument('-o', '--outfile', type=str, nargs='?',
                     help='Output file name, otherwise use stdout.')
 
 parser.add_argument('-m', '--maxid',  type=str, nargs='?',
                     help='Maximum status id.')
+
+parser.add_argument('search', type=str, help='Search string.')
 
 args = parser.parse_args()
 
@@ -43,7 +44,7 @@ else:
 if args.outfile is None:
     outfile = sys.stdout
 else:
-    outfile = file(args.outfile, 'wb')
+    outfile = file(args.outfile, 'w')
 
 outunicodecsv=unicodecsv.writer(outfile, quoting=unicodecsv.QUOTE_ALL)
 outunicodecsv.writerow([
@@ -69,7 +70,7 @@ while totaltweets < args.count:
 
     for tweet in tweets:
         if tweet.retweeted_status is None \
-        and string.find(tweet.text.lower(), searchlc) != -1:
+        and searchlc in tweet.text.lower():
             row = [
                     "'" + tweet.id_str,
                     tweet.user.screen_name,
