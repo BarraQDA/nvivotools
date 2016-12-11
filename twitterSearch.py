@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+from requests_oauthlib import OAuth1Session
+import webbrowser
 import twitter
 import sys
 import unicodecsv
@@ -25,12 +27,53 @@ parser.add_argument('search', type=str, help='Search string.')
 
 args = parser.parse_args()
 
-# Hard code keys for now
+## Hard code keys for now
+consumer_key='ODCA5b8DKy7vi0CShoaWhCqvs'
+consumer_secret='YTQZgVxSzMGKbbyTug5kU18GmTGrq89DsGNQbGIfFTEFyF2ZR9'
+
+#REQUEST_TOKEN_URL = 'https://api.twitter.com/oauth/request_token'
+#ACCESS_TOKEN_URL = 'https://api.twitter.com/oauth/access_token'
+#AUTHORIZATION_URL = 'https://api.twitter.com/oauth/authorize'
+#SIGNIN_URL = 'https://api.twitter.com/oauth/authenticate'
+
+#oauth_client = OAuth1Session(consumer_key, client_secret=consumer_secret, callback_uri='oob')
+
+#print('\nRequesting temp token from Twitter...\n')
+
+#try:
+    #resp = oauth_client.fetch_request_token(REQUEST_TOKEN_URL)
+#except ValueError as e:
+    #raise 'Invalid response from Twitter requesting temp token: {0}'.format(e)
+
+#url = oauth_client.authorization_url(AUTHORIZATION_URL)
+
+#print('I will try to start a browser to visit the following Twitter page '
+        #'if a browser will not start, copy the URL to your browser '
+        #'and retrieve the pincode to be used '
+        #'in the next step to obtaining an Authentication Token: \n'
+        #'\n\t{0}'.format(url))
+
+#webbrowser.open(url)
+#pincode = raw_input('\nEnter your pincode? ')
+
+#print('\nGenerating and signing request for an access token...\n')
+
+#oauth_client = OAuth1Session(consumer_key, client_secret=consumer_secret,
+                                #resource_owner_key=resp.get('oauth_token'),
+                                #resource_owner_secret=resp.get('oauth_token_secret'),
+                                #verifier=pincode)
+#try:
+    #resp = oauth_client.fetch_access_token(ACCESS_TOKEN_URL)
+#except ValueError as e:
+    #raise 'Invalid response from Twitter requesting temp token: {0}'.format(e)
+
+#access_token_key = resp.get('oauth_token')
+#access_token_secret = resp.get('oauth_token_secret')
+
 api = twitter.Api(
-            consumer_key='ODCA5b8DKy7vi0CShoaWhCqvs',
-            consumer_secret='YTQZgVxSzMGKbbyTug5kU18GmTGrq89DsGNQbGIfFTEFyF2ZR9',
-            access_token_key='780828796555399168-Fo9gqAru4jRVlrfP4EGhmqE9ae8E3li',
-            access_token_secret='uJNTOAHiV6blaHgy5Qq0rXNWW8nD2MBDtdtTyrM6ZIoms'
+            consumer_key=consumer_key,
+            consumer_secret=consumer_secret,
+            application_only_auth=True
       )
 
 searchlc = args.search.lower()
