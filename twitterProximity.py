@@ -8,7 +8,7 @@ from textblob import TextBlob
 import string
 import unicodedata
 
-parser = argparse.ArgumentParser(description='Mass twitter search.')
+parser = argparse.ArgumentParser(description='Word proximity calculator.')
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
 
