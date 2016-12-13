@@ -100,13 +100,13 @@ else:
 
 outunicodecsv=unicodecsv.writer(outfile, quoting=unicodecsv.QUOTE_ALL)
 outunicodecsv.writerow([
-        'ID',
-        'User',
-        'Date (UTC)',
-        'Text',
-        'Language',
-        'Retweets',
-        'Favorites'
+        'id',
+        'username',
+        'date',
+        'text',
+        'lang',
+        'retweets',
+        'favorites'
     ])
 
 while totaltweets < args.count:
