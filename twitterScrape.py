@@ -27,32 +27,30 @@ if args.outfile is None:
     outfile = sys.stdout
 else:
     outfile = file(args.outfile, 'a+')
+    # Position file at end. File open mode should do this already but apparently
+    # doesn't work correctly
+    outfile.seek(0,2)
 
 if args.outfile is not None and outfile.tell() > 0:
 	outfile.seek(0,0)
 	inreader=unicodecsv.DictReader(outfile)
 	fieldnames = inreader.fieldnames
 	# Real all lines to find last id
+	lastid = None
+	lastdate = None
 	for row in inreader:
 		lastid = row['id']
 		lastdate = row['date']
 
-	# Use last date from file instead of argument.
-	args.until = dateparser.parse(latedate)
-	sys.stderr.write("Continuing scrape from: " + lastdate + '\n')
+	if lastdate is not None:
+		# Use last date from file instead of argument.
+		args.until = dateparser.parse(lastdate).strftime("%Y-%m-%d")
+		sys.stderr.write("Continuing scrape from: " + args.until + '\n')
+
 	csvwriter=unicodecsv.DictWriter(outfile, fieldnames=fieldnames, extrasaction='ignore')
-
-	refreshCursor = ''
-
-	results = []
-	resultsAux = []
-	cookieJar = cookielib.CookieJar()
-
-	if args.username and (args.username.startswith("\'") or args.username.startswith("\"")) and (args.username.endswith("\'") or args.username.endswith("\"")):
-		args.username = args.username[1:-1]
-
 	overlap = False
 else:
+	sys.stderr.write("Creating new output file...\n")
 	fieldnames = [ 'username', 'date', 'retweets', 'favorites', 'text', 'lang', 'geo', 		'mentions', 'hashtags', 'id', 'permalink']
 	csvwriter=unicodecsv.DictWriter(outfile, fieldnames=fieldnames, extrasaction='ignore')
 	csvwriter.writeheader()
@@ -113,7 +111,6 @@ while active:
 
 	try:
 		dataJson = json.loads(opener.open(url).read())
-		sys.stderr.write("Read response to: " + url + '\n')
 	except:
 		raise
 		sys.stderr.write("Twitter weird response. Try to see on browser: " + url + '\n')
@@ -167,8 +164,10 @@ while active:
 		abortCount = 0
 
 		if not overlap:
+			overlap = True
+			sys.stderr.write("Possible missing tweets...\n")
 			# Add an empty tweet to signal possible missing tweets
-			csvwriter.writerow(tweet)
+			csvwriter.writerow({})
 
 		usernameTweet = tweetPQ("span.username.js-action-profile-name b").text();
 		lang = tweetPQ("p.js-tweet-text").attr("lang")
