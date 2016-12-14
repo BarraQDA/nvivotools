@@ -4,7 +4,6 @@
 import argparse
 import sys
 import unicodecsv
-#from textblob import TextBlob
 import string
 import unicodedata
 import pymp
@@ -12,12 +11,13 @@ import pymp
 parser = argparse.ArgumentParser(description='Word proximity calculator.')
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
+parser.add_argument('--textblob', action='store_true', help='Use textblob for analysis')
 
 parser.add_argument('-j', '--jobs', type=int, help='Number of parallel tasks, default is number of CPUs')
 
 parser.add_argument('-k', '--keyword', type=str, help='Key word for search.')
 parser.add_argument('-t', '--threshold', type=float,
-                    help='Threshold value for word to be output')
+                    help='Threshold value for word to be output, default=100')
 parser.add_argument('-l', '--limit', type=int, default=100,
                     help='Limit number of words to output')
 parser.add_argument('-o', '--outfile', type=str, nargs='?',
@@ -31,6 +31,9 @@ args = parser.parse_args()
 if args.jobs is None:
 	import multiprocessing
 	args.jobs = multiprocessing.cpu_count()
+
+if args.keyword is None:
+	raise("Keyword must be provided.")
 
 keywordlc = args.keyword.lower()
 
@@ -49,6 +52,12 @@ else:
 from nltk.corpus import stopwords
 stop = set(stopwords.words('english'))
 
+if args.textblob:
+    # We want to catch handles and hashtags so need to manage punctuation manually
+    from textblob import TextBlob
+    from nltk.tokenize import RegexpTokenizer
+    tokenizer=RegexpTokenizer(r'https?://[^"\' ]+|[@|#]?\w+')
+
 # Separators are all symbols and punctuation except hashtag ('#') and mention ('@')
 #separators = u''.join(set(unichr(i) for i in range(sys.maxunicode) if unicodedata.category(unichr(i))[0] in ['P','Z','S']) - set([u'#', u'@']))
 
@@ -59,20 +68,25 @@ mergedscore = pymp.shared.dict()
 with pymp.Parallel(args.jobs) as p:
 	score = {}
 	for rowindex in p.range(0, rowcount):
-		#textblob = TextBlob(rows[rowindex]['text'], tokenizer=tokenizer)
-		#wordlist = textblob.tokens
-		wordlist = rows[rowindex]['text'].split()
+		if args.textblob:
+			textblob = TextBlob(rows[rowindex]['text'], tokenizer=tokenizer)
+			wordlist = textblob.tokens
+		else:
+			wordlist = rows[rowindex]['text'].split()
 
 		keywordindices = [index for index,word in enumerate(wordlist)
 								if keywordlc in word.lower()]
 		if len(keywordindices) > 0:
-			#wordproximity = [(word.lemmatize().lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
-			wordproximity = [(word.lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
+			if args.textblob:
+				wordproximity = [(word.lemmatize().lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))]
+			else:
+				wordproximity = [(word.lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
 								for index,word in enumerate(wordlist) if word.lower() not in stop]
+
 			for word,proximity in wordproximity:
 				if proximity > 0:
-					wordscore = 1.0
-					#wordscore = 1.0 / proximity
+					#wordscore = 1.0
+					wordscore = 1.0 / proximity
 					if word not in score.keys():
 						score[word] = wordscore
 					else:
