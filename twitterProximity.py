@@ -8,6 +8,8 @@ from textblob import TextBlob
 import string
 import unicodedata
 
+@profile
+
 parser = argparse.ArgumentParser(description='Word proximity calculator.')
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
@@ -38,7 +40,6 @@ if args.outfile is None:
 else:
     outfile = file(args.outfile, 'w')
 
-score = {}
 
 from nltk.corpus import stopwords
 stop = set(stopwords.words('english'))
@@ -51,6 +52,7 @@ tokenizer=RegexpTokenizer(r'https?://[^"\' ]+|[@|#]?\w+')
                                  #if unicodedata.category(unichr(i)).startswith(u'P'))
 
 inreader=unicodecsv.DictReader(infile)
+score = {}
 for row in inreader:
     textblob = TextBlob(row['text'], tokenizer=tokenizer)
 
