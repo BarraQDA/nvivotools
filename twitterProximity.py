@@ -4,11 +4,8 @@
 import argparse
 import sys
 import unicodecsv
-from textblob import TextBlob
 import string
 import unicodedata
-
-@profile
 
 parser = argparse.ArgumentParser(description='Word proximity calculator.')
 
@@ -52,22 +49,27 @@ tokenizer=RegexpTokenizer(r'https?://[^"\' ]+|[@|#]?\w+')
                                  #if unicodedata.category(unichr(i)).startswith(u'P'))
 
 inreader=unicodecsv.DictReader(infile)
-score = {}
-for row in inreader:
-    textblob = TextBlob(row['text'], tokenizer=tokenizer)
+rows = [dict(row) for row in inreader]
+score = pymp.shared.dict()
+for rowindex in range(0, len(rows)):
+	#textblob = TextBlob(rows[rowindex]['text'], tokenizer=tokenizer)
+	#wordlist = textblob.tokens
+	wordlist = rows[rowindex]['text'].split()
 
-    keywordindices = [index for index,word in enumerate(textblob.tokens)
-                             if keywordlc in word.lower()]
-    if len(keywordindices) > 0:
-        wordproximity = [(word.lemmatize().lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
-                            for index,word in enumerate(textblob.tokens) if word.lower() not in stop]
-        for word,proximity in wordproximity:
-            if proximity > 0:
-
-                if word not in score.keys():
-                    score[word] = 0
-
-                score[word] += 1.0 / proximity
+	keywordindices = [index for index,word in enumerate(wordlist)
+								if keywordlc in word.lower()]
+	if len(keywordindices) > 0:
+		#wordproximity = [(word.lemmatize().lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
+		wordproximity = [(word.lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
+							for index,word in enumerate(wordlist) if word.lower() not in stop]
+		for word,proximity in wordproximity:
+			if proximity > 0:
+				wordscore = 1.0
+				#wordscore = 1.0 / proximity
+				if word not in score.keys():
+					score[word] = wordscore
+				else:
+					score[word] += wordscore
 
 sortedscore = sorted([{'word': word, 'score':score[word]}
                                 for word in score.keys()
