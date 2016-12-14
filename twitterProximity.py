@@ -4,12 +4,16 @@
 import argparse
 import sys
 import unicodecsv
+#from textblob import TextBlob
 import string
 import unicodedata
+import pymp
 
 parser = argparse.ArgumentParser(description='Word proximity calculator.')
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
+
+parser.add_argument('-j', '--jobs', type=int, help='Number of parallel tasks, default is number of CPUs')
 
 parser.add_argument('-k', '--keyword', type=str, help='Key word for search.')
 parser.add_argument('-t', '--threshold', type=float,
@@ -23,6 +27,10 @@ parser.add_argument('infile', type=str, nargs='?',
                     help='Input CSV file, if missing use stdin.')
 
 args = parser.parse_args()
+
+if args.jobs is None:
+	import multiprocessing
+	args.jobs = multiprocessing.cpu_count()
 
 keywordlc = args.keyword.lower()
 
@@ -41,39 +49,48 @@ else:
 from nltk.corpus import stopwords
 stop = set(stopwords.words('english'))
 
-# We want to catch handles and hashtags so need to manage puncutation manually
-from nltk.tokenize import RegexpTokenizer
-tokenizer=RegexpTokenizer(r'https?://[^"\' ]+|[@|#]?\w+')
-
-#punctuationtable = dict.fromkeys(i for i in range(sys.maxunicode)
-                                 #if unicodedata.category(unichr(i)).startswith(u'P'))
+# Separators are all symbols and punctuation except hashtag ('#') and mention ('@')
+#separators = u''.join(set(unichr(i) for i in range(sys.maxunicode) if unicodedata.category(unichr(i))[0] in ['P','Z','S']) - set([u'#', u'@']))
 
 inreader=unicodecsv.DictReader(infile)
 rows = [dict(row) for row in inreader]
-score = pymp.shared.dict()
-for rowindex in range(0, len(rows)):
-	#textblob = TextBlob(rows[rowindex]['text'], tokenizer=tokenizer)
-	#wordlist = textblob.tokens
-	wordlist = rows[rowindex]['text'].split()
+rowcount = len(rows)
+mergedscore = pymp.shared.dict()
+with pymp.Parallel(args.jobs) as p:
+	score = {}
+	for rowindex in p.range(0, rowcount):
+		#textblob = TextBlob(rows[rowindex]['text'], tokenizer=tokenizer)
+		#wordlist = textblob.tokens
+		wordlist = rows[rowindex]['text'].split()
 
-	keywordindices = [index for index,word in enumerate(wordlist)
+		keywordindices = [index for index,word in enumerate(wordlist)
 								if keywordlc in word.lower()]
-	if len(keywordindices) > 0:
-		#wordproximity = [(word.lemmatize().lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
-		wordproximity = [(word.lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
-							for index,word in enumerate(wordlist) if word.lower() not in stop]
-		for word,proximity in wordproximity:
-			if proximity > 0:
-				wordscore = 1.0
-				#wordscore = 1.0 / proximity
-				if word not in score.keys():
-					score[word] = wordscore
-				else:
-					score[word] += wordscore
+		if len(keywordindices) > 0:
+			#wordproximity = [(word.lemmatize().lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
+			wordproximity = [(word.lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
+								for index,word in enumerate(wordlist) if word.lower() not in stop]
+			for word,proximity in wordproximity:
+				if proximity > 0:
+					wordscore = 1.0
+					#wordscore = 1.0 / proximity
+					if word not in score.keys():
+						score[word] = wordscore
+					else:
+						score[word] += wordscore
 
-sortedscore = sorted([{'word': word, 'score':score[word]}
-                                for word in score.keys()
-                                if score[word] >= args.threshold or 0],
+	with p.lock:
+		# Accessing shared dict is really slow so do everything to minimise
+		mergedscorekeys = mergedscore.keys()
+		for word in score.keys():
+			if word in mergedscorekeys:
+				mergedscore[word] += score[word]
+			else:
+				mergedscore[word]  = score[word]
+				mergedscorekeys += {word}
+
+sortedscore = sorted([{'word': word, 'score':mergedscore[word]}
+                                for word in mergedscore.keys()
+                                if mergedscore[word] >= args.threshold or 0],
                            key=lambda item: item['score'],
                            reverse=True)
 
