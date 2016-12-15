@@ -17,7 +17,7 @@ parser.add_argument('-j', '--jobs', type=int, help='Number of parallel tasks, de
 
 parser.add_argument('-k', '--keyword', type=str, help='Key word for search.')
 parser.add_argument('-t', '--threshold', type=float,
-                    help='Threshold value for word to be output, default=100')
+                    help='Threshold value for word to be output')
 parser.add_argument('-l', '--limit', type=int, default=100,
                     help='Limit number of words to output')
 parser.add_argument('-o', '--outfile', type=str, nargs='?',
@@ -33,7 +33,7 @@ if args.jobs is None:
 	args.jobs = multiprocessing.cpu_count()
 
 if args.keyword is None:
-	raise("Keyword must be provided.")
+	raise RuntimeError("Keyword must be provided.")
 
 keywordlc = args.keyword.lower()
 
