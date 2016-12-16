@@ -31,6 +31,7 @@ else:
     # doesn't work correctly
     outfile.seek(0,2)
 
+lastid = None
 if args.outfile is not None and outfile.tell() > 0:
 	outfile.seek(0,0)
 	inreader=unicodecsv.DictReader(outfile)
@@ -67,7 +68,6 @@ if args.user is not None and (args.user.startswith("\'") or args.user.startswith
 active = True
 freshtweets = False
 dateSec = None
-lastid = None
 abortAfter = 2
 abortCount = 0
 
