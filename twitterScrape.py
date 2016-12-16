@@ -44,7 +44,7 @@ if args.outfile is not None and outfile.tell() > 0:
 		lastdate = row['date']
 
 	if args.until is None and lastdate is not None:
-		args.until = (dateparser.parse(lastdate)+datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+		args.until = dateparser.parse(lastdate).strftime("%Y-%m-%d")
 		sys.stderr.write("Continuing scrape from: " + args.until + '\n')
 
 	csvwriter=unicodecsv.DictWriter(outfile, fieldnames=fieldnames, extrasaction='ignore')
