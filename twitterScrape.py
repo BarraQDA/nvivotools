@@ -4,9 +4,7 @@
 import argparse
 import sys
 import unicodecsv
-import urllib,urllib2,json,re,datetime,sys,cookielib
-from pyquery import PyQuery
-from dateutil import parser as dateparser
+import TwitterFeed
 
 parser = argparse.ArgumentParser(description='Scrape twitter feed using pyquery.')
 
@@ -36,7 +34,7 @@ if args.outfile is not None and outfile.tell() > 0:
 	outfile.seek(0,0)
 	inreader=unicodecsv.DictReader(outfile)
 	fieldnames = inreader.fieldnames
-	# Real all lines to find last id
+	# Read all lines to find last id
 	lastid = None
 	lastdate = None
 	for row in inreader:
@@ -51,152 +49,58 @@ if args.outfile is not None and outfile.tell() > 0:
 	overlap = False
 else:
 	sys.stderr.write("Creating new output file...\n")
-	fieldnames = [ 'username', 'date', 'retweets', 'favorites', 'text', 'lang', 'geo', 		'mentions', 'hashtags', 'id', 'permalink']
+	fieldnames = [ 'user', 'date', 'retweets', 'favorites', 'text', 'lang', 'geo', 		'mentions', 'hashtags', 'id', 'permalink']
 	csvwriter=unicodecsv.DictWriter(outfile, fieldnames=fieldnames, extrasaction='ignore')
 	csvwriter.writeheader()
 	overlap = True
 
-refreshCursor = ''
-
-results = []
-resultsAux = []
-cookieJar = cookielib.CookieJar()
-
 if args.user is not None and (args.user.startswith("\'") or args.user.startswith("\"")) and (args.user.endswith("\'") or args.user.endswith("\"")):
 	args.user = args.user[1:-1]
 
-active = True
 freshtweets = False
-dateSec = None
 abortAfter = 2
 abortCount = 0
+tweetCount = 0
+lastDate = None
 
-while active:
-	if args.top:
-		url = "https://twitter.com/i/search/timeline?q=%s&src=typd&max_position=%s"
-	else:
-		url = "https://twitter.com/i/search/timeline?f=tweets&q=%s&src=typd&max_position=%s"
+twitterfeed = TwitterFeed(args.language, args.user, args.since, args.until, args.search)
 
-	urlGetData = ''
-	if args.language is not None:
-		urlGetData += ' lang:' + args.language
-
-	if args.user:
-		urlGetData += ' from:' + args.user
-
-	if args.since:
-		urlGetData += ' since:' + args.since
-
-	if args.until:
-		urlGetData += ' until:' + args.until
-
-	if args.query:
-		urlGetData += ' ' + args.query
-
-	url = url % (urllib.quote(urlGetData), refreshCursor)
-
-	headers = [
-		('Host', "twitter.com"),
-		('User-Agent', "Mozilla/5.0 (Windows NT 6.1; Win64; x64)"),
-		('Accept', "application/json, text/javascript, */*; q=0.01"),
-		('Accept-Language', "de,en-US;q=0.7,en;q=0.3"),
-		('X-Requested-With', "XMLHttpRequest"),
-		('Referer', url),
-		('Connection', "keep-alive")
-	]
-
-	opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookieJar))
-	opener.addheaders = headers
-
+while True:
 	try:
-		dataJson = json.loads(opener.open(url).read())
-	except:
-		raise
-		sys.stderr.write("Twitter weird response. Try to see on browser: " + url + '\n')
-		dataJson = None
+		tweet = twitterfeed.next()
+	except StopIteration:
+		abortCount += 1
+		if abortCount == abortAfter:
+			break
+		sys.stderr.write("Retrying...\n")
+		twitterfeed = TwitterFeed(args.language, args.user, args.since,
+							lastDate.strftime("%Y-%m-%d") if lastDate is not None else args.until,
+							args.search)
 
+		break
 
-	tweets = None
-	if dataJson is not None and len(dataJson['items_html'].strip()) > 0:
-		refreshCursor = dataJson['min_position']
-		tweets = PyQuery(dataJson['items_html'])('div.js-stream-tweet')
+	# Ignore non-descending tweet IDs. This can happen when we do a restart
+	# following search exhaustion.
+	if lastid is not None and tweet['id'] >= lastid:
+		overlap = True
+		if freshtweets:
+			raise RuntimeError("Out of order tweets! Id: " + tweet['id'] + " came after " + lastid)
 
-	if tweets is None or len(tweets) == 0:
-		if not freshtweets or dateSec is None:
-			abortCount += 1
-			if abortCount == abortAfter:
-				break
-			sys.stderr.write("Retrying...\n")
-
-		freshtweets = False
-		# Set 'until' criterion to date of last retrieved tweet
-		if dateSec is not None:
-			args.until = datetime.datetime.utcfromtimestamp(dateSec).strftime("%Y-%m-%d")
-			sys.stderr.write("Setting until criteria to " + args.until + '\n')
-
-		refreshCursor = ''
-		overlap = False
 		continue
 
-	for tweetHTML in tweets:
-		tweetPQ = PyQuery(tweetHTML)
+	freshtweets = True
+	abortCount = 0
 
-		# Get timestamp to help resume
-		dateSec = int(tweetPQ("small.time span.js-short-timestamp").attr("data-time"));
+	if not overlap:
+		overlap = True
+		sys.stderr.write("Possible missing tweets between id: " + lastid + " and " + tweet['id'])	# Add an empty tweet to signal possible missing tweets
+		csvwriter.writerow({})
 
-		# Skip retweets
-		retweet = tweetPQ("span.js-retweet-text").text()
-		if retweet != '':
-			continue
+	csvwriter.writerow(tweet)
+	lastid = tweet['id']
+	tweetCount += 1
 
-		# Ignore non-descending tweet IDs. This can happen when we do a restart
-		# following search exhaustion.
-		id = tweetPQ.attr("data-tweet-id");
-		if lastid is not None and id >= lastid:
-			overlap = True
-			if freshtweets:
-				raise "Out of order tweets!"
-
-			continue
-
-		freshtweets = True
-		abortCount = 0
-
-		if not overlap:
-			overlap = True
-			sys.stderr.write("Possible missing tweets...\n")
-			# Add an empty tweet to signal possible missing tweets
-			csvwriter.writerow({})
-
-		usernameTweet = tweetPQ("span.username.js-action-profile-name b").text();
-		lang = tweetPQ("p.js-tweet-text").attr("lang")
-		txt = re.sub(r"\s+", " ", tweetPQ("p.js-tweet-text").text().replace('# ', '#').replace('@ ', '@'));
-		retweets = int(tweetPQ("span.ProfileTweet-action--retweet span.ProfileTweet-actionCount").attr("data-tweet-stat-count").replace(",", ""));
-		favorites = int(tweetPQ("span.ProfileTweet-action--favorite span.ProfileTweet-actionCount").attr("data-tweet-stat-count").replace(",", ""));
-		permalink = tweetPQ.attr("data-permalink-path");
-
-		geo = ''
-		geoSpan = tweetPQ('span.Tweet-geo')
-		if len(geoSpan) > 0:
-			geo = geoSpan.attr('title')
-
-		tweet = {}
-		tweet['id'] = id
-		tweet['lang'] = lang
-		tweet['permalink'] = 'https://twitter.com' + permalink
-		tweet['username'] = usernameTweet
-		tweet['text'] = txt
-		tweet['date'] = datetime.datetime.fromtimestamp(dateSec)
-		tweet['retweets'] = retweets
-		tweet['favorites'] = favorites
-		tweet['mentions'] = " ".join(re.compile('(@\\w*)').findall(tweet['text']))
-		tweet['hashtags'] = " ".join(re.compile('(#\\w*)').findall(tweet['text']))
-		tweet['geo'] = geo
-
-		csvwriter.writerow(tweet)
-
-		if args.limit is not None and len(results) >= args.limit:
-			active = False
-			break
+	if args.limit is not None and tweetCount >= args.limit:
+		break
 
 outfile.close()
