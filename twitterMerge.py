@@ -5,7 +5,7 @@ import argparse
 import sys, os
 import unicodecsv
 from dateutil import parser as dateparser
-from DummyFeed import TwitterFeed
+from TwitterFeed import TwitterFeed
 
 parser = argparse.ArgumentParser(description='Scrape and merge twitter feed using pyquery.')
 
