@@ -78,17 +78,3 @@ if sqlany:
     sqlalchemy_sqlany.dialect.ischema_names['xml'] = String
     sqlalchemy_sqlany.dialect.ischema_names['long nvarchar'] = TEXT
     sqlalchemy_sqlany.dialect.ischema_names['uniqueidentifier'] = UUID
-
-DataTypeName = { 0: 'Text',
-                 1: 'Integer',
-                 2: 'Decimal',
-                 3: 'DateTime',
-                 4: 'Date',
-                 5: 'Time',
-                 6: 'Boolean' }
-
-ObjectTypeName = {  0: 'DOC',
-                    1: 'MP3',
-                    5: 'WMV',
-                    8: 'JPEG',
-                   11: 'PDF' }
