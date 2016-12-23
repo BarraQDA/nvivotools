@@ -42,6 +42,40 @@ from distutils import util
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
+class NVivo:
+    DataTypeName = { 0: 'Text',
+                     1: 'Integer',
+                     2: 'Decimal',
+                     3: 'DateTime',
+                     4: 'Date',
+                     5: 'Time',
+                     6: 'Boolean' }
+
+    ObjectTypeName = {  0:  'DOC',
+                        1:  'MP3',
+                        5:  'WMV',
+                        8:  'JPEG',
+                        11: 'PDF' }
+
+    class ItemType:
+        Folder = '0'
+        Node = '16'
+        AttributeName = '20'
+        AttributeValue = '21'
+        SourceClassification = '51'
+        NodeClassification = '52'
+
+    class RoleType:
+        NodeMember = '0'
+        ParentItem = '1'
+        NodeIndex = '2'
+        AttributeValue = '6'
+        ItemValue = '7'
+        AttributeClassification = '13'
+        ItemCategory = '14'
+        NodeAggregate = '15'
+
+
 # Generic merge/overwrite/replace function
 def merge_overwrite_or_replace(conn, table, columns, data, operation, verbosity):
     newids = [{column:row[column] for column in columns} for row in data]
@@ -327,7 +361,7 @@ def Normalise(args):
                     nvivoItem.c.ModifiedBy,
                     nvivoItem.c.ModifiedDate]
                 ).where(
-                    nvivoItem.c.TypeId == literal_column('52')
+                    nvivoItem.c.TypeId == literal_column(NVivo.ItemType.NodeClassification)
                 ))]
 
             for nodecategory in nodecategories:
@@ -363,16 +397,16 @@ def Normalise(args):
                     nvivoItem.c.ModifiedDate,
                     nvivoParentRole.c.Item1_Id.label('Parent')]
                 ).where(
-                    nvivoItem.c.TypeId == literal_column('16'),
+                    nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node),
                 ).select_from(nvivoItem.outerjoin(
                     nvivoCategoryRole,
                 and_(
-                    nvivoCategoryRole.c.TypeId == literal_column('14'),
+                    nvivoCategoryRole.c.TypeId == literal_column(NVivo.RoleType.ItemCategory),
                     nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id)
                 ).outerjoin(
                     nvivoParentRole,
                 and_(
-                    nvivoParentRole.c.TypeId == literal_column('1'),
+                    nvivoParentRole.c.TypeId == literal_column(NVivo.RoleType.ParentItem),
                     nvivoParentRole.c.Item2_Id == nvivoItem.c.Id
                 ))))]
             for node in nodes:
@@ -414,12 +448,12 @@ def Normalise(args):
                     nvivoValueItem.c.ModifiedDate,
                     nvivoExtendedItem.c.Properties]
                 ).where(and_(
-                    nvivoNodeItem.c.TypeId==literal_column('16'),
+                    nvivoNodeItem.c.TypeId==literal_column(NVivo.ItemType.Node),
                     nvivoNodeItem.c.Id == nvivoValueRole.c.Item1_Id,
-                    nvivoValueRole.c.TypeId == literal_column('7'),
+                    nvivoValueRole.c.TypeId == literal_column(NVivo.RoleType.ItemValue),
                     nvivoValueItem.c.Id == nvivoValueRole.c.Item2_Id,
                     nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
-                    nvivoNameRole.c.TypeId == literal_column('6'),
+                    nvivoNameRole.c.TypeId == literal_column(NVivo.RoleType.AttributeValue),
                     nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
                     nvivoValueItem.c.Name != bindparam('UnassignedLabel'),
                     nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
@@ -450,7 +484,7 @@ def Normalise(args):
                     attrlength = None
                     for property in parseString(nodeattrvalue['Properties']).documentElement.getElementsByTagName('Property'):
                         if property.getAttribute('Key') == 'DataType':
-                            attrtype = DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
+                            attrtype = NVivo.DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
                         elif property.getAttribute('Key') == 'Length':
                             attrlength = int(property.getAttribute('Value'))
                             if attrlength == 0:
@@ -493,7 +527,7 @@ def Normalise(args):
                     nvivoItem.c.ModifiedBy,
                     nvivoItem.c.ModifiedDate]
                 ).where(
-                    nvivoItem.c.TypeId == literal_column('51')
+                    nvivoItem.c.TypeId == literal_column(NVivo.ItemType.SourceClassification)
                 ))]
             for sourcecat in sourcecats:
                 if args.windows:
@@ -537,7 +571,7 @@ def Normalise(args):
                 ).select_from(nvivoItem.outerjoin(
                     nvivoCategoryRole,
                 and_(
-                    nvivoCategoryRole.c.TypeId == literal_column('14'),
+                    nvivoCategoryRole.c.TypeId == literal_column(NVivo.RoleType.ItemCategory),
                     nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id)
                 )))]
             for source in sources:
@@ -550,7 +584,7 @@ def Normalise(args):
                 else:
                     source['Content'] = None
 
-                source['ObjectType'] = ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
+                source['ObjectType'] = NVivo.ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
 
                 if source['ObjectType'] == 'DOC':
                     # Look for ODT signature from NVivo for Mac files
@@ -597,10 +631,10 @@ def Normalise(args):
                     nvivoExtendedItem.c.Properties]
                 ).where(and_(
                     nvivoSource.c.Item_Id == nvivoValueRole.c.Item1_Id,
-                    nvivoValueRole.c.TypeId == literal_column('7'),
+                    nvivoValueRole.c.TypeId == literal_column(NVivo.RoleType.ItemValue),
                     nvivoValueItem.c.Id == nvivoValueRole.c.Item2_Id,
                     nvivoNameRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
-                    nvivoNameRole.c.TypeId == literal_column('6'),
+                    nvivoNameRole.c.TypeId == literal_column(NVivo.RoleType.AttributeValue),
                     nvivoNameItem.c.Id == nvivoNameRole.c.Item1_Id,
                     nvivoValueItem.c.Name != bindparam('UnassignedLabel'),
                     nvivoExtendedItem.c.Item_Id == nvivoNameItem.c.Id
@@ -631,7 +665,7 @@ def Normalise(args):
                     attrlength = None
                     for property in parseString(sourceattrvalue['Properties']).documentElement.getElementsByTagName('Property'):
                         if property.getAttribute('Key') == 'DataType':
-                            attrtype = DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
+                            attrtype = NVivo.DataTypeName.get(int(property.getAttribute('Value')), property.getAttribute('Value'))
                         elif property.getAttribute('Key') == 'Length':
                             attrlength = int(property.getAttribute('Value'))
                             if attrlength == 0:
@@ -682,7 +716,7 @@ def Normalise(args):
                 ).where(and_(
                     #nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
                     nvivoItem.c.Id == nvivoNodeReference.c.Node_Item_Id,
-                    nvivoItem.c.TypeId == literal_column('16'),
+                    nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node),
                     nvivoNodeReference.c.StartZ.is_(None)
                 )))]
             for tagging in taggings:
@@ -917,7 +951,7 @@ def Denormalise(args):
                 headcategory = nvivocon.execute(select([
                         nvivoItem.c.Id
                     ]).where(and_(
-                        nvivoItem.c.TypeId == literal_column('0'),
+                        nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Folder),
                         nvivoItem.c.Name   == bindparam('Name'),
                         nvivoItem.c.System == True
                     )),
@@ -966,12 +1000,12 @@ def Denormalise(args):
                             'TypeId':   literal_column(itemtype),
                             'System':   literal_column('0'),
                             'ReadOnly': literal_column('0'),
-                            'InheritPermissions': literal_column('1')
+                            'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
                         }), rowstoinsert)
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': literal_column("'" + str(headcategory['Id']) + "'"),
                             'Item2_Id': bindparam('_Id'),
-                            'TypeId':   literal_column('0')
+                            'TypeId':   literal_column(NVivo.RoleType.NodeMember)
                         }), rowstoinsert)
                     nvivocon.execute(nvivoExtendedItem.insert().values({
                             'Item_Id': bindparam('_Id'),
@@ -984,7 +1018,7 @@ def Denormalise(args):
                         }), rowstoinsert)
 
 # Node Categories
-        skip_merge_or_overwrite_categories(normNodeCategory, '52', 'case' if args.nvivoversion == '11' else 'node', args.node_categories)
+        skip_merge_or_overwrite_categories(normNodeCategory, NVivo.ItemType.NodeClassification, 'case' if args.nvivoversion == '11' else 'node', args.node_categories)
 
 # Nodes
         if args.nodes != 'skip':
@@ -999,7 +1033,7 @@ def Denormalise(args):
             headnode = nvivocon.execute(select([
                     nvivoItem.c.Id
                 ]).where(and_(
-                    nvivoItem.c.TypeId == literal_column('0'),
+                    nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Folder),
                     nvivoItem.c.Name == bindparam('Name'),
                     nvivoItem.c.System == True
                 )),
@@ -1075,7 +1109,7 @@ def Denormalise(args):
             curids = [{'_Id':row['Id']} for row in nvivocon.execute(select([
                     nvivoItem.c.Id
                 ]).where(
-                    nvivoItem.c.TypeId == literal_column('16')
+                    nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node)
                 ))]
 
             nodestoinsert = [node for node in nodes if not {'_Id':node['Id']} in curids]
@@ -1091,21 +1125,21 @@ def Denormalise(args):
 
             if len(nodestoinsert) > 0:
                 nvivocon.execute(nvivoItem.insert().values({
-                        'TypeId':   literal_column('16'),
+                        'TypeId':   literal_column(NVivo.ItemType.Node),
                         'ColorArgb': bindparam('Color'),
                         'System':   literal_column('0'),
                         'ReadOnly': literal_column('0'),
-                        'InheritPermissions': literal_column('1')
+                        'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
                     }), nodestoinsert)
                 nvivocon.execute(nvivoRole.insert().values({
                         'Item1_Id': literal_column("'" + str(headnode['Id']) + "'"),
                         'Item2_Id': bindparam('Id'),
-                        'TypeId':   literal_column('0')
+                        'TypeId':   literal_column(NVivo.RoleType.NodeMember)
                     }), nodestoinsert)
                 nvivocon.execute(nvivoRole.insert().values({
                         'Item1_Id': bindparam('TopParent'),
                         'Item2_Id': bindparam('Id'),
-                        'TypeId':   literal_column('2'),
+                        'TypeId':   literal_column(NVivo.RoleType.NodeIndex),
                         'Tag':      bindparam('RoleTag')
                     }), nodestoinsert)
 
@@ -1115,19 +1149,19 @@ def Denormalise(args):
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Id'),
                             'Item2_Id': bindparam('Category'),
-                            'TypeId':   literal_column('14')
+                            'TypeId':   literal_column(NVivo.RoleType.ItemCategory)
                         }), nodeswithcategory)
                 if len(nodeswithparent) > 0:
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Parent'),
                             'Item2_Id': bindparam('Id'),
-                            'TypeId':   literal_column('1')
+                            'TypeId':   literal_column(NVivo.RoleType.ParentItem)
                         }), nodeswithparent)
                 if len(aggregatepairs) > 0:
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Ancestor'),
                             'Item2_Id': bindparam('Id'),
-                            'TypeId':   literal_column('15')
+                            'TypeId':   literal_column(NVivo.RoleType.NodeAggregate)
                         }), aggregatepairs)
 
         # Function to handle node or source attributes
@@ -1151,7 +1185,7 @@ def Denormalise(args):
                 )).select_from(
                     nvivoItem.outerjoin(
                     nvivoCategoryRole, and_(
-                    nvivoCategoryRole.c.TypeId   == literal_column('14'),
+                    nvivoCategoryRole.c.TypeId   == literal_column(NVivo.RoleType.ItemCategory),
                     nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id
                 )))
 
@@ -1170,7 +1204,7 @@ def Denormalise(args):
             attrsel = select([
                     func.max(nvivoCountAttributeRole.c.Tag).label('MaxAttributeTag')
                 ]).where(and_(
-                    nvivoCountAttributeRole.c.TypeId == literal_column('13'),
+                    nvivoCountAttributeRole.c.TypeId == literal_column(NVivo.RoleType.AttributeClassification),
                     nvivoCountAttributeRole.c.Item2_Id == bindparam('Category')
                 ))
 
@@ -1179,7 +1213,7 @@ def Denormalise(args):
                     nvivoValueRole.c.Item2_Id.label('ExistingValueId'),
                 ]).where(and_(
                     nvivoCategoryAttributeRole.c.Item1_Id == bindparam('Attribute'),
-                    nvivoCategoryAttributeRole.c.TypeId == literal_column('13'),
+                    nvivoCategoryAttributeRole.c.TypeId == literal_column(NVivo.RoleType.AttributeClassification),
                     nvivoCategoryAttributeRole.c.Item2_Id == bindparam('Category')
                 )).select_from(
                     nvivoCategoryAttributeRole.outerjoin(
@@ -1188,30 +1222,30 @@ def Denormalise(args):
                         nvivoNewValueItem.c.Id == nvivoNewValueRole.c.Item2_Id,
                         nvivoNewValueItem.c.Name == bindparam('Value')
                     )), and_(
-                        nvivoNewValueRole.c.TypeId == literal_column('6'),
+                        nvivoNewValueRole.c.TypeId == literal_column(NVivo.RoleType.AttributeValue),
                         nvivoNewValueRole.c.Item1_Id == nvivoCategoryAttributeRole.c.Item1_Id
                 )).outerjoin(
                     nvivoExistingValueRole.join(
                         nvivoValueRole, and_(
                         nvivoValueRole.c.Item2_Id == nvivoExistingValueRole.c.Item2_Id,
-                        nvivoValueRole.c.TypeId == literal_column('7'),
+                        nvivoValueRole.c.TypeId == literal_column(NVivo.RoleType.ItemValue),
                         nvivoValueRole.c.Item1_Id == bindparam('Item')
                     )), and_(
-                        nvivoExistingValueRole.c.TypeId == literal_column('6'),
+                        nvivoExistingValueRole.c.TypeId == literal_column(NVivo.RoleType.AttributeValue),
                         nvivoExistingValueRole.c.Item1_Id == nvivoCategoryAttributeRole.c.Item1_Id
                 )))
 
             maxvaluesel = select([
                     func.max(nvivoCountValueRole.c.Tag).label('MaxValueTag')
                 ]).where(and_(
-                    nvivoCountValueRole.c.TypeId == literal_column('6'),
+                    nvivoCountValueRole.c.TypeId == literal_column(NVivo.RoleType.AttributeValue),
                     nvivoCountValueRole.c.Item1_Id == bindparam('Attribute')
                 ))
 
             missingvaluesel = select([
                     nvivoCategoryRole.c.Item1_Id.label('Item')
                 ]).where(and_(
-                    nvivoCategoryRole.c.TypeId   == literal_column('14'),
+                    nvivoCategoryRole.c.TypeId   == literal_column(NVivo.RoleType.ItemCategory),
                     nvivoCategoryRole.c.Item2_Id == bindparam('Category')
                 )).group_by(
                     nvivoCategoryRole.c.Item1_Id
@@ -1222,9 +1256,9 @@ def Denormalise(args):
                     nvivoValueRole.join(
                         nvivoExistingValueRole, and_(
                             nvivoExistingValueRole.c.Item2_Id == nvivoValueRole.c.Item2_Id,
-                            nvivoExistingValueRole.c.TypeId == literal_column('7')
+                            nvivoExistingValueRole.c.TypeId == literal_column(NVivo.RoleType.ItemValue)
                         )), and_(
-                        nvivoValueRole.c.TypeId == literal_column('6'),
+                        nvivoValueRole.c.TypeId == literal_column(NVivo.RoleType.AttributeValue),
                         nvivoValueRole.c.Item1_Id == bindparam('Attribute'),
                         nvivoExistingValueRole.c.Item1_Id == nvivoCategoryRole.c.Item1_Id
                 )))
@@ -1239,8 +1273,8 @@ def Denormalise(args):
             addedattributes = []
             for value in values:
                 attribute = next(attribute for attribute in attributes if attribute['Id'] == value['Attribute'])
-                if attribute['Type'] in DataTypeName.values():
-                    datatype = DataTypeName.keys()[DataTypeName.values().index(attribute['Type'])]
+                if attribute['Type'] in NVivo.DataTypeName.values():
+                    datatype = NVivo.DataTypeName.keys()[NVivo.DataTypeName.values().index(attribute['Type'])]
                 else:
                     datatype = 0;
 
@@ -1307,10 +1341,10 @@ def Denormalise(args):
                             'Id':       bindparam('Id'),
                             'Name':     bindparam('Name'),
                             'Description': literal_column("''"),
-                            'TypeId':   literal_column('20'),
+                            'TypeId':   literal_column(NVivo.ItemType.AttributeName),
                             'System':   literal_column('0'),
                             'ReadOnly': literal_column('0'),
-                            'InheritPermissions': literal_column('1')
+                            'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
                         }), attribute)
 
                     attribute['Tag'] = maxattributetags[value['Category']]
@@ -1320,7 +1354,7 @@ def Denormalise(args):
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Id'),
                             'Item2_Id': bindparam('Category'),
-                            'TypeId':   literal_column('13'),
+                            'TypeId':   literal_column(NVivo.RoleType.AttributeClassification),
                             'Tag':      bindparam('Tag')
                         }), attribute)
                     nvivocon.execute(nvivoExtendedItem.insert().values({
@@ -1335,16 +1369,16 @@ def Denormalise(args):
                             'Id':       bindparam('UnassignedValueId'),
                             'Name':     bindparam('Unassigned'),
                             'Description': literal_column("''"),
-                            'TypeId':   literal_column('21'),
-                            'System':   literal_column('1'),
+                            'TypeId':   literal_column(NVivo.ItemType.AttributeValue),
+                            'System':   literal_column(NVivo.RoleType.ParentItem),
                             'ReadOnly': literal_column('0'),
-                            'InheritPermissions': literal_column('1'),
+                            'InheritPermissions': literal_column(NVivo.RoleType.ParentItem),
                             'ColorArgb': literal_column('0')
                         }), attribute)
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Id'),
                             'Item2_Id': bindparam('UnassignedValueId'),
-                            'TypeId':   literal_column('6'),
+                            'TypeId':   literal_column(NVivo.RoleType.AttributeValue),
                             'Tag':      literal_column('0')
                         }), attribute )
                     nvivocon.execute(nvivoExtendedItem.insert().values({
@@ -1364,17 +1398,17 @@ def Denormalise(args):
                             'Id':       bindparam('NotApplicableValueId'),
                             'Name':     bindparam('NotApplicable'),
                             'Description': literal_column("''"),
-                            'TypeId':   literal_column('21'),
-                            'System':   literal_column('1'),
+                            'TypeId':   literal_column(NVivo.ItemType.AttributeValue),
+                            'System':   literal_column(NVivo.RoleType.ParentItem),
                             'ReadOnly': literal_column('0'),
-                            'InheritPermissions': literal_column('1'),
+                            'InheritPermissions': literal_column(NVivo.RoleType.ParentItem),
                             'ColorArgb': literal_column('0')
                         }), attribute)
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Id'),
                             'Item2_Id': bindparam('NotApplicableValueId'),
-                            'TypeId':   literal_column('6'),
-                            'Tag':      literal_column('1')
+                            'TypeId':   literal_column(NVivo.RoleType.AttributeValue),
+                            'Tag':      literal_column(NVivo.RoleType.ParentItem)
                         }), attribute )
                     nvivocon.execute(nvivoExtendedItem.insert().values({
                             'Item_Id': bindparam('NotApplicableValueId'),
@@ -1395,17 +1429,17 @@ def Denormalise(args):
                                 'Id':       bindparam('FalseValueId'),
                                 'Name':     bindparam('False'),
                                 'Description': literal_column("''"),
-                                'TypeId':   literal_column('21'),
-                                'System':   literal_column('1'),
+                                'TypeId':   literal_column(NVivo.ItemType.AttributeValue),
+                                'System':   literal_column(NVivo.RoleType.ParentItem),
                                 'ReadOnly': literal_column('0'),
-                                'InheritPermissions': literal_column('1'),
+                                'InheritPermissions': literal_column(NVivo.RoleType.ParentItem),
                                 'ColorArgb': literal_column('0')
                             }), attribute)
                         nvivocon.execute(nvivoRole.insert().values({
                                 'Item1_Id': bindparam('Id'),
                                 'Item2_Id': bindparam('FalseValueId'),
-                                'TypeId':   literal_column('6'),
-                                'Tag':      literal_column('2')
+                                'TypeId':   literal_column(NVivo.RoleType.AttributeValue),
+                                'Tag':      literal_column(NVivo.RoleType.NodeIndex)
                             }), attribute )
                         nvivocon.execute(nvivoExtendedItem.insert().values({
                                 'Item_Id': bindparam('FalseValueId'),
@@ -1416,16 +1450,16 @@ def Denormalise(args):
                                 'Id':       bindparam('TrueValueId'),
                                 'Name':     bindparam('True'),
                                 'Description': literal_column("''"),
-                                'TypeId':   literal_column('21'),
-                                'System':   literal_column('1'),
+                                'TypeId':   literal_column(NVivo.ItemType.AttributeValue),
+                                'System':   literal_column(NVivo.RoleType.ParentItem),
                                 'ReadOnly': literal_column('0'),
-                                'InheritPermissions': literal_column('1'),
+                                'InheritPermissions': literal_column(NVivo.RoleType.ParentItem),
                                 'ColorArgb': literal_column('0')
                             }), attribute)
                         nvivocon.execute(nvivoRole.insert().values({
                                 'Item1_Id': bindparam('Id'),
                                 'Item2_Id': bindparam('TrueValueId'),
-                                'TypeId':   literal_column('6'),
+                                'TypeId':   literal_column(NVivo.RoleType.AttributeValue),
                                 'Tag':      literal_column('3')
                             }), attribute )
                         nvivocon.execute(nvivoExtendedItem.insert().values({
@@ -1466,16 +1500,16 @@ def Denormalise(args):
                                 'Id':       bindparam('Id'),
                                 'Name':     bindparam('Value'),
                                 'Description': literal_column("''"),
-                                'TypeId':   literal_column('21'),
+                                'TypeId':   literal_column(NVivo.ItemType.AttributeValue),
                                 'System':   literal_column('0'),
                                 'ReadOnly': literal_column('0'),
-                                'InheritPermissions': literal_column('1')
+                                'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
                             }), value )
                         value['Attribute'] = value['Attribute']
                         nvivocon.execute(nvivoRole.insert().values({
                                 'Item1_Id': bindparam('Attribute'),
                                 'Item2_Id': bindparam('Id'),
-                                'TypeId':   literal_column('6'),
+                                'TypeId':   literal_column(NVivo.RoleType.AttributeValue),
                                 'Tag':      bindparam('Tag')
                             }), value )
                         nvivocon.execute(nvivoExtendedItem.insert().values({
@@ -1494,7 +1528,7 @@ def Denormalise(args):
                             nvivocon.execute(nvivoRole.delete(and_(
                                     nvivoRole.c.Item1_Id == bindparam('Item'),
                                     nvivoRole.c.Item2_Id == bindparam('ExistingValueId'),
-                                    nvivoRole.c.TypeId   ==   literal_column('7')
+                                    nvivoRole.c.TypeId   ==   literal_column(NVivo.RoleType.ItemValue)
                                 )), value )
 
                         if args.verbosity > 1:
@@ -1502,7 +1536,7 @@ def Denormalise(args):
                         nvivocon.execute(nvivoRole.insert().values({
                                 'Item1_Id': bindparam('Item'),
                                 'Item2_Id': bindparam('NewValueId'),
-                                'TypeId':   literal_column('7')
+                                'TypeId':   literal_column(NVivo.RoleType.ItemValue)
                             }), value )
 
             # Now fill in default ('Undefined') for new attributes
@@ -1519,7 +1553,7 @@ def Denormalise(args):
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Item'),
                             'Item2_Id': bindparam('DefaultValueId'),
-                            'TypeId':   literal_column('7')
+                            'TypeId':   literal_column(NVivo.RoleType.ItemValue)
                         }), attributes )
 
 # Node attributes
@@ -1566,7 +1600,7 @@ def Denormalise(args):
                         nvivoRole.c.Item1_Id.label('Id')
                     ]).where(and_(
                         nvivoRole.c.Item2_Id == bindparam('CategoryId'),
-                        nvivoRole.c.TypeId   == literal_column('0')
+                        nvivoRole.c.TypeId   == literal_column(NVivo.RoleType.NodeMember)
                     )), category)]
                 index = 0
                 for item in items:
@@ -1582,7 +1616,7 @@ def Denormalise(args):
                         nvivoRole.c.Item1_Id.label('Id')
                     ]).where(and_(
                         nvivoRole.c.Item2_Id == bindparam('CategoryId'),
-                        nvivoRole.c.TypeId   == literal_column('13')
+                        nvivoRole.c.TypeId   == literal_column(NVivo.RoleType.AttributeClassification)
                     )), category)]
                 index = 0
                 for attribute in attributes:
@@ -1614,10 +1648,10 @@ def Denormalise(args):
 
         # Node category layouts
         if args.nodes != 'skip' or args.node_categories != 'skip' or args.node_attributes != 'skip':
-            rebuild_category_records('52')
+            rebuild_category_records(NVivo.ItemType.NodeClassification)
 
 # Source categories
-        skip_merge_or_overwrite_categories(normSourceCategory, '51', 'source', args.source_categories)
+        skip_merge_or_overwrite_categories(normSourceCategory, NVivo.ItemType.SourceClassification, 'source', args.source_categories)
 
 # Function to massage source data
         def massagesource(source):
@@ -1636,7 +1670,7 @@ def Denormalise(args):
             # Do our best to imitate NVivo's treatment of sources. In particular, generating
             # the PlainText column is very tricky. If it was already filled in the Object column
             # of the normalised file then use that value instead.
-            if source['ObjectTypeName'] == 'PDF':
+            if source['NVivo.ObjectTypeName'] == 'PDF':
                 source['SourceType'] = 34
                 source['LengthX'] = 0
 
@@ -1699,16 +1733,16 @@ def Denormalise(args):
                 # Would be good to work out how NVivo calculates the PDF checksum
                 extendeditems.append({'Item_Id':    source['Item_Id'],
                                     'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>'})
-            elif source['ObjectTypeName'] in {'DOC', 'ODT', 'TXT'}:
+            elif source['NVivo.ObjectTypeName'] in {'DOC', 'ODT', 'TXT'}:
                 if source['SourceType'] is None:
                     source['SourceType'] = 2  # or 3 or 4?
 
                 tmpfilename = tempfile.mktemp()
                 if source['Object'] is not None:
-                    tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
+                    tmpfile = file(tmpfilename + '.' + source['NVivo.ObjectTypeName'], 'wb')
                     tmpfile.write(source['Object'])
-                elif source['ObjectTypeName'] == 'TXT' and source['PlainText'] is not None:
-                    tmpfile = codecs.open(tmpfilename + '.' + source['ObjectTypeName'], 'w', 'utf-8-sig')
+                elif source['NVivo.ObjectTypeName'] == 'TXT' and source['PlainText'] is not None:
+                    tmpfile = codecs.open(tmpfilename + '.' + source['NVivo.ObjectTypeName'], 'w', 'utf-8-sig')
                     tmpfile.write(source['PlainText'])
                 else:
                     raise RuntimeError("Source '" + source['PlainTextName'] + "' is missing")
@@ -1739,11 +1773,11 @@ def Denormalise(args):
                         raise RuntimeError("Can't find unoconv on path. Please refer to the NVivotools README file.")
 
                 if source['PlainText'] is None:
-                    if source['ObjectTypeName'] == 'TXT':
+                    if source['NVivo.ObjectTypeName'] == 'TXT':
                         source['PlainText'] = codecs.open(tmpfilename + '.TXT', 'r', 'utf-8-sig').read()
                     else:
                         # Use unoconv to convert to text
-                        p = Popen(massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
+                        p = Popen(massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['NVivo.ObjectTypeName']], stderr=PIPE)
                         err = p.stderr.read()
                         if err != '':
                             raise RuntimeError(err)
@@ -1759,9 +1793,9 @@ def Denormalise(args):
 
                 # Convert object to DOC/ODT if isn't already
                 source['Object'] = ''
-                if source['ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
+                if source['NVivo.ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
                     destformat = 'odt' if args.mac else 'doc'
-                    p = Popen(massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
+                    p = Popen(massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['NVivo.ObjectTypeName']], stderr=PIPE)
                     err = p.stderr.read()
                     if err != '':
                         err = "unoconv invocation error:\n" + err
@@ -1770,10 +1804,10 @@ def Denormalise(args):
                     source['Object'] = file(tmpfilename + '.' + destformat, 'rb').read()
                     os.remove(tmpfilename + '.' + destformat)
 
-                os.remove(tmpfilename + '.' + source['ObjectTypeName'])
+                os.remove(tmpfilename + '.' + source['NVivo.ObjectTypeName'])
 
                 # Hack so that right object type code is found later
-                source['ObjectTypeName'] = 'DOC'
+                source['NVivo.ObjectTypeName'] = 'DOC'
 
                 if args.mac:
                     source['LengthX'] = len(source['PlainText'].replace(u' ', u''))
@@ -1806,7 +1840,7 @@ def Denormalise(args):
                     source['MetaData'] = paragraphs.toxml() + settings.toxml()
 
             # Note that NVivo 10 for Mac doesn't support images
-            elif source['ObjectTypeName'] == 'JPEG':
+            elif source['NVivo.ObjectTypeName'] == 'JPEG':
                 source['SourceType'] = 33
                 image = Image.open(StringIO(source['Object']))
                 source['LengthX'], source['LengthY'] = image.size
@@ -1818,20 +1852,20 @@ def Denormalise(args):
 
                 extendeditems.append({'Item_Id':source['Item_Id'],
                                     'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PictureRotation" Value="0"/><Property Key="PictureBrightness" Value="0"/><Property Key="PictureContrast" Value="0"/><Property Key="PictureQuality" Value="0"/></Properties>'})
-            #elif source['ObjectTypeName'] == 'MP3':
+            #elif source['NVivo.ObjectTypeName'] == 'MP3':
                 #source['LengthX'] = length of recording in milliseconds
                 #source['Waveform'] = waveform of recording, one byte per centisecond
-            #elif source['ObjectTypeName'] == 'WMV':
+            #elif source['NVivo.ObjectTypeName'] == 'WMV':
                 #source['LengthX'] = length of recording in milliseconds
                 #source['Waveform'] = waveform of recording, one byte per centisecond
             else:
                 source['LengthX'] = 0
 
             # Lookup object type from name
-            if source['ObjectTypeName'] in ObjectTypeName.values():
-                source['ObjectType'] = ObjectTypeName.keys()[ObjectTypeName.values().index(source['ObjectTypeName'])]
+            if source['NVivo.ObjectTypeName'] in NVivo.ObjectTypeName.values():
+                source['ObjectType'] = NVivo.ObjectTypeName.keys()[NVivo.ObjectTypeName.values().index(source['NVivo.ObjectTypeName'])]
             else:
-                source['ObjectType'] = int(source['ObjectTypeName'])
+                source['ObjectType'] = int(source['NVivo.ObjectTypeName'])
 
         # Unitialise static variable
         massagesource.unoconvcmd = None
@@ -1848,7 +1882,7 @@ def Denormalise(args):
             headsource = nvivocon.execute(select([
                     nvivoItem.c.Id
                 ]).where(and_(
-                    nvivoItem.c.TypeId == literal_column('0'),
+                    nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Folder),
                     nvivoItem.c.Name == bindparam('Name'),
                     nvivoItem.c.System == True
                 )),
@@ -1867,7 +1901,7 @@ def Denormalise(args):
                         normSource.c.Description,
                         normSource.c.Color,
                         normSource.c.Content,
-                        normSource.c.ObjectType.label('ObjectTypeName'),
+                        normSource.c.ObjectType.label('NVivo.ObjectTypeName'),
                         normSource.c.SourceType,
                         normSource.c.Object,
                         normSource.c.Thumbnail,
@@ -1920,7 +1954,7 @@ def Denormalise(args):
                         'ColorArgb': bindparam('Color'),
                         'System':   literal_column('0'),
                         'ReadOnly': literal_column('0'),
-                        'InheritPermissions': literal_column('1')
+                        'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
                     }), sourcestoinsert)
                 nvivocon.execute(nvivoSource.insert().values({
                         'TypeId':   bindparam('ObjectType'),
@@ -1937,7 +1971,7 @@ def Denormalise(args):
                 nvivocon.execute(nvivoRole.insert().values({
                         'Item1_Id': literal_column("'" + str(headsource['Id']) + "'"),
                         'Item2_Id': bindparam('Item_Id'),
-                        'TypeId':   literal_column('0')
+                        'TypeId':   literal_column(NVivo.RoleType.NodeMember)
                     }), sourcestoinsert)
 
             sourcestoinsertwithcategory = [dict(row) for row in sourcestoinsert if row['Category'] is not None]
@@ -1945,7 +1979,7 @@ def Denormalise(args):
                 nvivocon.execute(nvivoRole.insert().values({
                         'Item1_Id': bindparam('Item_Id'),
                         'Item2_Id': bindparam('Category'),
-                        'TypeId':   literal_column('14')
+                        'TypeId':   literal_column(NVivo.RoleType.ItemCategory)
                     }), sourcestoinsertwithcategory)
 
             # Now deal with extended items.
@@ -1994,7 +2028,7 @@ def Denormalise(args):
 
         # Source category layouts
         if args.sources != 'skip' or args.source_categories != 'skip' or args.source_attributes != 'skip':
-            rebuild_category_records('51')
+            rebuild_category_records(NVivo.ItemType.SourceClassification)
 
 # Taggings and annotations
         if args.taggings != 'skip' or args.annotations != 'skip':
