@@ -65,6 +65,11 @@ class NVivo:
         SourceClassification = '51'
         NodeClassification = '52'
 
+    class SourceType:
+        Doc = '2'
+        JPEG = '33'
+        PDF = '34'
+
     class RoleType:
         NodeMember = '0'
         ParentItem = '1'
@@ -920,15 +925,22 @@ def Denormalise(args):
             if args.project == 'overwrite':
                 nvivocon.execute(nvivoProject.update(), project)
 
-        # Basic lookup item name function. Use for debug messages.
-        itemsel = select([
+        # Item name loookup query
+        namesel = select([
                 nvivoItem.c.Name
             ]).where(
                 nvivoItem.c.Id == bindparam('Id')
             )
 
+        # Hierarchical name lookup query
+        hierarchicalnamesel = select([
+                nvivoItem.c.HierarchicalName
+            ]).where(
+                nvivoItem.c.Id == bindparam('Id')
+            )
+
         def itemname(id):
-            res = nvivocon.execute(itemsel, {'Id':id}).first()
+            res = nvivocon.execute(namesel, {'Id':id}).first()
             if res is not None:
                 res = res['Name']
                 if args.windows:
@@ -979,6 +991,8 @@ def Denormalise(args):
                     if args.windows:
                         category['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), category['Name']))
                         category['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), category['Description']))
+                    if args.mac:
+                        category['HierarchicalName'] = headcategoryname + u'\\\\' + category['Name']
 
                 newids = [{'_Id':row['Id']} for row in categories]
                 curids = [{'_Id':row['Id']} for row in nvivocon.execute(select([
@@ -1337,20 +1351,26 @@ def Denormalise(args):
                         if args.verbosity > 1:
                             print("Creating " + name + " attribute '" + attribute['PlainTextName'] + "' for category '" + itemname(value['Category']) + "' with tag: " + str(maxattributetags[value['Category']]))
 
+                    attribute['Tag'] = maxattributetags[value['Category']]
+                    attribute['Category'] = value['Category']
+                    maxvaluetags[(value['Category'], attribute['Id'])] = 1
+
+                    if args.mac:
+                        attribute['HierarchicalName'] = nvivocon.execute(
+                                hierarchicalnamesel,
+                                {'Id': attribute['Category']}
+                            ).first()['HierarchicalName'] + ':' + attribute['Name']
+
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('Id'),
                             'Name':     bindparam('Name'),
                             'Description': literal_column("''"),
+                            'HierarchicalName': bindparam('HierarchicalName'),
                             'TypeId':   literal_column(NVivo.ItemType.AttributeName),
                             'System':   literal_column('0'),
                             'ReadOnly': literal_column('0'),
                             'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
                         }), attribute)
-
-                    attribute['Tag'] = maxattributetags[value['Category']]
-                    attribute['Category'] = value['Category']
-                    maxvaluetags[(value['Category'], attribute['Id'])] = 1
-
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Id'),
                             'Item2_Id': bindparam('Category'),
@@ -1363,6 +1383,7 @@ def Denormalise(args):
                     }), attribute)
 
                     # Create unassigned and not applicable attribute values
+                    attribute['HierarchicalName'] = None    # Doesn't apply to values
                     attribute['UnassignedValueId'] = uuid.uuid4()
                     attribute['Unassigned'] = unassignedlabel
                     nvivocon.execute(nvivoItem.insert().values({
@@ -1671,7 +1692,7 @@ def Denormalise(args):
             # the PlainText column is very tricky. If it was already filled in the Object column
             # of the normalised file then use that value instead.
             if source['NVivo.ObjectTypeName'] == 'PDF':
-                source['SourceType'] = 34
+                source['SourceType'] = NVivo.SourceType.PDF
                 source['LengthX'] = 0
 
                 doc = Document()
@@ -1735,7 +1756,7 @@ def Denormalise(args):
                                     'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>'})
             elif source['NVivo.ObjectTypeName'] in {'DOC', 'ODT', 'TXT'}:
                 if source['SourceType'] is None:
-                    source['SourceType'] = 2  # or 3 or 4?
+                    source['SourceType'] = NVivo.SourceType.Doc
 
                 tmpfilename = tempfile.mktemp()
                 if source['Object'] is not None:
@@ -1841,7 +1862,7 @@ def Denormalise(args):
 
             # Note that NVivo 10 for Mac doesn't support images
             elif source['NVivo.ObjectTypeName'] == 'JPEG':
-                source['SourceType'] = 33
+                source['SourceType'] = NVivo.SourceType.JPEG
                 image = Image.open(StringIO(source['Object']))
                 source['LengthX'], source['LengthY'] = image.size
                 image.thumbnail((200,200))
