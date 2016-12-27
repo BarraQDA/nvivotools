@@ -44,11 +44,11 @@ parser.add_argument('infile', type=str, nargs='?',
 args = parser.parse_args()
 
 if args.jobs is None:
-	import multiprocessing
-	args.jobs = multiprocessing.cpu_count()
+    import multiprocessing
+    args.jobs = multiprocessing.cpu_count()
 
 if args.keyword is None:
-	raise RuntimeError("Keyword must be provided.")
+    raise RuntimeError("Keyword must be provided.")
 
 keywordlc = args.keyword.lower()
 
@@ -81,41 +81,41 @@ rows = [dict(row) for row in inreader]
 rowcount = len(rows)
 mergedscore = pymp.shared.dict()
 with pymp.Parallel(args.jobs) as p:
-	score = {}
-	for rowindex in p.range(0, rowcount):
-		if args.textblob:
-			textblob = TextBlob(rows[rowindex]['text'], tokenizer=tokenizer)
-			wordlist = textblob.tokens
-		else:
-			wordlist = rows[rowindex]['text'].split()
+    score = {}
+    for rowindex in p.range(0, rowcount):
+        if args.textblob:
+            textblob = TextBlob(rows[rowindex]['text'], tokenizer=tokenizer)
+            wordlist = textblob.tokens
+        else:
+            wordlist = rows[rowindex]['text'].split()
 
-		keywordindices = [index for index,word in enumerate(wordlist)
-								if keywordlc in word.lower()]
-		if len(keywordindices) > 0:
-			if args.textblob:
-				wordproximity = [(word.lemmatize().lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))]
-			else:
-				wordproximity = [(word.lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
-								for index,word in enumerate(wordlist) if word.lower() not in stop]
+        keywordindices = [index for index,word in enumerate(wordlist)
+                                if keywordlc in word.lower()]
+        if len(keywordindices) > 0:
+            if args.textblob:
+                wordproximity = [(word.lemmatize().lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))]
+            else:
+                wordproximity = [(word.lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
+                                for index,word in enumerate(wordlist) if word.lower() not in stop]
 
-			for word,proximity in wordproximity:
-				if proximity > 0:
-					#wordscore = 1.0
-					wordscore = 1.0 / proximity
-					if word not in score.keys():
-						score[word] = wordscore
-					else:
-						score[word] += wordscore
+            for word,proximity in wordproximity:
+                if proximity > 0:
+                    #wordscore = 1.0
+                    wordscore = 1.0 / proximity
+                    if word not in score.keys():
+                        score[word] = wordscore
+                    else:
+                        score[word] += wordscore
 
-	with p.lock:
-		# Accessing shared dict is really slow so do everything to minimise
-		mergedscorekeys = mergedscore.keys()
-		for word in score.keys():
-			if word in mergedscorekeys:
-				mergedscore[word] += score[word]
-			else:
-				mergedscore[word]  = score[word]
-				mergedscorekeys += {word}
+    with p.lock:
+        # Accessing shared dict is really slow so do everything to minimise
+        mergedscorekeys = mergedscore.keys()
+        for word in score.keys():
+            if word in mergedscorekeys:
+                mergedscore[word] += score[word]
+            else:
+                mergedscore[word]  = score[word]
+                mergedscorekeys += {word}
 
 sortedscore = sorted([{'word': word, 'score':mergedscore[word]}
                                 for word in mergedscore.keys()
