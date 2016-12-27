@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import argparse
 import sys
 import unicodecsv
@@ -52,6 +53,9 @@ if args.keyword is None:
 
 keywordlc = args.keyword.lower()
 
+if args.verbosity > 1:
+    print("Using " + str(args.jobs) + " jobs.", file=sys.stderr)
+
 if args.infile is None:
     infile = sys.stdin
 else:
@@ -62,7 +66,6 @@ if args.outfile is None:
     outfile = sys.stdout
 else:
     outfile = file(args.outfile, 'w')
-
 
 from nltk.corpus import stopwords
 stop = set(stopwords.words('english'))
@@ -77,23 +80,24 @@ if args.textblob:
 #separators = u''.join(set(unichr(i) for i in range(sys.maxunicode) if unicodedata.category(unichr(i))[0] in ['P','Z','S']) - set([u'#', u'@']))
 
 inreader=unicodecsv.DictReader(infile)
-rows = [dict(row) for row in inreader]
+rows = [row['text'] for row in inreader]
 rowcount = len(rows)
 mergedscore = pymp.shared.dict()
 with pymp.Parallel(args.jobs) as p:
     score = {}
     for rowindex in p.range(0, rowcount):
         if args.textblob:
-            textblob = TextBlob(rows[rowindex]['text'], tokenizer=tokenizer)
+            textblob = TextBlob(rows[rowindex], tokenizer=tokenizer)
             wordlist = textblob.tokens
         else:
-            wordlist = rows[rowindex]['text'].split()
+            wordlist = rows[rowindex].split()
 
         keywordindices = [index for index,word in enumerate(wordlist)
                                 if keywordlc in word.lower()]
         if len(keywordindices) > 0:
             if args.textblob:
-                wordproximity = [(word.lemmatize().lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))]
+                wordproximity = [(word.lemmatize().lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
+                                for index,word in enumerate(wordlist) if word.lower() not in stop]
             else:
                 wordproximity = [(word.lower(), min([abs(index - keywordindex) for keywordindex in keywordindices]))
                                 for index,word in enumerate(wordlist) if word.lower() not in stop]
@@ -102,20 +106,16 @@ with pymp.Parallel(args.jobs) as p:
                 if proximity > 0:
                     #wordscore = 1.0
                     wordscore = 1.0 / proximity
-                    if word not in score.keys():
-                        score[word] = wordscore
-                    else:
-                        score[word] += wordscore
+                    score[word] = score.get(word, 0) + wordscore
 
     with p.lock:
-        # Accessing shared dict is really slow so do everything to minimise
-        mergedscorekeys = mergedscore.keys()
-        for word in score.keys():
-            if word in mergedscorekeys:
-                mergedscore[word] += score[word]
-            else:
-                mergedscore[word]  = score[word]
-                mergedscorekeys += {word}
+        if args.verbosity > 1:
+            print("Merging " + str(len(score)) + " results from thread: " + str(p.thread_num), file=sys.stderr)
+        for word in score:
+            mergedscore[word] = mergedscore.get(word, 0) + score[word]
+
+if args.verbosity > 1:
+    print("Sorting " + str(len(mergedscore)) + " results.", file=sys.stderr)
 
 sortedscore = sorted([{'word': word, 'score':mergedscore[word]}
                                 for word in mergedscore.keys()

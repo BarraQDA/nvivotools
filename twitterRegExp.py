@@ -73,23 +73,34 @@ else:
     regexp = re.compile(args.regexp)
 
 inreader=unicodecsv.DictReader(infile)
-rows = [dict(row) for row in inreader]
+rows = [row['text'] for row in inreader]
 rowcount = len(rows)
 fields = list(regexp.groupindex)
-results = pymp.shared.dict()
+mergedresults = pymp.shared.dict()
 with pymp.Parallel(args.jobs) as p:
+    results = {}
     for rowindex in p.range(0, rowcount):
-        matches = regexp.finditer(rows[rowindex]['text'])
+        matches = regexp.finditer(rows[rowindex])
         for match in matches:
-            index = tuple(match.groupdict().values())
-            with p.lock:
-                results[index] = results.get(index, 0) + 1
+            if args.ignorecase:
+                index = tuple(value.lower() for value in match.groupdict().values())
+            else:
+                index = tuple(match.groupdict().values())
+            results[index] = results.get(index, 0) + 1
+
+    with p.lock:
+        if args.verbosity > 1:
+            print("Merging " + str(len(results)) + " results from thread: " + str(p.thread_num), file=sys.stderr)
+
+        for index in results:
+            mergedresults[index] = mergedresults.get(index, 0) + results[index]
 
 if args.verbosity > 1:
-    print(str(len(results)) + " matches found.", file=sys.stderr)
-sortedresults = sorted([{'match': match, 'score':results[match]}
-                                for match in results.keys()
-                                if results[match] >= args.threshold or 0],
+    print("Sorting " + str(len(mergedresults)) + " results.", file=sys.stderr)
+
+sortedresults = sorted([{'match': match, 'score':mergedresults[match]}
+                                for match in mergedresults.keys()
+                                if mergedresults[match] >= args.threshold or 0],
                            key=lambda item: item['score'],
                            reverse=True)
 
