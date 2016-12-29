@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+from __future__ import print_function
 import argparse
 import sys
 import unicodecsv
@@ -43,12 +44,12 @@ if args.outfile is not None and outfile.tell() > 0:
 
     if args.until is None and lastdate is not None:
         args.until = dateparser.parse(lastdate).strftime("%Y-%m-%d")
-        sys.stderr.write("Continuing scrape from: " + args.until + '\n')
+        print("Continuing scrape from: " + args.until, file=sys.stderr)
 
     csvwriter=unicodecsv.DictWriter(outfile, fieldnames=fieldnames, extrasaction='ignore')
     overlap = False
 else:
-    sys.stderr.write("Creating new output file...\n")
+    print("Creating new output file...", file=sys.stderr)
     fieldnames = [ 'user', 'date', 'retweets', 'favorites', 'text', 'lang', 'geo',         'mentions', 'hashtags', 'id', 'permalink']
     csvwriter=unicodecsv.DictWriter(outfile, fieldnames=fieldnames, extrasaction='ignore')
     csvwriter.writeheader()
@@ -72,7 +73,7 @@ while True:
         abortCount += 1
         if abortCount == abortAfter:
             break
-        sys.stderr.write("Retrying...\n")
+        print("Retrying...", file=sys.stderr)
         twitterfeed = TwitterFeed(args.language, args.user, args.since,
                             lastDate.strftime("%Y-%m-%d") if lastDate is not None else args.until,
                             args.search)
@@ -93,7 +94,8 @@ while True:
 
     if not overlap:
         overlap = True
-        sys.stderr.write("Possible missing tweets between id: " + lastid + " and " + tweet['id'])    # Add an empty tweet to signal possible missing tweets
+        # Add an empty tweet to signal possible missing tweets
+        print("Possible missing tweets between id: " + lastid + " and " + tweet['id'], file=sys.stderr)
         csvwriter.writerow({})
 
     csvwriter.writerow(tweet)

@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import argparse
 import sys, os
 import unicodecsv
@@ -102,7 +103,7 @@ matching = [(headidx is not None and currow[fileidx] is not None and currow[file
                 for fileidx in range(len(inreader))]
 
 if headidx is None:
-    sys.stderr.write("Nothing to do\n")
+    print("Nothing to do.", file=sys.stderr)
     sys.exit()
 
 outunicodecsv=unicodecsv.DictWriter(outfile, fieldnames, extrasaction='ignore')
@@ -116,7 +117,7 @@ while True:
     for fileidx in range(len(inreader)):
         if currow[fileidx] is not None and matching[fileidx]:
             if currow[fileidx] != currow[headidx]:
-                sys.stderr.write("WARNING: Inconsistent data, id: " + currow[headidx]['id'] + " sources: " + args.infile[headidx] + " and " + args.infile[fileidx] + '\n')
+                print("WARNING: Inconsistent data, id: " + currow[headidx]['id'] + " sources: " + args.infile[headidx] + " and " + args.infile[fileidx], file=sys.stderr)
 
     # If we are past the 'since' date then finish up
     if args.since is not None and lastdate < args.since:
@@ -169,16 +170,16 @@ while True:
         if not matching[twitteridx]:
             outunicodecsv.writerow({})
             if headidx is not None:
-                sys.stderr.write("Possible missing tweets between id: " + str(lastid) + " and " + str(currow[headidx]['id']) + '\n')
+                print("Possible missing tweets between id: " + str(lastid) + " and " + str(currow[headidx]['id']), file=sys.stderr)
             else:
-                sys.stderr.write("Possible missing tweets after id: " + str(lastid) + '\n')
+                print("Possible missing tweets after id: " + str(lastid), file=sys.stderr)
                 break
 
     for fileidx in range(len(inreader)):
         if currow[fileidx] is not None:
             if matching[fileidx]:
                 if currow[fileidx]['id'] != currow[headidx]['id']:
-                    sys.stderr.write("WARNING: Missing tweet, id: " + currow[fileidx]['id'] + " in file: " + args.infile[fileidx] + '\n')
+                    print("WARNING: Missing tweet, id: " + currow[fileidx]['id'] + " in file: " + args.infile[fileidx], file=sys.stderr)
                     matching[fileidx] = False
             else:
                 if currow[fileidx]['id'] == currow[headidx]['id']:

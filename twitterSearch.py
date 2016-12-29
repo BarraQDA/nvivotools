@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import argparse
 from requests_oauthlib import OAuth1Session
 import webbrowser
@@ -25,7 +26,6 @@ import unicodecsv
 import string
 import pytz
 from datetime import datetime
-
 
 import warnings
 warnings.simplefilter("error", DeprecationWarning)
@@ -76,10 +76,10 @@ else:
         resp = oauth_client.fetch_request_token(REQUEST_TOKEN_URL)
         url = oauth_client.authorization_url(AUTHORIZATION_URL)
 
-        sys.stderr.write('Opening browser for Twitter authentication: ' + url + '\n')
+        print('Opening browser for Twitter authentication: ' + url, file=sys.stderr)
 
         webbrowser.open(url)
-        sys.stderr.write('Enter your pincode? ')
+        print('Enter your pincode? ', file=sys.stderr)
         pincode = raw_input()
 
         oauth_client = OAuth1Session(consumer_key, client_secret=consumer_secret,
@@ -90,8 +90,8 @@ else:
         args.access_token_key = resp.get('oauth_token')
         args.access_token_secret = resp.get('oauth_token_secret')
 
-        sys.stderr.write('To re-use access token next time use the following arguments:\n')
-        sys.stderr.write('    --access-token-key ' + args.access_token_key + ' --access-token-secret ' + args.access_token_secret + '\n')
+        print('To re-use access token next time use the following arguments:', file=sys.stderr)
+        print('    --access-token-key ' + args.access_token_key + ' --access-token-secret ' + args.access_token_secret, file=sys.stderr)
 
     api = twitter.Api(
                 consumer_key=consumer_key,
@@ -130,7 +130,7 @@ while totaltweets < args.count:
     if maxid is not None:
         query += '&max_id='+str(maxid)
     if args.verbosity > 1:
-        sys.stderr.write('Query: ' + query + '\n')
+        print('Query: ' + query, file=sys.stderr)
     tweets = api.GetSearch(raw_query=query)
     if len(tweets) == 0:
         break
