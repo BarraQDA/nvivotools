@@ -88,9 +88,11 @@ with pymp.Parallel(args.jobs) as p:
                 index = tuple(match.groupdict().values())
             result[index] = result.get(index, 0) + 1
 
-    results += [result]
     if args.verbosity > 1:
         print("Thread " + str(p.thread_num) + " found " + str(len(result)) + " results.", file=sys.stderr)
+
+    with p.lock:
+        results += [result]
 
 mergedresult = None
 for result in results:

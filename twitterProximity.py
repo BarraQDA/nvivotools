@@ -109,9 +109,11 @@ with pymp.Parallel(args.jobs) as p:
                     wordscore = 1.0 / proximity
                     score[word] = score.get(word, 0) + wordscore
 
-    scores += [score]
     if args.verbosity > 1:
         print("Thread " + str(p.thread_num) + " analysed " + str(len(score)) + " words.", file=sys.stderr)
+
+    with p.lock:
+        scores += [score]
 
 mergedscore = None
 for score in scores:
