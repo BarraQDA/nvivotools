@@ -82,10 +82,11 @@ if args.textblob:
 inreader=unicodecsv.DictReader(infile)
 rows = [row['text'] for row in inreader]
 rowcount = len(rows)
-mergedscore = pymp.shared.dict()
+scores = pymp.shared.list()
 with pymp.Parallel(args.jobs) as p:
     score = {}
     for rowindex in p.range(0, rowcount):
+        #print("Thread :" + str(p.thread_num) + " score count is " + str(len(score.values())))
         if args.textblob:
             textblob = TextBlob(rows[rowindex], tokenizer=tokenizer)
             wordlist = textblob.tokens
@@ -108,14 +109,20 @@ with pymp.Parallel(args.jobs) as p:
                     wordscore = 1.0 / proximity
                     score[word] = score.get(word, 0) + wordscore
 
-    with p.lock:
-        if args.verbosity > 1:
-            print("Merging " + str(len(score)) + " results from thread: " + str(p.thread_num), file=sys.stderr)
+    scores += [score]
+    if args.verbosity > 1:
+        print("Thread " + str(p.thread_num) + " analysed " + str(len(score)) + " words.", file=sys.stderr)
+
+mergedscore = None
+for score in scores:
+    if mergedscore is None:
+        mergedscore = score.copy()
+    else:
         for word in score:
             mergedscore[word] = mergedscore.get(word, 0) + score[word]
 
 if args.verbosity > 1:
-    print("Sorting " + str(len(mergedscore)) + " results.", file=sys.stderr)
+    print("Sorting " + str(len(mergedscore)) + " words.", file=sys.stderr)
 
 sortedscore = sorted([{'word': word, 'score':mergedscore[word]}
                                 for word in mergedscore.keys()

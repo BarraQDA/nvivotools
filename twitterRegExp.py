@@ -76,9 +76,9 @@ inreader=unicodecsv.DictReader(infile)
 rows = [row['text'] for row in inreader]
 rowcount = len(rows)
 fields = list(regexp.groupindex)
-mergedresults = pymp.shared.dict()
+results = pymp.shared.list()
 with pymp.Parallel(args.jobs) as p:
-    results = {}
+    result = {}
     for rowindex in p.range(0, rowcount):
         matches = regexp.finditer(rows[rowindex])
         for match in matches:
@@ -86,28 +86,33 @@ with pymp.Parallel(args.jobs) as p:
                 index = tuple(value.lower() for value in match.groupdict().values())
             else:
                 index = tuple(match.groupdict().values())
-            results[index] = results.get(index, 0) + 1
+            result[index] = result.get(index, 0) + 1
 
-    with p.lock:
-        if args.verbosity > 1:
-            print("Merging " + str(len(results)) + " results from thread: " + str(p.thread_num), file=sys.stderr)
+    results += [result]
+    if args.verbosity > 1:
+        print("Thread " + str(p.thread_num) + " found " + str(len(result)) + " results.", file=sys.stderr)
 
-        for index in results:
-            mergedresults[index] = mergedresults.get(index, 0) + results[index]
+mergedresult = None
+for result in results:
+    if mergedresult is None:
+        mergedresult = result.copy()
+    else:
+        for index in result:
+            mergedresult[index] = mergedresult.get(index, 0) + result[index]
 
 if args.verbosity > 1:
-    print("Sorting " + str(len(mergedresults)) + " results.", file=sys.stderr)
+    print("Sorting " + str(len(mergedresult)) + " results.", file=sys.stderr)
 
-sortedresults = sorted([{'match': match, 'score':mergedresults[match]}
-                                for match in mergedresults.keys()
-                                if mergedresults[match] >= args.threshold or 0],
+sortedresult = sorted([{'match': match, 'score':mergedresult[match]}
+                                for match in mergedresult.keys()
+                                if mergedresult[match] >= args.threshold or 0],
                            key=lambda item: item['score'],
                            reverse=True)
 
 if args.limit != 0:
-    sortedresults = sortedresults[0:args.limit]
+    sortedresult = sortedresult[0:args.limit]
 
-for result in sortedresults:
+for result in sortedresult:
     for idx in range(len(fields)):
         result[fields[idx]] = result['match'][idx]
 
@@ -118,6 +123,6 @@ outfile.write('\n')
 
 outunicodecsv=unicodecsv.DictWriter(outfile, fieldnames=fields + ['score'], extrasaction='ignore')
 outunicodecsv.writeheader()
-if len(sortedresults) > 0:
-    outunicodecsv.writerows(sortedresults)
+if len(sortedresult) > 0:
+    outunicodecsv.writerows(sortedresult)
 outfile.close()
