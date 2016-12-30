@@ -5,7 +5,7 @@ from __future__ import print_function
 import argparse
 import sys
 import unicodecsv
-import TwitterFeed
+from TwitterFeed import TwitterFeed
 
 parser = argparse.ArgumentParser(description='Scrape twitter feed using pyquery.')
 
@@ -64,7 +64,7 @@ abortCount = 0
 tweetCount = 0
 lastDate = None
 
-twitterfeed = TwitterFeed(args.language, args.user, args.since, args.until, args.search)
+twitterfeed = TwitterFeed(args.language, args.user, args.since, args.until, args.query)
 
 while True:
     try:
@@ -76,7 +76,7 @@ while True:
         print("Retrying...", file=sys.stderr)
         twitterfeed = TwitterFeed(args.language, args.user, args.since,
                             lastDate.strftime("%Y-%m-%d") if lastDate is not None else args.until,
-                            args.search)
+                            args.query)
 
         break
 

@@ -88,7 +88,7 @@ currow += [None]
 args.infile += ['[Twitter Reader]']
 
 # Start twitter feed if needed to reach 'until' argument
-if args.until is not None and headidx is None or args.until > currow[headidx]['date']:
+if args.until is not None and args.until > 0 if headidx is None else currow[headidx]['date']:
     inreader[twitteridx] = TwitterFeed(language=args.language, user=args.user, query=args.query,
                                         since=currow[headidx]['date'] if headidx is not None else None,
                                         until=args.until)

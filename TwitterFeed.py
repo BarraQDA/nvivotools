@@ -19,13 +19,14 @@ from dateutil import parser as dateparser
 
 class TwitterFeed(object):
     def __init__(self, language=None, user=None, since=None, until=None, query=None):
-        self.url = 'https://twitter.com/i/search/timeline?f=tweets&q='
-        self.url += (' lang:' + language) if language is not None else ''
-        self.url += (' from:' + user)     if user     is not None else ''
-        self.url += (' since:' + since)   if since    is not None else ''
-        self.url += (' until:' + until)   if until    is not None else ''
-        self.url += (' ' + query)         if query    is not None else ''
-        self.url += '&src=typd&max_position='
+        urlGetData = ''
+        urlGetData += (' lang:' + language) if language is not None else ''
+        urlGetData += (' from:' + user)     if user     is not None else ''
+        urlGetData += (' since:' + since)   if since    is not None else ''
+        urlGetData += (' until:' + until)   if until    is not None else ''
+        urlGetData += (' ' + query)         if query    is not None else ''
+
+        self.url = 'https://twitter.com/i/search/timeline?f=tweets&q=' + urllib.quote(urlGetData) + '&src=typd&max_position='
         self.position = ''
         self.opener = None
         self.cookieJar = cookielib.CookieJar()
@@ -33,33 +34,34 @@ class TwitterFeed(object):
 
     def next(self):
         if self.opener is None:
-            self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookieJar))
-            opener.addheaders = [
+            self.opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(self.cookieJar))
+            self.opener.addheaders = [
                 ('Host', "twitter.com"),
                 ('User-Agent', "Mozilla/5.0 (Windows NT 6.1; Win64; x64)"),
                 ('Accept', "application/json, text/javascript, */*; q=0.01"),
                 ('Accept-Language', "de,en-US;q=0.7,en;q=0.3"),
                 ('X-Requested-With', "XMLHttpRequest"),
-                ('Referer', url),
+                ('Referer', self.url),
                 ('Connection', "keep-alive")
             ]
 
         while True:
             if self.tweets is None:
                 try:
-                    dataJson = json.loads(opener.open(self.url + self.position).read())
+                    dataJson = json.loads(self.opener.open(self.url + self.position).read())
                     if dataJson is not None and len(dataJson['items_html'].strip()) > 0:
                         self.position = dataJson['min_position']
-                        self.tweets = PyQuery(dataJson['items_html'])('div.js-stream-tweet')
+                        self.tweets = PyQuery(dataJson['items_html']).items('div.js-stream-tweet')
                 except:
-                    sys.stderr.write("Twitter weird response. Try to see on browser: " + url + '\n')
+                    sys.stderr.write("Twitter weird response. Try to see on browser: " + self.url + self.position + '\n')
                     raise
 
             if self.tweets is None:
                 raise StopIteration
 
             try:
-                tweetPQ = PyQuery(next(self.tweets))
+                tweet = next(self.tweets)
+                tweetPQ = PyQuery(tweet)
             except StopIteration:
                 self.tweets = None
                 continue
