@@ -161,7 +161,7 @@ while True:
             else:
                 if fileidx == twitteridx:
                     if args.verbosity > 1:
-                        print("Closing twitter feed after " + rowcnt[fileidx] + " rows.", file=sys.stderr)
+                        print("Closing twitter feed after " + str(rowcnt[fileidx]) + " rows.", file=sys.stderr)
                 currow[fileidx] = None
                 rowcnt[fileidx] = 0
                 matching[fileidx] = False
@@ -183,7 +183,7 @@ while True:
             # Set until date one day past lastdate because twitter returns tweets strictly before until date
             untildate = (dateparser.parse(lastdate) + datetime.timedelta(days=1)).date().isoformat()
             if args.verbosity > 1:
-                print("Opening twitter feed with until = " + untildate + ", since = " + (nextdate or ''), file=sys.stderr)
+                print("Opening twitter feed with until:" + untildate + ", since:" + (nextdate or ''), file=sys.stderr)
 
             twitterreader = TwitterFeed(language=args.language, user=args.user, query=args.query,
                                         until=untildate, since=nextdate)
