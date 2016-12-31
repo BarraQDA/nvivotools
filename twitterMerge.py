@@ -132,7 +132,9 @@ while True:
             else:
                 if currow[fileidx]['id'] == currow[headidx]['id']:
                     matching[fileidx] = True
-                    rowcnt[fileidx] += 1
+
+        if matching[fileidx]:
+            rowcnt[fileidx] += 1
 
     outunicodecsv.writerow(currow[headidx])
     lastid = currow[headidx]['id']
