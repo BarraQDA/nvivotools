@@ -98,6 +98,7 @@ while True:
         print("Possible missing tweets between id: " + lastid + " and " + tweet['id'], file=sys.stderr)
         csvwriter.writerow({})
 
+    tweet['date'] = tweet['datetime'].isoformat()
     csvwriter.writerow(tweet)
     lastid = tweet['id']
     tweetCount += 1

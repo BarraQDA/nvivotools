@@ -15,7 +15,6 @@
 
 import urllib,urllib2,json,re,datetime,sys,cookielib
 from pyquery import PyQuery
-from dateutil import parser as dateparser
 
 class TwitterFeed(object):
     def __init__(self, language=None, user=None, since=None, until=None, query=None):
@@ -75,8 +74,8 @@ class TwitterFeed(object):
             ret = {}
 
             ret['id']        = tweetPQ.attr("data-tweet-id");
-            ret['date']      = datetime.datetime.utcfromtimestamp(
-                                    int(tweetPQ("small.time span.js-short-timestamp").attr("data-time"))).strftime("%Y-%m-%d %H:%M:%S")
+            ret['datetime']  = datetime.datetime.utcfromtimestamp(
+                                    int(tweetPQ("small.time span.js-short-timestamp").attr("data-time")))
             ret['user']      = tweetPQ("span.username.js-action-profile-name b").text();
             ret['lang']      = tweetPQ("p.js-tweet-text").attr("lang")
             ret['text']      = re.sub(r"\s+", " ", tweetPQ("p.js-tweet-text").text().replace('# ', '#').replace('@ ', '@'));
