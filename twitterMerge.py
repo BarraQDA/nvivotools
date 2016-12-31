@@ -186,6 +186,8 @@ while True:
             if currowitem is not None:
                 openfiles += 1
                 inreader[twitteridx] = twitterreader
+                if 'date' not in currowitem.keys():
+                    currowitem['date'] = currowitem['datetime'].isoformat()
                 currow[twitteridx] = currowitem
                 if headidx is None or currowitem['id'] > currow[headidx]['id']:
                     headidx = twitteridx
