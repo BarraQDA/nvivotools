@@ -86,6 +86,7 @@ else:
     fieldnames = ['user', 'date', 'retweets', 'favorites', 'text', 'lang', 'geo', 'mentions', 'hashtags', 'id', 'permalink']
 
 # Append placeholder for twitter feed to list of readers
+twitterreader = None
 twitteridx = len(inreader)
 inreader += [None]
 currow += [None]
