@@ -759,7 +759,9 @@ def Normalise(args):
 
             for annotation in annotations:
                 annotation['Node'] = None
-                annotation['Fragment'] = str(annotation['StartX']) + ':' + str(annotation['StartX'] + annotation['LengthX'] - 1);
+                annotation['Fragment'] = ''
+                if annotation['StartX'] is not None and annotation['LengthX'] is not None:
+                    annotation['Fragment'] += str(annotation['StartX']) + ':' + str(annotation['StartX'] + annotation['LengthX'] - 1);
                 if annotation['StartY'] is not None:
                     annotation['Fragment'] += ',' + str(annotation['StartY'])
                     if annotation['LengthY'] > 0:
