@@ -708,23 +708,47 @@ def Normalise(args):
                     nvivoNodeReference.c.Id,
                     nvivoNodeReference.c.Source_Item_Id.label('Source'),
                     nvivoNodeReference.c.Node_Item_Id.label('Node'),
-                    nvivoNodeReference.c.StartX,
-                    nvivoNodeReference.c.LengthX,
+                    nvivoNodeReference.c.StartText  if args.mac else nvivoNodeReference.c.StartX,
+                    nvivoNodeReference.c.LengthText if args.mac else nvivoNodeReference.c.LengthX,
                     nvivoNodeReference.c.StartY,
                     nvivoNodeReference.c.LengthY,
                     nvivoNodeReference.c.StartZ,
                     nvivoNodeReference.c.CreatedBy,
                     nvivoNodeReference.c.CreatedDate,
                     nvivoNodeReference.c.ModifiedBy,
-                    nvivoNodeReference.c.ModifiedDate,
-                    nvivoItem.c.TypeId]
-                ).where(and_(
+                    nvivoNodeReference.c.ModifiedDate
+                ]).where(and_(
                     #nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
                     nvivoItem.c.Id == nvivoNodeReference.c.Node_Item_Id,
                     nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node),
                     nvivoNodeReference.c.StartZ.is_(None)
                 )))]
             for tagging in taggings:
+                # On Mac, text sections refer to indexes on non-space characters
+                if args.mac:
+                    # TODO: Deal with case where we have skipped sources
+                    source = next(source for source in sources if source['Id'] == tagging['Source'])
+                    sourcetext = source['PlainText']
+
+                    startx = tagging['StartText']
+                    laststartx = 0
+                    nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
+                    while nextstartx > startx:
+                        laststartx = startx+1
+                        startx = nextstartx
+                        nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
+
+                    lengthx = tagging['LengthText']
+                    lastlengthx = 0
+                    nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
+                    while nextlengthx > lengthx:
+                        lastlengthx = lengthx
+                        lengthx = nextlengthx
+                        nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
+
+                    tagging['StartX']  = startx
+                    tagging['LengthX'] = lengthx
+
                 tagging['Fragment'] = ''
                 if tagging['StartX'] is not None and tagging['LengthX'] is not None:
                     tagging['Fragment'] = str(tagging['StartX']) + ':' + str(tagging['StartX'] + tagging['LengthX'] - 1)
@@ -749,8 +773,8 @@ def Normalise(args):
                     nvivoAnnotation.c.Id,
                     nvivoAnnotation.c.Item_Id.label('Source'),
                     nvivoAnnotation.c.Text.label('Memo'),
-                    nvivoAnnotation.c.StartText.label('StartX')   if args.mac else nvivoAnnotation.c.StartX,
-                    nvivoAnnotation.c.LengthText.label('LengthX') if args.mac else nvivoAnnotation.c.LengthX,
+                    nvivoAnnotation.c.StartText  if args.mac else nvivoAnnotation.c.StartX,
+                    nvivoAnnotation.c.LengthText if args.mac else nvivoAnnotation.c.LengthX,
                     nvivoAnnotation.c.StartY,
                     nvivoAnnotation.c.LengthY,
                     nvivoAnnotation.c.CreatedBy,
@@ -760,6 +784,31 @@ def Normalise(args):
                 ]))]
 
             for annotation in annotations:
+                # On Mac, text sections refer to indexes on non-space characters
+                if args.mac:
+                    # TODO: Deal with case where we have skipped sources
+                    source = next(source for source in sources if source['Id'] == annotation['Source'])
+                    sourcetext = source['PlainText']
+
+                    startx = annotation['StartText']
+                    laststartx = 0
+                    nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
+                    while nextstartx > startx:
+                        laststartx = startx+1
+                        startx = nextstartx
+                        nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
+
+                    lengthx = annotation['LengthText']
+                    lastlengthx = 0
+                    nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
+                    while nextlengthx > lengthx:
+                        lastlengthx = lengthx
+                        lengthx = nextlengthx
+                        nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
+
+                    annotation['StartX']  = startx
+                    annotation['LengthX'] = lengthx
+
                 annotation['Node'] = None
                 annotation['Fragment'] = ''
                 if annotation['StartX'] is not None and annotation['LengthX'] is not None:
