@@ -725,7 +725,9 @@ def Normalise(args):
                     nvivoNodeReference.c.StartZ.is_(None)
                 )))]
             for tagging in taggings:
-                tagging['Fragment'] = str(tagging['StartX']) + ':' + str(tagging['StartX'] + tagging['LengthX'] - 1)
+                tagging['Fragment'] = ''
+                if tagging['StartX'] is not None and tagging['LengthX'] is not None:
+                    tagging['Fragment'] = str(tagging['StartX']) + ':' + str(tagging['StartX'] + tagging['LengthX'] - 1)
                 if tagging['StartY'] is not None:
                     tagging['Fragment'] += ',' + str(tagging['StartY'])
                     if tagging['LengthY'] > 0:
