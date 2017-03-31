@@ -135,7 +135,7 @@ try:
             attributeLength = sourceattribute['Length']
 
             if attributeType == 'Text':
-                if len(attributeValue) > attributeLength:
+                if attributeLength and len(attributeValue) > attributeLength:
                     raise RuntimeError("Value: " + attributeValue + " longer than attribute length")
             elif attributeType == 'Integer':
                 int(attributeValue)
@@ -164,22 +164,26 @@ try:
                     'ModifiedDate': datetimeNow
                 }]
 
-    object = file(args.source, 'rb').read()
-
     sourceColumns = {
             'Id':           Id,
             '_Id':          Id,
-            'Category':     categoryId,
-            'Name':         args.name,
-            'Description':  args.description,
-            'Color':        args.color,
-            'Object':       file(args.source, 'rb').read(),
-            'ObjectType':   os.path.splitext(args.source)[1][1:].upper(),
             'CreatedBy':    userId,
             'CreatedDate':  datetimeNow,
             'ModifiedBy':   userId,
             'ModifiedDate': datetimeNow
         }
+    if categoryId:
+        sourceColumns['Category'] = categoryId
+    if args.name:
+        sourceColumns['Name'] = args.name
+    if args.description:
+        sourceColumns['Description']  = args.description
+    if args.color:
+        sourceColumns['Color'] = args.color
+    if args.source:
+        sourceColumns['Object']     = file(args.source, 'rb').read()
+        sourceColumns['ObjectType'] = os.path.splitext(args.source)[1][1:].upper()
+
     if source is None:    # New source
         normcon.execute(normSource.insert(), sourceColumns)
         if len(sourceValues) > 0:
@@ -190,7 +194,7 @@ try:
                 sourceColumns)
         for sourceValue in sourceValues:
             normcon.execute(normSourceValue.delete(and_(
-                normSourceValue.c.Source      == bindparam('_Source'),
+                normSourceValue.c.Source    == bindparam('_Source'),
                 normSourceValue.c.Attribute == bindparam('_Attribute'),
             )), sourceValues)
             normcon.execute(normSourceValue.insert(), sourceValues)
