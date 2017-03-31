@@ -933,11 +933,12 @@ def Denormalise(args):
             )
 
         # Hierarchical name lookup query
-        hierarchicalnamesel = select([
-                nvivoItem.c.HierarchicalName
-            ]).where(
-                nvivoItem.c.Id == bindparam('Id')
-            )
+        if args.mac:
+            hierarchicalnamesel = select([
+                    nvivoItem.c.HierarchicalName
+                ]).where(
+                    nvivoItem.c.Id == bindparam('Id')
+                )
 
         def itemname(id):
             res = nvivocon.execute(namesel, {'Id':id}).first()
@@ -1309,6 +1310,8 @@ def Denormalise(args):
                         value['Value'] = unicode(date.strftime(dateparser.parse(value['Value']), '%Y-%m-%d 00:00:00Z'))
                 elif attribute['Type'] == 'Time':
                     value['Value'] = unicode(time.strftime(dateparser.parse(value['Value']).time(), '%H:%M:%S'))
+                else:
+                    value['Value'] = unicode(value['Value'])
 
                 value['PlainTextValue'] = value['Value']
                 if args.windows:
@@ -1361,16 +1364,20 @@ def Denormalise(args):
                                 {'Id': attribute['Category']}
                             ).first()['HierarchicalName'] + ':' + attribute['Name']
 
-                    nvivocon.execute(nvivoItem.insert().values({
+                    itemvalues = {
                             'Id':       bindparam('Id'),
                             'Name':     bindparam('Name'),
                             'Description': literal_column("''"),
-                            'HierarchicalName': bindparam('HierarchicalName'),
                             'TypeId':   literal_column(NVivo.ItemType.AttributeName),
                             'System':   literal_column('0'),
                             'ReadOnly': literal_column('0'),
                             'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
-                        }), attribute)
+                        }
+                    if args.mac:
+                        itemvalues.update({
+                            'HierarchicalName': bindparam('HierarchicalName')
+                        })
+                    nvivocon.execute(nvivoItem.insert().values(itemvalues), attribute)
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': bindparam('Id'),
                             'Item2_Id': bindparam('Category'),
