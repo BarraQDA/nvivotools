@@ -77,6 +77,9 @@ tmpinfileptr.write(args.infile.read())
 args.infile.close()
 tmpinfileptr.close()
 
+if args.outfilename is None:
+    args.outfilename = args.infile.name.rsplit('.',1)[0] + '.nvp'
+
 if args.basefile is None:
     args.basefile = file(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + ('emptyNVivo10Win.nvp' if args.nvivoversion == '10' else 'emptyNVivo11Win.nvp'), 'rb')
 
