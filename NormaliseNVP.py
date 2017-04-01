@@ -17,93 +17,105 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-
-parser = argparse.ArgumentParser(description='Normalise an NVivo for Windows file.')
-
-parser.add_argument('-v', '--verbosity', type=int, default=1)
-
-parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
-                    help='NVivo version (10 or 11)')
-
-parser.add_argument('-i', '--instance', type=str, nargs='?',
-                    help="Microsoft SQL Server instance")
-
-parser.add_argument('-u', '--users', choices=["skip", "merge", "overwrite", "replace"], default="merge",
-                    help='User action.')
-parser.add_argument('-p', '--project', choices=["skip", "overwrite"], default="overwrite",
-                    help='Project action.')
-parser.add_argument('-nc', '--node-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
-                    help='Node category action.')
-parser.add_argument('-n', '--nodes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
-                    help='Node action.')
-parser.add_argument('-na', '--node-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
-                    help='Node attribute table action.')
-parser.add_argument('-sc', '--source-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
-                    help='Source category action.')
-parser.add_argument('--sources', choices=["skip", "merge", "overwrite", "replace"], default="merge",
-                    help='Source action.')
-parser.add_argument('-sa', '--source-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
-                    help='Source attribute action.')
-parser.add_argument('-t', '--taggings', choices=["skip", "merge", "overwrite", "replace"], default="merge",
-                    help='Tagging action.')
-parser.add_argument('-a', '--annotations', choices=["skip", "merge", "overwrite", "replace"], default="merge",
-                    help='Annotation action.')
-
-parser.add_argument('infile', type=argparse.FileType('rb'),
-                    help="Input NVivo for Mac file (extension .nvpx)")
-parser.add_argument('outfilename', type=str, nargs='?',
-                    help="Output normalised SQLite file")
-
-args = parser.parse_args()
-
-# Fill in extra arguments that NVivo module expects
-args.mac       = False
-args.windows   = True
-
 import NVivo
 import os
 import shutil
-import signal
 from subprocess import Popen, PIPE
 import tempfile
-import time
 
-tmpinfilename = tempfile.mktemp()
-tmpinfileptr  = file(tmpinfilename, 'wb')
-tmpinfileptr.write(args.infile.read())
-args.infile.close()
-tmpinfileptr.close()
+def NormaliseNVP(arglist):
+    parser = argparse.ArgumentParser(description='Normalise an NVivo for Windows file.')
 
-tmpoutfilename = tempfile.mktemp()
+    parser.add_argument('-v', '--verbosity', type=int, default=1)
 
-if args.outfilename is None:
-    args.outfilename = args.infile.name.rsplit('.',1)[0] + '.norm'
+    parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
+                        help='NVivo version (10 or 11)')
 
-helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'Windows' + os.path.sep
+    parser.add_argument('-i', '--instance', type=str, nargs='?',
+                        help="Microsoft SQL Server instance")
 
-if args.instance is None:
-    proc = Popen([helperpath + 'mssqlInstance.bat'], stdout=PIPE)
-    args.instance = proc.stdout.readline()[0:-len(os.linesep)]
+    parser.add_argument('-u', '--users', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+                        help='User action.')
+    parser.add_argument('-p', '--project', choices=["skip", "overwrite"], default="overwrite",
+                        help='Project action.')
+    parser.add_argument('-nc', '--node-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+                        help='Node category action.')
+    parser.add_argument('-n', '--nodes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+                        help='Node action.')
+    parser.add_argument('-na', '--node-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+                        help='Node attribute table action.')
+    parser.add_argument('-sc', '--source-categories', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+                        help='Source category action.')
+    parser.add_argument('--sources', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+                        help='Source action.')
+    parser.add_argument('-sa', '--source-attributes', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+                        help='Source attribute action.')
+    parser.add_argument('-t', '--taggings', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+                        help='Tagging action.')
+    parser.add_argument('-a', '--annotations', choices=["skip", "merge", "overwrite", "replace"], default="merge",
+                        help='Annotation action.')
+
+    parser.add_argument('infile', type=argparse.FileType('rb'),
+                        help="Input NVivo for Mac file (extension .nvpx)")
+    parser.add_argument('outfilename', type=str, nargs='?',
+                        help="Output normalised SQLite file")
+
+    args = parser.parse_args(arglist)
+
+    # Fill in extra arguments that NVivo module expects
+    args.mac       = False
+    args.windows   = True
+
+
+    tmpinfilename = tempfile.mktemp()
+    tmpinfileptr  = file(tmpinfilename, 'wb')
+    tmpinfileptr.write(args.infile.read())
+    args.infile.close()
+    tmpinfileptr.close()
+
+    tmpoutfilename = tempfile.mktemp()
+
+    if args.outfilename is None:
+        args.outfilename = args.infile.name.rsplit('.',1)[0] + '.norm'
+
+    helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'Windows' + os.path.sep
+
+    if args.instance is None:
+        proc = Popen([helperpath + 'mssqlInstance.bat'], stdout=PIPE)
+        args.instance = proc.stdout.readline()[0:-len(os.linesep)]
+        if args.verbosity > 0:
+            print("Using MSSQL instance: " + args.instance)
+
+    # Get reasonably distinct yet recognisable DB name
+    dbname = 'nt' + str(os.getpid())
+
+    proc = Popen([helperpath + 'mssqlAttach.bat', tmpinfilename, dbname, args.instance])
+    proc.wait()
     if args.verbosity > 0:
-        print("Using MSSQL instance: " + args.instance)
+        print("Attached database " + dbname)
 
-# Get reasonably distinct yet recognisable DB name
-dbname = 'nt' + str(os.getpid())
+    try:
+        args.indb = 'mssql+pymssql://nvivotools:nvivotools@localhost/' + dbname
+        args.outdb = 'sqlite:///' + tmpoutfilename
 
-proc = Popen([helperpath + 'mssqlAttach.bat', tmpinfilename, dbname, args.instance])
-proc.wait()
-if args.verbosity > 0:
-    print("Attached database " + dbname)
+        NVivo.Normalise(args)
 
-args.indb = 'mssql+pymssql://nvivotools:nvivotools@localhost/' + dbname
-args.outdb = 'sqlite:///' + tmpoutfilename
+        proc = Popen([helperpath + 'mssqlDrop.bat', dbname, args.instance])
+        proc.wait()
+        if args.verbosity > 0:
+            print("Dropped database " + dbname)
 
-NVivo.Normalise(args)
+        shutil.move(tmpoutfilename, args.outfilename)
 
-proc = Popen([helperpath + 'mssqlDrop.bat', dbname, args.instance])
-proc.wait()
-if args.verbosity > 0:
-    print("Dropped database " + dbname)
+    except:
+        if args.verbosity > 0:
+            print("Dropping database " + dbname)
+        proc = Popen([helperpath + 'mssqlDrop.bat', dbname, args.instance])
+        proc.wait()
+        raise
 
-shutil.move(tmpoutfilename, args.outfilename)
-os.remove(tmpinfilename)
+    finally:
+        os.remove(tmpinfilename)
+
+if __name__ == '__main__':
+    NormaliseNVP(None)
