@@ -34,15 +34,15 @@ parser = argparse.ArgumentParser(description='Insert or update node in normalise
 
 parser.add_argument('-v', '--verbosity',  type=int, default=1)
 
-parser.add_argument('-n', '--name',        type = str)
-parser.add_argument('-d', '--description', type = str)
-parser.add_argument('-c', '--category',    type = str)
+parser.add_argument('-n', '--name',        required=True, type = lambda s: unicode(s, 'utf8'))
+parser.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
+parser.add_argument('-c', '--category',    type = lambda s: unicode(s, 'utf8'))
 parser.add_argument('-a', '--attribute',   action='append')
-parser.add_argument('-p', '--parent',      type = str)
+parser.add_argument('-p', '--parent',      type = lambda s: unicode(s, 'utf8'))
 parser.add_argument(      '--color',       type = str)
 parser.add_argument(      '--aggregate',   action = 'store_true')
 
-parser.add_argument('-u', '--user',        type = str,
+parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
                     help = 'User name, default is project "modified by".')
 
 parser.add_argument('normFile', type=str)

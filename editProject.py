@@ -35,8 +35,8 @@ parser = argparse.ArgumentParser(description='Insert or update project in normal
 parser.add_argument('-v', '--verbosity',  type=int, default=1)
 
 parser.add_argument('-t', '--title',       type=str)
-parser.add_argument('-d', '--description', type = str)
-parser.add_argument('-u', '--user',        type = str,
+parser.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
+parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
                     help='User, default is first user from user table')
 
 parser.add_argument('normFile', type=str)

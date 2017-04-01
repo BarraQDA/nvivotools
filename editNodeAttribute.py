@@ -34,11 +34,11 @@ parser = argparse.ArgumentParser(description='Insert or update node attribute in
 
 parser.add_argument('-v', '--verbosity',  type=int, default=1)
 
-parser.add_argument('-n', '--name',        type = str)
-parser.add_argument('-d', '--description', type = str)
+parser.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
+parser.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
 parser.add_argument('-t', '--type',        choices=["text", "integer", "decimal", "datetime", "date", "time", "boolean"])
 parser.add_argument('-l', '--length',      type = int)
-parser.add_argument('-u', '--user',        type = str,
+parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
                     help = 'User name, default is project "modified by".')
 
 parser.add_argument('normFile', type=str)

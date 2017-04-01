@@ -34,7 +34,7 @@ parser = argparse.ArgumentParser(description='Insert user into normalised file.'
 
 parser.add_argument('-v', '--verbosity',  type=int, default=1)
 
-parser.add_argument('-n', '--name',        type = str)
+parser.add_argument('-n', '--name',       type = lambda s: unicode(s, 'utf8'))
 
 parser.add_argument('normFile', type=str)
 
