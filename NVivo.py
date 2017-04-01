@@ -700,6 +700,46 @@ def Normalise(args):
             merge_overwrite_or_replace(normcon, normSourceValue, ['Source', 'Attribute'], sourceattrvalues, args.source_attributes, args.verbosity)
 
 # Tagging
+        def build_tagging_or_annotation(item):
+            # On Mac, text sections refer to indexes on non-space characters
+            if args.mac:
+                # TODO: Deal with case where we have skipped sources
+                source = next(source for source in sources if source['Id'] == item['Source'])
+                sourcetext = source['PlainText']
+
+                startx = item['StartText']
+                laststartx = 0
+                nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
+                while nextstartx > startx:
+                    laststartx = startx+1
+                    startx = nextstartx
+                    nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
+
+                lengthx = item['LengthText']
+                lastlengthx = 0
+                nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
+                while nextlengthx > lengthx:
+                    lastlengthx = lengthx
+                    lengthx = nextlengthx
+                    nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
+
+                item['StartX']  = startx
+                item['LengthX'] = lengthx
+
+            item['Node'] = None
+            item['Fragment'] = ''
+            if item['StartX'] is not None and item['LengthX'] is not None:
+                item['Fragment'] += str(item['StartX']) + ':' + str(item['StartX'] + item['LengthX'] - 1);
+            if item['StartY'] is not None:
+                item['Fragment'] += ',' + str(item['StartY'])
+                if item['LengthY'] > 0:
+                    item['Fragment'] += ':' + str(item['StartY'] + item['LengthY'] - 1)
+
+            if not isinstance(item['CreatedDate'], datetime):
+                item['CreatedDate'] = dateparser.parse(item['CreatedDate'])
+            if not isinstance(item['ModifiedDate'], datetime):
+                item['ModifiedDate'] = dateparser.parse(item['ModifiedDate'])
+
         if args.taggings != 'skip':
             if args.verbosity > 0:
                 print("Normalising taggings")
@@ -724,43 +764,7 @@ def Normalise(args):
                     nvivoNodeReference.c.StartZ.is_(None)
                 )))]
             for tagging in taggings:
-                # On Mac, text sections refer to indexes on non-space characters
-                if args.mac:
-                    # TODO: Deal with case where we have skipped sources
-                    source = next(source for source in sources if source['Id'] == tagging['Source'])
-                    sourcetext = source['PlainText']
-
-                    startx = tagging['StartText']
-                    laststartx = 0
-                    nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
-                    while nextstartx > startx:
-                        laststartx = startx+1
-                        startx = nextstartx
-                        nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
-
-                    lengthx = tagging['LengthText']
-                    lastlengthx = 0
-                    nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
-                    while nextlengthx > lengthx:
-                        lastlengthx = lengthx
-                        lengthx = nextlengthx
-                        nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
-
-                    tagging['StartX']  = startx
-                    tagging['LengthX'] = lengthx
-
-                tagging['Fragment'] = ''
-                if tagging['StartX'] is not None and tagging['LengthX'] is not None:
-                    tagging['Fragment'] = str(tagging['StartX']) + ':' + str(tagging['StartX'] + tagging['LengthX'] - 1)
-                if tagging['StartY'] is not None:
-                    tagging['Fragment'] += ',' + str(tagging['StartY'])
-                    if tagging['LengthY'] > 0:
-                        tagging['Fragment'] += ':' + str(tagging['StartY'] + tagging['LengthY'] - 1)
-
-                if not isinstance(tagging['CreatedDate'], datetime):
-                    tagging['CreatedDate'] = dateparser.parse(tagging['CreatedDate'])
-                if not isinstance(tagging['ModifiedDate'], datetime):
-                    tagging['ModifiedDate'] = dateparser.parse(tagging['ModifiedDate'])
+                build_tagging_or_annotation(tagging)
 
             merge_overwrite_or_replace(normcon, normTagging, ['Id'], taggings, args.taggings, args.verbosity)
 
@@ -784,44 +788,7 @@ def Normalise(args):
                 ]))]
 
             for annotation in annotations:
-                # On Mac, text sections refer to indexes on non-space characters
-                if args.mac:
-                    # TODO: Deal with case where we have skipped sources
-                    source = next(source for source in sources if source['Id'] == annotation['Source'])
-                    sourcetext = source['PlainText']
-
-                    startx = annotation['StartText']
-                    laststartx = 0
-                    nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
-                    while nextstartx > startx:
-                        laststartx = startx+1
-                        startx = nextstartx
-                        nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
-
-                    lengthx = annotation['LengthText']
-                    lastlengthx = 0
-                    nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
-                    while nextlengthx > lengthx:
-                        lastlengthx = lengthx
-                        lengthx = nextlengthx
-                        nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
-
-                    annotation['StartX']  = startx
-                    annotation['LengthX'] = lengthx
-
-                annotation['Node'] = None
-                annotation['Fragment'] = ''
-                if annotation['StartX'] is not None and annotation['LengthX'] is not None:
-                    annotation['Fragment'] += str(annotation['StartX']) + ':' + str(annotation['StartX'] + annotation['LengthX'] - 1);
-                if annotation['StartY'] is not None:
-                    annotation['Fragment'] += ',' + str(annotation['StartY'])
-                    if annotation['LengthY'] > 0:
-                        annotation['Fragment'] += ':' + str(annotation['StartY'] + annotation['LengthY'] - 1)
-
-                if not isinstance(annotation['CreatedDate'], datetime):
-                    annotation['CreatedDate'] = dateparser.parse(annotation['CreatedDate'])
-                if not isinstance(annotation['ModifiedDate'], datetime):
-                    annotation['ModifiedDate'] = dateparser.parse(annotation['ModifiedDate'])
+                build_tagging_or_annotation(annotation)
 
             merge_overwrite_or_replace(normcon, normTagging, ['Id'], annotations, args.annotations, args.verbosity)
 
