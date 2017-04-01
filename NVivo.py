@@ -337,7 +337,7 @@ def Normalise(args):
             notapplicablelabel = project['NotApplicableLabel']
             if args.windows:
                 project['Title']       = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Title']))
-                project['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Description']))
+                project['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), project['Description'])).replace('\r\n', '\n')
                 unassignedlabel    = u''.join(map(lambda ch: chr(ord(ch) + 0x377), unassignedlabel))
                 notapplicablelabel = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicablelabel))
 
@@ -372,7 +372,7 @@ def Normalise(args):
             for nodecategory in nodecategories:
                 if args.windows:
                     nodecategory['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Name']))
-                    nodecategory['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Description']))
+                    nodecategory['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), nodecategory['Description'])).replace('\r\n', '\n')
 
                 if not isinstance(nodecategory['CreatedDate'], datetime):
                     nodecategory['CreatedDate'] = dateparser.parse(nodecategory['CreatedDate'])
@@ -417,7 +417,7 @@ def Normalise(args):
             for node in nodes:
                 if args.windows:
                     node['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Name']))
-                    node['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Description']))
+                    node['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), node['Description'])).replace('\r\n', '\n')
 
                 if not isinstance(node['CreatedDate'], datetime):
                     node['CreatedDate'] = dateparser.parse(node['CreatedDate'])
@@ -537,7 +537,7 @@ def Normalise(args):
             for sourcecat in sourcecats:
                 if args.windows:
                     sourcecat['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Name']))
-                    sourcecat['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Description']))
+                    sourcecat['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), sourcecat['Description'])).replace('\r\n', '\n')
 
                 if not isinstance(sourcecat['CreatedDate'], datetime):
                     sourcecat['CreatedDate'] = dateparser.parse(sourcecat['CreatedDate'])
@@ -582,7 +582,7 @@ def Normalise(args):
             for source in sources:
                 if args.windows:
                     source['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Name']))
-                    source['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description']))
+                    source['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description'])).replace('\r\n', '\n')
 
                 if source['PlainText'] is not None:
                     source['Content'] = source['PlainText']
@@ -920,7 +920,7 @@ def Denormalise(args):
             project['Description'] = project['Description'] or u''
             if args.windows:
                 project['Title']       = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Title']))
-                project['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Description']))
+                project['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), project['Description'].replace('\n', '\r\n')))
 
             if args.project == 'overwrite':
                 nvivocon.execute(nvivoProject.update(), project)
@@ -991,7 +991,7 @@ def Denormalise(args):
                     category['PlainTextName'] = category['Name']
                     if args.windows:
                         category['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), category['Name']))
-                        category['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), category['Description']))
+                        category['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), category['Description'].replace('\n', '\r\n')))
                     if args.mac:
                         category['HierarchicalName'] = headcategoryname + u'\\\\' + category['Name']
 
@@ -1082,7 +1082,7 @@ def Denormalise(args):
                 node['PlainTextName'] = node['Name']
                 if args.windows:
                     node['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Name']))
-                    node['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Description']))
+                    node['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Description'].replace('\n', '\r\n')))
                 node['Color'] = node['Color'] or 0
                 if args.mac:
                     node['HierarchicalName'] = node['Name']
@@ -1137,6 +1137,7 @@ def Denormalise(args):
             for node in nodestoinsert:
                 for dest in node['AggregateList']:
                     aggregatepairs += [{ 'Id': node['Id'], 'Ancestor': dest }]
+                node['TruncatedDescription'] = node['Description'][0:nvivoItem.c.Description.type.length]
 
             if len(nodestoinsert) > 0:
                 nvivocon.execute(nvivoItem.insert().values({
@@ -1144,7 +1145,8 @@ def Denormalise(args):
                         'ColorArgb': bindparam('Color'),
                         'System':   literal_column('0'),
                         'ReadOnly': literal_column('0'),
-                        'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
+                        'InheritPermissions': literal_column(NVivo.RoleType.ParentItem),
+                        'Description': bindparam('TruncatedDescription')
                     }), nodestoinsert)
                 nvivocon.execute(nvivoRole.insert().values({
                         'Item1_Id': literal_column("'" + str(headnode['Id']) + "'"),
@@ -1690,7 +1692,7 @@ def Denormalise(args):
             source['PlainTextName'] = source['Name']
             if args.windows:
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
-                source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description']))
+                source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description'].replace('\n', '\r\n')))
 
             source['PlainText'] = source['Content']
             source['MetaData']  = None
