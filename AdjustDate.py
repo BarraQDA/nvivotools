@@ -17,21 +17,26 @@ db = None
 con = None
 tr = None
 try:
-    parser = argparse.ArgumentParser(description='Adjust all CreatedDate/ModifiedDate columns in a database before a specified date by a given number of days.')
+    parser = argparse.ArgumentParser(description='Adjust all CreatedDate/ModifiedDate columns in a database before a specified date by a given number of days. Simultateouly correct ModifiedDate to be no earlier than CreatedDate.')
 
-    parser.add_argument('db', type=str,
+    parser.add_argument('db',        type=str,
                         help='SQLAlchemy path of database from which to delete data.')
-    parser.add_argument('--before', type=str, required=True,
+    parser.add_argument('--before',  type=str, required=True,
                         help='Adjust all records with created date before this date.')
-    parser.add_argument('--adjust', type=int, required=True,
-                        help='Number of days to adjust dates.')
+    parser.add_argument('--adjust',  type=int, required=True,
+                        help='Time delta to adjust time forward by. Format is "<w>w <d>d <h>h <m>m <s>s"')
+    parser.add_argument('--dry-run', action='store_true', help='Print but do not execute command')
 
     args = parser.parse_args()
 
     args.before = dateparser.parse(args.before).date().isoformat()
-    adjust = datetime.timedelta(days=args.adjust)
 
-    mssql.ischema_names['xml'] = UUID
+    adjustdict = re.compile(r'(?:(?P<weeks>\d+?)w)?\s*(?:(?P<days>\d+?)d)?\s*(?:(?P<hours>\d+?)h)?\s*(?:(?P<minutes>\d+?)m)?\s*((?P<seconds>\d+?)s)?', arg.adjust, re.UNICODE | re.IGNORECASE)
+    adjust = datetime.timedelta(weeks=adjustdict['weeks'],
+                                days=adjustdict['days'],
+                                hours=adjustdict['hours'],
+                                minutes=adjustdict['minutes'],
+                                seconds=adjustdict['seconds'])
 
     db = create_engine(args.db)
     md = MetaData(bind=db)
@@ -47,22 +52,28 @@ try:
             # Prepend columns with '_' to avoid bindparam conflict error with reserved names
             rows = [{'_'+key:value for key,value in dict(row).iteritems()} for row in con.execute(
                 select(
-                    table.primary_key.columns + [CreatedDate, ModifiedDate]).where(
-                    table.c.CreatedDate  <= args.before))]
+                    table.primary_key.columns + [CreatedDate, ModifiedDate]).where(or_(
+                    table.c.CreatedDate <= args.before,
+                    table.c.CreatedDate >  table.c.ModifiedDate)))]
 
             keycondition = [column == bindparam('_'+column.name) for column in table.primary_key.columns]
 
             print ("Updating " + str(len(rows)) + " rows.")
-            for row in rows:
-                row['_ModifiedDate'] += adjust
-                row['_CreatedDate']  += adjust
+            if not args.dry_run:
+                for row in rows:
+                    if row['_CreatedDate'] <= args.before:
+                        row['_ModifiedDate'] += adjust
+                        row['_CreatedDate']  += adjust
+                    if row['_CreatedDate'] > row['_ModifiedDate']:
+                        row['_ModifiedDate'] = row['_CreatedDate']
 
-                con.execute(table.update(
-                    and_(*keycondition)).values({
-                        'CreatedDate':  bindparam('_CreatedDate'),
-                        'ModifiedDate': bindparam('_ModifiedDate')}), row)
+                    con.execute(table.update(
+                        and_(*keycondition)).values({
+                            'CreatedDate':  bindparam('_CreatedDate'),
+                            'ModifiedDate': bindparam('_ModifiedDate')}), row)
 
-    tr.commit()
+    if not args.dry_run:
+        tr.commit()
 
 except:
     raise
