@@ -1723,7 +1723,7 @@ def Denormalise(args):
             # Do our best to imitate NVivo's treatment of sources. In particular, generating
             # the PlainText column is very tricky. If it was already filled in the Object column
             # of the normalised file then use that value instead.
-            if source['NVivo.ObjectTypeName'] == 'PDF':
+            if source['ObjectTypeName'] == 'PDF':
                 source['SourceType'] = NVivo.SourceType.PDF
                 source['LengthX'] = 0
 
@@ -1786,16 +1786,20 @@ def Denormalise(args):
                 # Would be good to work out how NVivo calculates the PDF checksum
                 extendeditems.append({'Item_Id':    source['Item_Id'],
                                     'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>'})
-            elif source['NVivo.ObjectTypeName'] in {'DOC', 'ODT', 'TXT'}:
+            elif source['ObjectTypeName'] in {'DOCX', 'DOC', 'ODT', 'TXT'}:
                 if source['SourceType'] is None:
                     source['SourceType'] = NVivo.SourceType.Doc
 
                 tmpfilename = tempfile.mktemp()
                 if source['Object'] is not None:
-                    tmpfile = file(tmpfilename + '.' + source['NVivo.ObjectTypeName'], 'wb')
+                    if source['ObjectTypeName'] == 'TXT':
+                        tmpfile = codecs.open(tmpfilename + '.TXT', 'w', 'utf-8-sig')
+                    else:
+                        tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
+
                     tmpfile.write(source['Object'])
-                elif source['NVivo.ObjectTypeName'] == 'TXT' and source['PlainText'] is not None:
-                    tmpfile = codecs.open(tmpfilename + '.' + source['NVivo.ObjectTypeName'], 'w', 'utf-8-sig')
+                elif source['PlainText'] is not None:
+                    tmpfile = codecs.open(tmpfilename + '.' + source['ObjectTypeName'], 'w', 'utf-8-sig')
                     tmpfile.write(source['PlainText'])
                 else:
                     raise RuntimeError("Source '" + source['PlainTextName'] + "' is missing")
@@ -1826,11 +1830,11 @@ def Denormalise(args):
                         raise RuntimeError("Can't find unoconv on path. Please refer to the NVivotools README file.")
 
                 if source['PlainText'] is None:
-                    if source['NVivo.ObjectTypeName'] == 'TXT':
+                    if source['ObjectTypeName'] == 'TXT':
                         source['PlainText'] = codecs.open(tmpfilename + '.TXT', 'r', 'utf-8-sig').read()
                     else:
                         # Use unoconv to convert to text
-                        p = Popen(massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['NVivo.ObjectTypeName']], stderr=PIPE)
+                        p = Popen(massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
                         err = p.stderr.read()
                         if err != '':
                             raise RuntimeError(err)
@@ -1846,9 +1850,9 @@ def Denormalise(args):
 
                 # Convert object to DOC/ODT if isn't already
                 source['Object'] = ''
-                if source['NVivo.ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
+                if source['ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
                     destformat = 'odt' if args.mac else 'doc'
-                    p = Popen(massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['NVivo.ObjectTypeName']], stderr=PIPE)
+                    p = Popen(massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
                     err = p.stderr.read()
                     if err != '':
                         err = "unoconv invocation error:\n" + err
@@ -1857,10 +1861,10 @@ def Denormalise(args):
                     source['Object'] = file(tmpfilename + '.' + destformat, 'rb').read()
                     os.remove(tmpfilename + '.' + destformat)
 
-                os.remove(tmpfilename + '.' + source['NVivo.ObjectTypeName'])
+                os.remove(tmpfilename + '.' + source['ObjectTypeName'])
 
                 # Hack so that right object type code is found later
-                source['NVivo.ObjectTypeName'] = 'DOC'
+                source['ObjectTypeName'] = 'DOC'
 
                 if args.mac:
                     source['LengthX'] = len(source['PlainText'].replace(u' ', u''))
@@ -1893,7 +1897,7 @@ def Denormalise(args):
                     source['MetaData'] = paragraphs.toxml() + settings.toxml()
 
             # Note that NVivo 10 for Mac doesn't support images
-            elif source['NVivo.ObjectTypeName'] == 'JPEG':
+            elif source['ObjectTypeName'] == 'JPEG':
                 source['SourceType'] = NVivo.SourceType.JPEG
                 image = Image.open(StringIO(source['Object']))
                 source['LengthX'], source['LengthY'] = image.size
@@ -1905,20 +1909,20 @@ def Denormalise(args):
 
                 extendeditems.append({'Item_Id':source['Item_Id'],
                                     'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PictureRotation" Value="0"/><Property Key="PictureBrightness" Value="0"/><Property Key="PictureContrast" Value="0"/><Property Key="PictureQuality" Value="0"/></Properties>'})
-            #elif source['NVivo.ObjectTypeName'] == 'MP3':
+            #elif source['ObjectTypeName'] == 'MP3':
                 #source['LengthX'] = length of recording in milliseconds
                 #source['Waveform'] = waveform of recording, one byte per centisecond
-            #elif source['NVivo.ObjectTypeName'] == 'WMV':
+            #elif source['ObjectTypeName'] == 'WMV':
                 #source['LengthX'] = length of recording in milliseconds
                 #source['Waveform'] = waveform of recording, one byte per centisecond
             else:
                 source['LengthX'] = 0
 
             # Lookup object type from name
-            if source['NVivo.ObjectTypeName'] in NVivo.ObjectTypeName.values():
-                source['ObjectType'] = NVivo.ObjectTypeName.keys()[NVivo.ObjectTypeName.values().index(source['NVivo.ObjectTypeName'])]
+            if source['ObjectTypeName'] in NVivo.ObjectTypeName.values():
+                source['ObjectType'] = NVivo.ObjectTypeName.keys()[NVivo.ObjectTypeName.values().index(source['ObjectTypeName'])]
             else:
-                source['ObjectType'] = int(source['NVivo.ObjectTypeName'])
+                source['ObjectType'] = int(source['ObjectTypeName'])
 
         # Unitialise static variable
         massagesource.unoconvcmd = None
@@ -1954,7 +1958,7 @@ def Denormalise(args):
                         normSource.c.Description,
                         normSource.c.Color,
                         normSource.c.Content,
-                        normSource.c.ObjectType.label('NVivo.ObjectTypeName'),
+                        normSource.c.ObjectType.label('ObjectTypeName'),
                         normSource.c.SourceType,
                         normSource.c.Object,
                         normSource.c.Thumbnail,
