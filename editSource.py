@@ -183,12 +183,16 @@ try:
     if args.color:
         sourceColumns['Color'] = args.color
     if args.source:
-        # detect file encoding
-        raw = file(args.source, 'rb').read(32) # at most 32 bytes are returned
-        encoding = chardet.detect(raw)['encoding']
-
-        sourceColumns['Object']     = open(args.source, 'r', encoding=encoding).read().encode('utf-8')
         sourceColumns['ObjectType'] = os.path.splitext(args.source)[1][1:].upper()
+
+        if sourceColumns['ObjectType'].lower() == 'txt':
+            # detect file encoding
+            raw = file(args.source, 'rb').read(32) # at most 32 bytes are returned
+            encoding = chardet.detect(raw)['encoding']
+
+            sourceColumns['Object']     = open(args.source, 'r', encoding=encoding).read().encode('utf-8')
+        else:
+            sourceColumns['Object']     = file(args.source, 'rb').read()
 
     if source is None:    # New source
         normcon.execute(normSource.insert(), sourceColumns)
