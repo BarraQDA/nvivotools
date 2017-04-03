@@ -26,6 +26,8 @@ from dateutil import parser as dateparser
 from datetime import date, time, datetime
 from distutils import util
 import uuid
+import chardet
+from io import open
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
@@ -181,7 +183,11 @@ try:
     if args.color:
         sourceColumns['Color'] = args.color
     if args.source:
-        sourceColumns['Object']     = file(args.source, 'rb').read()
+        # detect file encoding
+        raw = file(args.source, 'rb').read(32) # at most 32 bytes are returned
+        encoding = chardet.detect(raw)['encoding']
+
+        sourceColumns['Object']     = open(args.source, 'r', encoding=encoding).read().encode('utf-8')
         sourceColumns['ObjectType'] = os.path.splitext(args.source)[1][1:].upper()
 
     if source is None:    # New source
