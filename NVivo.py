@@ -1231,7 +1231,10 @@ def Denormalise(args):
             itemcategory = {}
             for item in uniqueitems:
                 itemselresult = nvivocon.execute(itemsel, {'Item':item}).first()
-                itemcategory[item] = itemselresult['Category']
+                if itemselresult is None:
+                    print("ERROR: " + name + " '" + str(item) + " missing")
+                else:
+                    itemcategory[item] = itemselresult['Category']
             for value in values:
                 value['Category'] = itemcategory[value['Item']]
                 if value['Category'] is None:
