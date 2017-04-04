@@ -7,7 +7,7 @@ import warnings
 import sys
 import os
 import argparse
-import uuid
+import re
 from dateutil import parser as dateparser
 import datetime
 
@@ -23,20 +23,20 @@ try:
                         help='SQLAlchemy path of database from which to delete data.')
     parser.add_argument('--before',  type=str, required=True,
                         help='Adjust all records with created date before this date.')
-    parser.add_argument('--adjust',  type=int, required=True,
+    parser.add_argument('--adjust',  type=str, required=True,
                         help='Time delta to adjust time forward by. Format is "<w>w <d>d <h>h <m>m <s>s"')
     parser.add_argument('--dry-run', action='store_true', help='Print but do not execute command')
 
     args = parser.parse_args()
 
-    args.before = dateparser.parse(args.before).date().isoformat()
+    args.before = dateparser.parse(args.before)
 
-    adjustdict = re.compile(r'(?:(?P<weeks>\d+?)w)?\s*(?:(?P<days>\d+?)d)?\s*(?:(?P<hours>\d+?)h)?\s*(?:(?P<minutes>\d+?)m)?\s*((?P<seconds>\d+?)s)?', arg.adjust, re.UNICODE | re.IGNORECASE)
-    adjust = datetime.timedelta(weeks=adjustdict['weeks'],
-                                days=adjustdict['days'],
-                                hours=adjustdict['hours'],
-                                minutes=adjustdict['minutes'],
-                                seconds=adjustdict['seconds'])
+    adjust = re.search(r'(?:(?P<weeks>\d+?)w)?\s*(?:(?P<days>\d+?)d)?\s*(?:(?P<hours>\d+?)h)?\s*(?:(?P<minutes>\d+?)m)?\s*((?P<seconds>\d+?)s)?', args.adjust, re.UNICODE | re.IGNORECASE)
+    adjust = datetime.timedelta(weeks=int(adjust.group('weeks') or '0'),
+                                days=int(adjust.group('days') or '0'),
+                                hours=int(adjust.group('hours') or '0'),
+                                minutes=int(adjust.group('minutes') or '0'),
+                                seconds=int(adjust.group('seconds') or '0'))
 
     db = create_engine(args.db)
     md = MetaData(bind=db)
@@ -47,7 +47,7 @@ try:
     for table in md.sorted_tables:
         CreatedDate  = table.c.get('CreatedDate')
         ModifiedDate = table.c.get('ModifiedDate')
-        if CreatedDate is not None:
+        if CreatedDate is not None and ModifiedDate is not None:
             print ("Table " + table.name)
             # Prepend columns with '_' to avoid bindparam conflict error with reserved names
             rows = [{'_'+key:value for key,value in dict(row).iteritems()} for row in con.execute(
@@ -62,8 +62,9 @@ try:
             if not args.dry_run:
                 for row in rows:
                     if row['_CreatedDate'] <= args.before:
-                        row['_ModifiedDate'] += adjust
                         row['_CreatedDate']  += adjust
+                    if row['_ModifiedDate'] <= args.before:
+                        row['_ModifiedDate'] += adjust
                     if row['_CreatedDate'] > row['_ModifiedDate']:
                         row['_ModifiedDate'] = row['_CreatedDate']
 
