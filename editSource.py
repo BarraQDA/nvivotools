@@ -27,7 +27,9 @@ from datetime import date, time, datetime
 from distutils import util
 import uuid
 import chardet
-from io import open
+import codecs
+import tempfile
+from subprocess import Popen, PIPE
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
@@ -185,14 +187,58 @@ try:
     if args.source:
         sourceColumns['ObjectType'] = os.path.splitext(args.source)[1][1:].upper()
 
-        if sourceColumns['ObjectType'].lower() == 'txt':
+        if sourceColumns['ObjectType'] == 'TXT':
             # detect file encoding
             raw = file(args.source, 'rb').read(32) # at most 32 bytes are returned
             encoding = chardet.detect(raw)['encoding']
 
-            sourceColumns['Object']     = open(args.source, 'r', encoding=encoding).read().encode('utf-8')
+            sourceColumns['Object'] = codecs.open(args.source, 'r', encoding=encoding).read().encode('utf-8')
+            sourceColumns['Content'] = sourceColumns['Object']
         else:
-            sourceColumns['Object']     = file(args.source, 'rb').read()
+            sourceColumns['Object'] = file(args.source, 'rb').read()
+
+            # This code copied from NVivo.py
+            if args.verbosity > 1:
+                print("Searching for unoconv executable.")
+            # Look first on path for OS installed version, otherwise use our copy
+            for path in os.environ["PATH"].split(os.pathsep):
+                unoconvpath = os.path.join(path, 'unoconv')
+                if os.path.exists(unoconvpath):
+                    if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
+                        unoconvcmd = [unoconvpath]
+                    else:
+                        unoconvcmd = ['python', unoconvpath]
+                    break
+            if unoconvcmd is None:
+                unoconvpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'unoconv')
+                if os.path.exists(unoconvpath):
+                    if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
+                        unoconvcmd = [unoconvpath]
+                    else:
+                        unoconvcmd = ['python', unoconvpath]
+            if unoconvcmd is None:
+                raise RuntimeError("Can't find unoconv on path. Please refer to the NVivotools README file.")
+
+            # Use unoconv to convert to text
+            tmpfilename = tempfile.mktemp()
+            if sourceColumns['ObjectType'] == 'TXT':
+                sourceColumns['Content'] = sourceColumns['Object']
+            else:
+                tmpfile = file(tmpfilename + '.' + sourceColumns['ObjectType'], 'wb')
+
+                tmpfile.write(sourceColumns['Object'])
+                tmpfile.close()
+
+                p = Popen(unoconvcmd + ['--format=text', tmpfilename + '.' + sourceColumns['ObjectType']], stderr=PIPE)
+                err = p.stderr.read()
+                if err != '':
+                    raise RuntimeError(err)
+
+                # Read text output from unocode, then massage it by first dropping a final line
+                # terminator, then changing to Windows (CRLF) or Mac (LFLF) line terminators
+                sourceColumns['Content'] = codecs.open(tmpfilename + '.txt', 'r', 'utf-8-sig').read()
+                os.remove(tmpfilename + '.txt')
+                os.remove(tmpfilename + '.' + sourceColumns['ObjectType'])
 
     if source is None:    # New source
         normcon.execute(normSource.insert(), sourceColumns)
