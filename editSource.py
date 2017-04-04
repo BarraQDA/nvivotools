@@ -34,14 +34,15 @@ from subprocess import Popen, PIPE
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
 
-parser = argparse.ArgumentParser(description='Insert or update source in normalised file.')
+parser = argparse.ArgumentParser(description='Insert or update source in normalised file.',
+                                 fromfile_prefix_chars='@')
 
 parser.add_argument('-v', '--verbosity',  type=int, default=1)
 
 parser.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
 parser.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
 parser.add_argument('-c', '--category',    type = lambda s: unicode(s, 'utf8'))
-parser.add_argument('-a', '--attribute',   action='append')
+parser.add_argument('-a', '--attribute',   type = str, action='append')
 parser.add_argument(      '--color',       type = str)
 parser.add_argument('-s', '--source',      type = str,
                     help = 'Source file name')
@@ -156,7 +157,7 @@ try:
             else:
                 raise RuntimeError("Unknown attribute type: " + attributeType)
 
-            sourceValues += [{
+            sourceValues.append({
                     'Source':         Id,
                     '_Source':        Id,
                     'Attribute':    attributeId,
@@ -166,7 +167,7 @@ try:
                     'CreatedDate':  datetimeNow,
                     'ModifiedBy':   userId,
                     'ModifiedDate': datetimeNow
-                }]
+                })
 
     sourceColumns = {
             'Id':           Id,
@@ -235,8 +236,14 @@ try:
                     raise RuntimeError(err)
 
                 # Read text output from unocode, then massage it by first dropping a final line
-                # terminator, then changing to Windows (CRLF) or Mac (LFLF) line terminators
+                # terminator, then doubling up line terminators
+                # JS - is the correct on windows?
                 sourceColumns['Content'] = codecs.open(tmpfilename + '.txt', 'r', 'utf-8-sig').read()
+                if sourceColumns['Content'].endswith('\n'):
+                    sourceColumns['Content'] = sourceColumns['Content'][:-1]
+
+                sourceColumns['Content'] = sourceColumns['Content'].replace('\n', '\n\n')
+
                 os.remove(tmpfilename + '.txt')
                 os.remove(tmpfilename + '.' + sourceColumns['ObjectType'])
 
