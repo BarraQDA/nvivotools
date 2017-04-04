@@ -30,13 +30,14 @@ import uuid
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
 
-parser = argparse.ArgumentParser(description='Insert or update tagging in normalised file.')
+parser = argparse.ArgumentParser(description='Insert or update tagging in normalised file.',
+                                 fromfile_prefix_chars='@')
 
 parser.add_argument('-v', '--verbosity',  type=int, default=1)
 
 parser.add_argument('-s', '--source',      type = lambda s: unicode(s, 'utf8'))
 parser.add_argument('-n', '--node',        type = lambda s: unicode(s, 'utf8'))
-parser.add_argument('-f', '--fragment',    type = str)
+parser.add_argument('-f', '--fragment',    type = str, action = 'append')
 parser.add_argument('-m', '--memo',        type = lambda s: unicode(s, 'utf8'))
 parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
                     help = 'User name, default is project "modified by".')
@@ -101,21 +102,24 @@ try:
         if node is None:
             raise RuntimeError("Node: " + args.node + " not found.")
 
-    Id = uuid.uuid4()
     datetimeNow = datetime.now()
+    if args.fragment:
+        taggings = []
+        for fragment in args.fragment:
+            Id = uuid.uuid4()
+            taggings.append({
+                    'Id':           Id,
+                    'Source':       source['Id'],
+                    'Node':         node['Id'],
+                    'Fragment':     fragment,
+                    'Memo':         args.memo,
+                    'CreatedBy':    userId,
+                    'CreatedDate':  datetimeNow,
+                    'ModifiedBy':   userId,
+                    'ModifiedDate': datetimeNow
+                })
 
-    tagColumns = {
-            'Id':           Id,
-            'Source':       source['Id'],
-            'Node':         node['Id'],
-            'Fragment':     args.fragment,
-            'Memo':         args.memo,
-            'CreatedBy':    userId,
-            'CreatedDate':  datetimeNow,
-            'ModifiedBy':   userId,
-            'ModifiedDate': datetimeNow
-        }
-    normcon.execute(normTagging.insert(), tagColumns)
+        normcon.execute(normTagging.insert(), taggings)
 
     normtr.commit()
     normtr = None
