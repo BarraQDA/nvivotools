@@ -10,6 +10,7 @@ import argparse
 import re
 from dateutil import parser as dateparser
 import datetime
+from pytimeparse.timeparse import timeparse
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
@@ -24,19 +25,14 @@ try:
     parser.add_argument('--before',  type=str, required=True,
                         help='Adjust all records with created date before this date.')
     parser.add_argument('--adjust',  type=str, required=True,
-                        help='Time delta to adjust time forward by. Format is "<w>w <d>d <h>h <m>m <s>s"')
+                        help='Time delta to adjust time forward by, for example "3 days 2 hours"')
     parser.add_argument('--dry-run', action='store_true', help='Print but do not execute command')
 
     args = parser.parse_args()
 
     args.before = dateparser.parse(args.before)
 
-    adjust = re.search(r'(?:(?P<weeks>\d+?)w)?\s*(?:(?P<days>\d+?)d)?\s*(?:(?P<hours>\d+?)h)?\s*(?:(?P<minutes>\d+?)m)?\s*((?P<seconds>\d+?)s)?', args.adjust, re.UNICODE | re.IGNORECASE)
-    adjust = datetime.timedelta(weeks=int(adjust.group('weeks') or '0'),
-                                days=int(adjust.group('days') or '0'),
-                                hours=int(adjust.group('hours') or '0'),
-                                minutes=int(adjust.group('minutes') or '0'),
-                                seconds=int(adjust.group('seconds') or '0'))
+    adjust = datetime.timedelta(seconds=timeparse(args.adjust))
 
     db = create_engine(args.db)
     md = MetaData(bind=db)
