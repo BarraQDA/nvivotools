@@ -143,9 +143,9 @@ try:
                 if attributeLength and len(attributeValue) > attributeLength:
                     raise RuntimeError("Value: " + attributeValue + " longer than attribute length")
             elif attributeType == 'Integer':
-                int(attributeValue)
+                attributeValue = int(attributeValue)
             elif attributeType == 'Decimal':
-                float(attributeValue)
+                attributeValue = float(attributeValue)
             elif attributeType == 'Datetime':
                 attributeValue = datetime.isoformat(dateparser.parse(attributeValue))
             elif attributeType == 'Date':
@@ -172,8 +172,6 @@ try:
     sourceColumns = {
             'Id':           Id,
             '_Id':          Id,
-            'CreatedBy':    userId,
-            'CreatedDate':  datetimeNow,
             'ModifiedBy':   userId,
             'ModifiedDate': datetimeNow
         }
@@ -248,6 +246,10 @@ try:
                 os.remove(tmpfilename + '.' + sourceColumns['ObjectType'])
 
     if source is None:    # New source
+        sourceColumns.update({
+            'CreatedBy':    userId,
+            'CreatedDate':  datetimeNow,
+        })
         normcon.execute(normSource.insert(), sourceColumns)
         if len(sourceValues) > 0:
             normcon.execute(normSourceValue.insert(), sourceValues)

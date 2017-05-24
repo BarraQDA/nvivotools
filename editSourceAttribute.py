@@ -22,7 +22,6 @@ import argparse
 from sqlalchemy import *
 from sqlalchemy import exc
 import re
-from dateutil import parser as dateparser
 from datetime import date, time, datetime
 from distutils import util
 import uuid
@@ -88,7 +87,7 @@ try:
 
     datetimeNow = datetime.now()
 
-    catColumns = {
+    attColumns = {
             'Id':           Id,
             '_Id':          Id,
             'Name':         args.name,
@@ -101,11 +100,11 @@ try:
             'ModifiedDate': datetimeNow
         }
     if att is None:    # New category
-        normcon.execute(normSourceAttribute.insert(), catColumns)
+        normcon.execute(normSourceAttribute.insert(), attColumns)
     else:
         normcon.execute(normSourceAttribute.update(
                 normSourceAttribute.c.Id == bindparam('_Id')),
-                catColumns)
+                attColumns)
 
     normtr.commit()
     normtr = None
