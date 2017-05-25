@@ -19,8 +19,8 @@
 import os
 import sys
 import argparse
+from NVivoNorm import NVivoNorm
 from sqlalchemy import *
-from sqlalchemy import exc
 import re
 from dateutil import parser as dateparser
 from datetime import date, time, datetime
@@ -29,84 +29,79 @@ import uuid
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
+def editProject(arglist):
 
-parser = argparse.ArgumentParser(description='Insert or update project in normalised file.')
+    parser = argparse.ArgumentParser(description='Insert or update project in normalised file.')
 
-parser.add_argument('-v', '--verbosity',  type=int, default=1)
+    parser.add_argument('-v', '--verbosity',  type=int, default=1)
 
-parser.add_argument('-t', '--title',       type=str)
-parser.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
-parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
-                    help='User, default is first user from user table')
+    parser.add_argument('-t', '--title',       type=str)
+    parser.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
+    parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
+                        help='User, default is first user from user table')
 
-parser.add_argument('normFile', type=str)
+    parser.add_argument('normFile', type=str)
 
-args = parser.parse_args()
+    args = parser.parse_args()
 
-try:
-    normdb  = create_engine('sqlite:///' + args.normFile)
-    normmd  = MetaData(bind=normdb)
-    normcon = normdb.connect()
-    normtr  = normcon.begin()
+    try:
+        norm = NVivoNorm(args.normFile)
+        norm.begin()
 
-    normUser          = Table('User',          normmd, autoload=True)
-    normProject       = Table('Project',       normmd, autoload=True)
-
-    if args.user is not None:
-        user = normcon.execute(select([
-                normUser.c.Id
-            ]).where(
-                normUser.c.Name == bindparam('Name')
-            ), {
-                'Name': args.user
-            }).first()
-        if user is not None:
-            userId = user['Id']
-        else:
-            userId = uuid.uuid4()
-            normcon.execute(normUser.insert(), {
-                    'Id':   userId,
+        if args.user is not None:
+            user = norm.con.execute(select([
+                    norm.User.c.Id
+                ]).where(
+                    norm.User.c.Name == bindparam('Name')
+                ), {
                     'Name': args.user
-                })
-    else:
-        user = normcon.execute(select([
-                normUser.c.Id
-            ])).first()
-        if user is not None:
-            userId = user['Id']
+                }).first()
+            if user is not None:
+                userId = user['Id']
+            else:
+                userId = uuid.uuid4()
+                norm.con.execute(norm.User.insert(), {
+                        'Id':   userId,
+                        'Name': args.user
+                    })
         else:
-            raise RuntimeError("No user on command line or user file")
+            user = norm.con.execute(select([
+                    norm.User.c.Id
+                ])).first()
+            if user is not None:
+                userId = user['Id']
+            else:
+                raise RuntimeError("No user on command line or user file")
 
-    project = normcon.execute(select([
-                normProject.c.Title
-            ])).first()
+        project = norm.con.execute(select([
+                    norm.Project.c.Title
+                ])).first()
 
-    datetimeNow = datetime.now()
+        datetimeNow = datetime.now()
 
-    projectColumns = {'Version': '0.2'}
-    if args.title is not None:
-        projectColumns.update({'Title': args.title})
-    if args.description is not None:
-        projectColumns.update({'Description': args.description})
-    if project is None:
-        projectColumns.update({'CreatedBy':   userId})
-        projectColumns.update({'CreatedDate': datetimeNow})
-    projectColumns.update({'ModifiedBy':   userId})
-    projectColumns.update({'ModifiedDate': datetimeNow})
+        projectColumns = {'Version': '0.2'}
+        if args.title is not None:
+            projectColumns.update({'Title': args.title})
+        if args.description is not None:
+            projectColumns.update({'Description': args.description})
+        if project is None:
+            projectColumns.update({'CreatedBy':   userId})
+            projectColumns.update({'CreatedDate': datetimeNow})
+        projectColumns.update({'ModifiedBy':   userId})
+        projectColumns.update({'ModifiedDate': datetimeNow})
 
-    if project is None:    # New project
-        normcon.execute(normProject.insert(), projectColumns)
-    else:
-        normcon.execute(normProject.update(), projectColumns)
+        if project is None:    # New project
+            norm.con.execute(norm.Project.insert(), projectColumns)
+        else:
+            norm.con.execute(norm.Project.update(), projectColumns)
 
-    normtr.commit()
-    normtr = None
-    normcon.close()
-    normdb.dispose()
+        norm.commit()
+        del norm
 
+    except:
+        raise
+        norm.rollback()
+        del norm
 
-except:
-    raise
-    if not normtr is None:
-        normtr.rollback()
-    normdb.dispose()
+if __name__ == '__main__':
+    editProject(None)
