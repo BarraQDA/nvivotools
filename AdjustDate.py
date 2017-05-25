@@ -26,7 +26,6 @@ try:
                         help='Adjust all records with created date before this date.')
     parser.add_argument('--adjust',  type=str, required=True,
                         help='Time delta to adjust time forward by, for example "3 days 2 hours"')
-    parser.add_argument('--dry-run', action='store_true', help='Print but do not execute command')
 
     args = parser.parse_args()
 
