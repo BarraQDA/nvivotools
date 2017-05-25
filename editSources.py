@@ -64,7 +64,7 @@ def editSources(arglist):
         norm = NVivoNorm(args.normFile)
         norm.begin()
 
-        datetimeNow = datetime.now()
+        datetimeNow = datetime.utcnow()
 
         if args.user:
             user = norm.con.execute(select([

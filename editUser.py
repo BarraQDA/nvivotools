@@ -50,7 +50,7 @@ try:
 
     Id = uuid.uuid4()
 
-    datetimeNow = datetime.now()
+    datetimeNow = datetime.utcnow()
 
     userColumns = {
             'Id':           Id,

@@ -85,7 +85,7 @@ try:
             }).first()
     Id = uuid.uuid4() if att is None else att['Id']
 
-    datetimeNow = datetime.now()
+    datetimeNow = datetime.utcnow()
 
     attColumns = {
             'Id':           Id,

@@ -77,7 +77,7 @@ def editProject(arglist):
                     norm.Project.c.Title
                 ])).first()
 
-        datetimeNow = datetime.now()
+        datetimeNow = datetime.utcnow()
 
         projectColumns = {'Version': '0.2'}
         if args.title is not None:

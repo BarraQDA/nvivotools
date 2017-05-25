@@ -102,7 +102,7 @@ try:
         if node is None:
             raise RuntimeError("Node: " + args.node + " not found.")
 
-    datetimeNow = datetime.now()
+    datetimeNow = datetime.utcnow()
     if args.fragment:
         taggings = []
         for fragment in args.fragment:

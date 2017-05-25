@@ -108,7 +108,7 @@ try:
             }).first()
     Id = uuid.uuid4() if node is None else node['Id']
 
-    datetimeNow = datetime.now()
+    datetimeNow = datetime.utcnow()
 
     nodeValues = []
     if args.attribute is not None:
