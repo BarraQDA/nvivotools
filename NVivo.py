@@ -1232,13 +1232,13 @@ def Denormalise(args):
             for item in uniqueitems:
                 itemselresult = nvivocon.execute(itemsel, {'Item':item}).first()
                 if itemselresult is None:
-                    print("ERROR: " + name + " '" + str(item) + " missing")
+                    raise RuntimeError("ERROR: " + name + " '" + str(item) + " missing")
                 else:
                     itemcategory[item] = itemselresult['Category']
             for value in values:
                 value['Category'] = itemcategory[value['Item']]
                 if value['Category'] is None:
-                    print("WARNING: " + name + " '" + itemname(value['Item']) + "' has no category, attribute '" + attribute['PlainTextName'] + "' cannot be stored.")
+                    raise RuntimeError("WARNING: " + name + " '" + itemname(value['Item']) + "' has no category, attributes cannot be stored.")
                     continue
 
             attrsel = select([
@@ -1717,7 +1717,7 @@ def Denormalise(args):
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description'].replace('\n', '\r\n')))
 
-            source['PlainText'] = source['Content']
+            source['PlainText'] = unicode(source['Content'], 'utf-8')
             source['MetaData']  = None
 
             # Do our best to imitate NVivo's treatment of sources. In particular, generating
@@ -1797,7 +1797,7 @@ def Denormalise(args):
                     else:
                         tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
 
-                    tmpfile.write(source['Object'])
+                    tmpfile.write(unicode(source['Object'], 'utf-8'))
                 elif source['PlainText'] is not None:
                     tmpfile = codecs.open(tmpfilename + '.' + source['ObjectTypeName'], 'w', 'utf-8-sig')
                     tmpfile.write(source['PlainText'])
@@ -1855,7 +1855,7 @@ def Denormalise(args):
                     p = Popen(massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
                     err = p.stderr.read()
                     if err != '':
-                        err = "unoconv invocation error:\n" + err
+                        err = "unoconv invocation error: " + str(massagesource.unoconvcmd) + "\n" + err
                         raise RuntimeError(err)
 
                     source['Object'] = file(tmpfilename + '.' + destformat, 'rb').read()
@@ -2120,7 +2120,7 @@ def Denormalise(args):
                 tagging['ClusterId'] = None
                 matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
                 if matchfragment is None:
-                    print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + itemname(tagging['Source']) )
+                    raise RuntimeError("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + itemname(tagging['Source']) )
                     taggings.remove(tagging)
                     continue
 
