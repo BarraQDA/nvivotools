@@ -86,7 +86,22 @@ def editSources(arglist):
             project = norm.con.execute(select([
                     norm.Project.c.ModifiedBy
                 ])).first()
-            userId = project['ModifiedBy']
+            if project:
+                userId = project['ModifiedBy']
+            else:
+                userId = uuid.uuid4()
+                norm.con.execute(norm.User.insert(), {
+                        'Id':   userId,
+                        'Name': "NVivotools"
+                    })
+                norm.con.execute(norm.Project.insert(), {
+                    'Version': '0.2',
+                    'Title': "Created by NVivotools",
+                    'CreatedBy':    userId,
+                    'CreatedDate':  datetimeNow,
+                    'ModifiedBy':   userId,
+                    'ModifiedDate': datetimeNow
+                })
 
         if args.infile:
             csvFile = file(args.infile, 'r')
