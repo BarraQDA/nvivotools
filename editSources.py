@@ -88,7 +88,6 @@ def editSources(arglist):
                 ])).first()
             userId = project['ModifiedBy']
 
-
         if args.infile:
             csvFile = file(args.infile, 'r')
 
@@ -372,4 +371,3 @@ def editSources(arglist):
 
 if __name__ == '__main__':
     editSources(None)
-
