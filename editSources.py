@@ -92,7 +92,7 @@ def editSources(arglist):
                 userId = uuid.uuid4()
                 norm.con.execute(norm.User.insert(), {
                         'Id':   userId,
-                        'Name': "NVivotools"
+                        'Name': "Default User"
                     })
                 norm.con.execute(norm.Project.insert(), {
                     'Version': '0.2',

@@ -85,7 +85,7 @@ def editNodes(arglist):
                 userId = uuid.uuid4()
                 norm.con.execute(norm.User.insert(), {
                         'Id':   userId,
-                        'Name': "NVivotools"
+                        'Name': "Default User"
                     })
                 norm.con.execute(norm.Project.insert(), {
                     'Version': '0.2',
@@ -113,10 +113,10 @@ def editNodes(arglist):
             nodeRows = []
             for row in csvreader:
                 nodeRow = dict(row)
-                nodeRow['Name']        = nodeRow.get('Name',        args.name)
+                nodeRow['Name']        = nodeRow.get('Name',        args.name).strip()
                 nodeRow['Description'] = nodeRow.get('Description', args.description)
                 nodeRow['Category']    = nodeRow.get('Category',    args.category)
-                nodeRow['Parent']      = nodeRow.get('Parent',      args.parent)
+                nodeRow['Parent']      = nodeRow.get('Parent',      args.parent).strip()
                 nodeRow['Aggregate']   = nodeRow.get('Aggregate',   args.aggregate)
                 nodeRow['Category']    = nodeRow.get('Category',    args.category)
                 nodeRow['Color']       = nodeRow.get('Color',       args.color)
@@ -125,7 +125,7 @@ def editNodes(arglist):
             colNames = csvfieldnames
         else:
             nodeRows = [{
-                'Name':        args.name,
+                'Name':        args.name.strip(),
                 'Description': args.description,
                 'Category':    args.category,
                 'Color':       args.color
