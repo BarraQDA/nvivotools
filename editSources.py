@@ -96,7 +96,7 @@ def editSources(arglist):
                     })
                 norm.con.execute(norm.Project.insert(), {
                     'Version': '0.2',
-                    'Title': "Created by NVivotools",
+                    'Title': "Created by NVivotools http://barraqda.org/nvivotools/",
                     'CreatedBy':    userId,
                     'CreatedDate':  datetimeNow,
                     'ModifiedBy':   userId,
@@ -227,7 +227,7 @@ def editSources(arglist):
                 norm.con.execute(norm.SourceAttribute.insert(), {
                     'Id':           attributeId,
                     'Name':         attributeName,
-                    'Description':  "Created by NVivotools",
+                    'Description':  "Created by NVivotools http://barraqda.org/nvivotools/",
                     'Type':         attributeType,
                     'Length':       attributeLength,
                     'CreatedBy':    userId,
@@ -265,7 +265,7 @@ def editSources(arglist):
                     norm.con.execute(norm.SourceCategory.insert(), {
                         'Id':           categoryId,
                         'Name':         categoryName,
-                        'Description':  "Created by NVivotools",
+                        'Description':  "Created by NVivotools http://barraqda.org/nvivotools/",
                         'CreatedBy':    userId,
                         'CreatedDate':  datetimeNow,
                         'ModifiedBy':   userId,
@@ -273,7 +273,7 @@ def editSources(arglist):
                         })
 
             sourceName        = sourceRow.get('Name') or str(rowNum)
-            sourceDescription = sourceRow.get('Description') or "Created by NVivotools"
+            sourceDescription = sourceRow.get('Description') or "Created by NVivotools http://barraqda.org/nvivotools/"
 
             source = norm.con.execute(select([
                         norm.Source.c.Id

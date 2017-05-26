@@ -89,7 +89,7 @@ def editNodes(arglist):
                     })
                 norm.con.execute(norm.Project.insert(), {
                     'Version': '0.2',
-                    'Title': "Created by NVivotools",
+                    'Title': "Created by NVivotools http://barraqda.org/nvivotools/",
                     'CreatedBy':    userId,
                     'CreatedDate':  datetimeNow,
                     'ModifiedBy':   userId,
@@ -219,7 +219,7 @@ def editNodes(arglist):
                 norm.con.execute(norm.NodeAttribute.insert(), {
                     'Id':           attributeId,
                     'Name':         attributeName,
-                    'Description':  "Created by NVivotools",
+                    'Description':  "Created by NVivotools http://barraqda.org/nvivotools/",
                     'Type':         attributeType,
                     'Length':       attributeLength,
                     'CreatedBy':    userId,
@@ -257,7 +257,7 @@ def editNodes(arglist):
                     norm.con.execute(norm.NodeCategory.insert(), {
                         'Id':           categoryId,
                         'Name':         categoryName,
-                        'Description':  "Created by NVivotools",
+                        'Description':  "Created by NVivotools http://barraqda.org/nvivotools/",
                         'CreatedBy':    userId,
                         'CreatedDate':  datetimeNow,
                         'ModifiedBy':   userId,
@@ -286,7 +286,7 @@ def editNodes(arglist):
                         norm.con.execute(norm.Node.insert(), {
                             'Id':           parentId,
                             'Name':         parentName,
-                            'Description':  "Created by NVivotools",
+                            'Description':  "Created by NVivotools http://barraqda.org/nvivotools/",
                             'CreatedBy':    userId,
                             'CreatedDate':  datetimeNow,
                             'ModifiedBy':   userId,
