@@ -9,7 +9,7 @@ import os
 import argparse
 import re
 from dateutil import parser as dateparser
-import datetime
+from datetime import datetime, timedelta
 from pytimeparse.timeparse import timeparse
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
@@ -27,17 +27,21 @@ try:
     parser.add_argument('--adjust',  type=str, required=True,
                         help='Time delta to adjust time forward by, for example "3 days 2 hours"')
 
+    parser.add_argument('--dry-run',         action='store_true', help='Print but do not execute command')
+
     args = parser.parse_args()
 
-    args.before = dateparser.parse(args.before)
+    before = dateparser.parse(args.before)
 
-    adjust = datetime.timedelta(seconds=timeparse(args.adjust))
+    adjust = timedelta(seconds=timeparse(args.adjust))
 
     db = create_engine(args.db)
     md = MetaData(bind=db)
     md.reflect(db)
     con = db.connect()
     tr = con.begin()
+
+    datetimeNow = datetime.utcnow()
 
     for table in md.sorted_tables:
         CreatedDate  = table.c.get('CreatedDate')
@@ -48,7 +52,7 @@ try:
             rows = [{'_'+key:value for key,value in dict(row).iteritems()} for row in con.execute(
                 select(
                     table.primary_key.columns + [CreatedDate, ModifiedDate]).where(or_(
-                    table.c.CreatedDate <= args.before,
+                    table.c.CreatedDate <= before,
                     table.c.CreatedDate >  table.c.ModifiedDate)))]
 
             keycondition = [column == bindparam('_'+column.name) for column in table.primary_key.columns]
@@ -56,12 +60,22 @@ try:
             print ("Updating " + str(len(rows)) + " rows.")
             if not args.dry_run:
                 for row in rows:
-                    if row['_CreatedDate'] <= args.before:
-                        row['_CreatedDate']  += adjust
-                    if row['_ModifiedDate'] <= args.before:
-                        row['_ModifiedDate'] += adjust
-                    if row['_CreatedDate'] > row['_ModifiedDate']:
-                        row['_ModifiedDate'] = row['_CreatedDate']
+                    #print (row['_CreatedDate'], args.before)
+                    createdDate  = dateparser.parse(row['_CreatedDate'])
+                    modifiedDate = dateparser.parse(row['_ModifiedDate'])
+                    if createdDate <= before:
+                        createdDate  += adjust
+                    if modifiedDate <= before:
+                        modifiedDate += adjust
+                    if createdDate > datetimeNow or modifiedDate > datetimeNow:
+                        print("WARNING: future date")
+
+                    if createdDate > modifiedDate:
+                        print("WARNING: created date later than modified date")
+                        #row['_ModifiedDate'] = row['_CreatedDate']
+
+                    row['_CreatedDate']  = createdDate
+                    row['_ModifiedDate'] = modifiedDate
 
                     con.execute(table.update(
                         and_(*keycondition)).values({
