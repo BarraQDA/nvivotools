@@ -1120,6 +1120,8 @@ def Denormalise(args):
                         parent = parentnode['Parent']
                     node['HierarchicalName'] = u'Nodes\\\\' + node['HierarchicalName']
 
+            # JS This might be NQR. Not sure whether node should aggregate to itself -
+            # might depend on NVivo version?
             def tagchildnodes(TopParent, Parent, AggregateList, depth):
                 tag = depth << 16
                 for node in nodes:
