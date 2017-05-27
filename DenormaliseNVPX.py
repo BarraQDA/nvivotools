@@ -82,6 +82,8 @@ tmpinfileptr.close()
 
 if args.outfilename is None:
     args.outfilename = args.infile.name.rsplit('.',1)[0] + '.nvpx'
+    if os.path.exists(args.outfilename):
+        shutil.move(args.outfilename, args.outfilename + '.bak')
 
 if args.basefile is None:
     args.basefile = file(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + ('emptyNVivo10Mac.nvpx' if args.nvivoversion == '10' else 'emptyNVivo11Mac.nvpx'), 'rb')
