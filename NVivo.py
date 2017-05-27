@@ -1228,9 +1228,10 @@ def Denormalise(args):
                     nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id
                 )))
 
-            # Replace null or empty values (NVivo doesn't like these) with Unassigned
+            # Since NVivo doesn't like them, strip values and replace null or empty values
+            # with Unassigned.
             for value in values:
-                value['Value'] = value['Value'] or unassignedlabel
+                value['Value'] = value['Value'].strip() or unassignedlabel
 
             # Build dictionary of item categories
             uniqueitems = set(value['Item'] for value in values)
