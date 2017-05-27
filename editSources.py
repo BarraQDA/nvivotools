@@ -244,6 +244,7 @@ def editSources(arglist):
         rowNum = 0
         sourcesToInsert      = []
         sourceValuesToInsert = []
+        digits = len(str(len(sourceRows)))
         for sourceRow in sourceRows:
             rowNum += 1
 
@@ -272,7 +273,7 @@ def editSources(arglist):
                         'ModifiedDate': datetimeNow
                         })
 
-            sourceName        = sourceRow.get('Name') or str(rowNum)
+            sourceName        = sourceRow.get('Name') or str(rowNum).zfill(digits)
             sourceDescription = sourceRow.get('Description') or "Created by NVivotools http://barraqda.org/nvivotools/"
 
             source = norm.con.execute(select([
@@ -332,13 +333,7 @@ def editSources(arglist):
                 }
             normSourceRow['Color'] = sourceRow.get('Color')
 
-            if sourceRow.get('Text'):
-                normSourceRow['ObjectType'] = 'TXT'
-
-                normSourceRow['Object']  = buffer(sourceRow['Text'].encode('utf-8'))
-                normSourceRow['Content'] = normSourceRow['Object']
-
-            elif sourceRow.get('Source'):
+            if sourceRow.get('Source'):
                 normSourceRow['ObjectType'] = 'TXT'
 
                 # detect file encoding
@@ -347,6 +342,12 @@ def editSources(arglist):
 
                 normSourceRow['Object'] = codecs.open(sourcerow['Source'], 'r', encoding=encoding).read().encode('utf-8')
                 normSourceRow['Content'] = normSourceRow['Object']
+            else:
+                normSourceRow['ObjectType'] = 'TXT'
+
+                normSourceRow['Object']  = buffer(sourceRow.get('Text', '').encode('utf-8'))
+                normSourceRow['Content'] = normSourceRow['Object']
+
 
             # Skip source without an object
             if not normSourceRow.get('ObjectType'):
