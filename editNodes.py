@@ -313,6 +313,9 @@ def editNodes(arglist):
                 attributeLength = attributeNode['Length']
                 attributeValue  = nodeRow[attributeName]
 
+                if not attributeValue:
+                    continue
+
                 if attributeType == 'text':
                     if attributeLength and len(attributeValue) > attributeLength:
                         raise RuntimeError("Value: " + attributeValue + " longer than attribute length")
