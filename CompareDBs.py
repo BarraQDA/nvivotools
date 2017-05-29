@@ -26,6 +26,11 @@ try:
     parser.add_argument('db2',       type=str,
                         help='SQLAlchemy path of database from which to delete data.')
 
+    parser.add_argument('--tables',  type=str, nargs='*', default=['Annotation', 'Category', 'ExtendedItem', 'Item', 'NodeReference', 'Project',  'Role', 'Source', 'UserProfile'],
+                        help='List of tables to compare, otherwise all main NVivo tables.')
+    parser.add_argument('--ignore',  type=str, nargs='*', default=['CreatedBy', 'CreatedDate', 'ModifiedBy', 'ModifiedDate', 'RevisionId'],
+                        help='Fields to ignore in comparison, otherwise creation and modification info only.')
+
     args = parser.parse_args()
 
     db1 = create_engine(args.db1)
@@ -74,17 +79,15 @@ try:
     dict2 = {}
     buildTableMatchDicts('UserProfile', ['Name'])
     buildTableMatchDicts('Project', [])
-    buildTableMatchDicts('Item', ['TypeId', 'Name'])
+    buildTableMatchDicts('Item', ['TypeId', 'Name', 'HierarchicalName'])
 
-    tables = ['Annotation', 'Category', 'ExtendedItem', 'Item', 'NodeReference', 'Project',  'Role', 'Source', 'UserProfile']
-    ignore = ['CreatedBy', 'CreatedDate', 'ModifiedBy', 'ModifiedDate', 'RevisionId']
-    for tableName in tables:
+    for tableName in args.tables:
         table = next(table for table in md1.sorted_tables if table.name == tableName)
         print("Table:", table.name)
 
         rows1 = [dict(row) for row in con1.execute(select(table.columns))]
         rows2 = [dict(row) for row in con2.execute(select(table.columns))]
-        keyColNames = ([column.name for column in table.primary_key.columns])
+        keyColNames = [column.name for column in table.primary_key.columns]
 
         for row1 in rows1:
             keyVals = [{keyColName:row1[keyColName] for keyColName in keyColNames}]
@@ -108,7 +111,7 @@ try:
                     row2['_matched'] = True
                     diffCols = []
                     for col in row1.keys():     # NB dict not DB key
-                        if col[-2:] != 'Id' and col not in ignore and row1[col] != row2[col]:
+                        if col[-2:] != 'Id' and col not in args.ignore and row1[col] != row2[col]:
                             diffCols.append(col)
                     if diffCols:
                         print ("    Key:", {keyColName:keyVal[keyColName] for keyColName in keyColNames})
