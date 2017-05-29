@@ -1030,13 +1030,18 @@ def Denormalise(args):
 
                 rowstoinsert = [row for row in categories if not {'_Id':row['Id']} in curids]
                 if len(rowstoinsert) > 0:
-                    nvivocon.execute(nvivoItem.insert().values({
+                    itemvalues = {
                             'Id':       bindparam('_Id'),
                             'TypeId':   literal_column(itemtype),
                             'System':   literal_column('0'),
                             'ReadOnly': literal_column('0'),
                             'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
-                        }), rowstoinsert)
+                        }
+                    if args.mac:
+                        itemvalues.update({
+                            'HierarchicalName': bindparam('HierarchicalName')
+                        })
+                    nvivocon.execute(nvivoItem.insert().values(itemvalues), rowstoinsert)
                     nvivocon.execute(nvivoRole.insert().values({
                             'Item1_Id': literal_column("'" + str(headcategory['Id']) + "'"),
                             'Item2_Id': bindparam('_Id'),
@@ -1162,14 +1167,19 @@ def Denormalise(args):
                 node['TruncatedDescription'] = node['Description'][0:nvivoItem.c.Description.type.length]
 
             if len(nodestoinsert) > 0:
-                nvivocon.execute(nvivoItem.insert().values({
+                itemvalues = {
                         'TypeId':   literal_column(NVivo.ItemType.Node),
                         'ColorArgb': bindparam('Color'),
                         'System':   literal_column('0'),
                         'ReadOnly': literal_column('0'),
                         'InheritPermissions': literal_column(NVivo.RoleType.ParentItem),
                         'Description': bindparam('TruncatedDescription')
-                    }), nodestoinsert)
+                    }
+                if args.mac:
+                    itemvalues.update({
+                        'HierarchicalName': bindparam('HierarchicalName')
+                    })
+                nvivocon.execute(nvivoItem.insert().values(itemvalues), nodestoinsert)
                 nvivocon.execute(nvivoRole.insert().values({
                         'Item1_Id': literal_column("'" + str(headnode['Id']) + "'"),
                         'Item2_Id': bindparam('Id'),
@@ -1422,7 +1432,6 @@ def Denormalise(args):
                     }), attribute)
 
                     # Create unassigned and not applicable attribute values
-                    attribute['HierarchicalName'] = None    # Doesn't apply to values
                     attribute['UnassignedValueId'] = uuid.uuid4()
                     attribute['Unassigned'] = unassignedlabel
                     nvivocon.execute(nvivoItem.insert().values({
@@ -1791,8 +1800,10 @@ def Denormalise(args):
                 source['MetaData'] = paragraphs.toxml() + pages.toxml()
 
                 # Would be good to work out how NVivo calculates the PDF checksum
-                extendeditems.append({'Item_Id':    source['Item_Id'],
-                                    'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>'})
+                extendeditems.append({
+                    'Item_Id':    source['Item_Id'],
+                    'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>'
+                })
             elif source['ObjectTypeName'] in {'DOCX', 'DOC', 'ODT', 'TXT'}:
                 if source['SourceType'] is None:
                     source['SourceType'] = NVivo.SourceType.Doc
@@ -1903,6 +1914,10 @@ def Denormalise(args):
 
                     source['MetaData'] = paragraphs.toxml() + settings.toxml()
 
+                extendeditems.append({
+                    'Item_Id':source['Item_Id'],
+                    'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="MimeType" Value=""/></Properties>'
+                })
             # Note that NVivo 10 for Mac doesn't support images
             elif source['ObjectTypeName'] == 'JPEG':
                 source['SourceType'] = NVivo.SourceType.JPEG
@@ -1914,8 +1929,10 @@ def Denormalise(args):
                 source['Thumbnail'] = thumbnail.getvalue()
                 source['Properties'] = '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"/>'
 
-                extendeditems.append({'Item_Id':source['Item_Id'],
-                                    'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PictureRotation" Value="0"/><Property Key="PictureBrightness" Value="0"/><Property Key="PictureContrast" Value="0"/><Property Key="PictureQuality" Value="0"/></Properties>'})
+                extendeditems.append({
+                    'Item_Id':source['Item_Id'],
+                    'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PictureRotation" Value="0"/><Property Key="PictureBrightness" Value="0"/><Property Key="PictureContrast" Value="0"/><Property Key="PictureQuality" Value="0"/></Properties>'
+                })
             #elif source['ObjectTypeName'] == 'MP3':
                 #source['LengthX'] = length of recording in milliseconds
                 #source['Waveform'] = waveform of recording, one byte per centisecond
@@ -1930,6 +1947,9 @@ def Denormalise(args):
                 source['ObjectType'] = NVivo.ObjectTypeName.keys()[NVivo.ObjectTypeName.values().index(source['ObjectTypeName'])]
             else:
                 source['ObjectType'] = int(source['ObjectTypeName'])
+
+            if args.mac:
+                source['HierarchicalName'] = headsourcename + u'\\\\' + node['Name']
 
         # Unitialise static variable
         massagesource.unoconvcmd = None
@@ -1981,6 +2001,19 @@ def Denormalise(args):
                     nvivoSource.c.Item_Id
                 ]))]
 
+            itemvalues = {
+                        'Id':       bindparam('Item_Id'),
+                        'TypeId':   bindparam('SourceType'),
+                        'ColorArgb': bindparam('Color'),
+                        'System':   literal_column('0'),
+                        'ReadOnly': literal_column('0'),
+                        'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
+                    }
+            if args.mac:
+                itemvalues.update({
+                    'HierarchicalName': bindparam('HierarchicalName')
+                })
+
             if args.sources == 'overwrite' or args.sources == 'replace':
                 sourcestoupdate = [source for source in sources if {'Item_Id':source['Item_Id']} in curids]
 
@@ -1989,10 +2022,8 @@ def Denormalise(args):
 
                 if len(sourcestoupdate) > 0:
                     nvivocon.execute(nvivoItem.update(
-                            nvivoItem.c.Id == bindparam('Item_Id')).values({
-                            'TypeId':   bindparam('SourceType'),
-                            'ColorArgb': bindparam('Color'),
-                        }), sourcestoupdate)
+                            nvivoItem.c.Id == bindparam('Item_Id')
+                        ).values(itemvalues), sourcestoupdate)
                     nvivocon.execute(nvivoSource.update(
                             nvivoSource.c.Item_Id == bindparam('Item_Id')).values({
                             'TypeId':   bindparam('ObjectType'),
@@ -2012,14 +2043,7 @@ def Denormalise(args):
                 massagesource(source)
 
             if len(sourcestoinsert) > 0:
-                nvivocon.execute(nvivoItem.insert().values({
-                        'Id':       bindparam('Item_Id'),
-                        'TypeId':   bindparam('SourceType'),
-                        'ColorArgb': bindparam('Color'),
-                        'System':   literal_column('0'),
-                        'ReadOnly': literal_column('0'),
-                        'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
-                    }), sourcestoinsert)
+                nvivocon.execute(nvivoItem.insert().values(itemvalues), sourcestoinsert)
                 nvivocon.execute(nvivoSource.insert().values({
                         'TypeId':   bindparam('ObjectType'),
                         # This work-around is specific to MSSQL
