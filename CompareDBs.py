@@ -79,7 +79,7 @@ try:
     dict2 = {}
     buildTableMatchDicts('UserProfile', ['Name'])
     buildTableMatchDicts('Project', [])
-    buildTableMatchDicts('Item', ['TypeId', 'Name', 'HierarchicalName'])
+    buildTableMatchDicts('Item', ['TypeId', 'Name'])
 
     for tableName in args.tables:
         table = next(table for table in md1.sorted_tables if table.name == tableName)
