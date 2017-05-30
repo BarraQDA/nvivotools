@@ -20,7 +20,7 @@ import argparse
 import NVivo
 import os
 import shutil
-from subprocess import Popen, PIPE
+import subprocess
 import tempfile
 
 def NormaliseNVP(arglist):
@@ -31,7 +31,11 @@ def NormaliseNVP(arglist):
     parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
                         help='NVivo version (10 or 11)')
 
-    parser.add_argument('-i', '--instance', type=str, nargs='?',
+    parser.add_argument('-S', '--server', type=str,
+                        help="IP address/name of Microsoft SQL Server")
+    parser.add_argument('-P', '--port', type=int,
+                        help="Port of Microsoft SQL Server")
+    parser.add_argument('-i', '--instance', type=str,
                         help="Microsoft SQL Server instance")
 
     parser.add_argument('-u', '--users', choices=["skip", "merge", "overwrite", "replace"], default="merge",
@@ -55,7 +59,7 @@ def NormaliseNVP(arglist):
     parser.add_argument('-a', '--annotations', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                         help='Annotation action.')
 
-    parser.add_argument('infile', type=argparse.FileType('rb'),
+    parser.add_argument('infile', type=str,
                         help="Input NVivo for Mac file (extension .nvpx)")
     parser.add_argument('outfilename', type=str, nargs='?',
                         help="Output normalised SQLite file")
@@ -66,42 +70,62 @@ def NormaliseNVP(arglist):
     args.mac       = False
     args.windows   = True
 
+    if args.server is None:
+        if os.name != 'nt':
+            raise RuntimeError("This is not a Windows machine so --server must be specified.")
 
-    tmpinfilename = tempfile.mktemp()
-    tmpinfileptr  = file(tmpinfilename, 'wb')
-    tmpinfileptr.write(args.infile.read())
-    args.infile.close()
-    tmpinfileptr.close()
+        infile = file(args.infile, 'rb')
+        tmpinfilename = tempfile.mktemp()
+        tmpinfileptr  = file(tmpinfilename, 'wb')
+        tmpinfileptr.write(args.infile.read())
+        args.infile.close()
+        tmpinfileptr.close()
+    else:
+        subprocess.call(['scp', '-q', args.infile, args.server + ':'])
 
     tmpoutfilename = tempfile.mktemp()
 
     if args.outfilename is None:
-        args.outfilename = args.infile.name.rsplit('.',1)[0] + '.norm'
+        args.outfilename = args.infile.rsplit('.',1)[0] + '.norm'
 
     helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'Windows' + os.path.sep
 
     if args.instance is None:
-        proc = Popen([helperpath + 'mssqlInstance.bat'], stdout=PIPE)
-        args.instance = proc.stdout.readline()[0:-len(os.linesep)]
+        if not args.server:     # ie server is on same machine as this script
+            args.instance = subprocess.check_output([helperpath + 'mssqlInstance.bat'], stdout=PIPE)
+        else:
+            subprocess.call(['scp', '-q', helperpath + 'mssqlInstance.bat', args.server + ':'])
+            args.instance = subprocess.check_output(['ssh', args.server, 'mssqlInstance.bat']).strip()
+
+        #args.instance = proc.stdout.readline()[0:-len(os.linesep)]
         if args.verbosity > 0:
             print("Using MSSQL instance: " + args.instance)
 
     # Get reasonably distinct yet recognisable DB name
     dbname = 'nt' + str(os.getpid())
 
-    proc = Popen([helperpath + 'mssqlAttach.bat', tmpinfilename, dbname, args.instance])
-    proc.wait()
+    if args.server is None:
+        subprocess.call([helperpath + 'mssqlAttach.bat', tmpinfilename, dbname, args.instance])
+    else:
+        subprocess.call(['scp', '-q', helperpath + 'mssqlAttach.bat', args.server + ':'])
+        subprocess.call(['ssh', args.server, 'mssqlAttach.bat', os.path.basename(args.infile), dbname, args.instance])
+
     if args.verbosity > 0:
         print("Attached database " + dbname)
 
     try:
-        args.indb = 'mssql+pymssql://nvivotools:nvivotools@localhost/' + dbname
+        args.indb = 'mssql+pymssql://nvivotools:nvivotools@' + (args.server or 'localhost') + ((':' + str(args.port)) if args.port else '') + '/' + dbname
         args.outdb = 'sqlite:///' + tmpoutfilename
 
         NVivo.Normalise(args)
 
-        proc = Popen([helperpath + 'mssqlDrop.bat', dbname, args.instance])
-        proc.wait()
+        if args.server is None:
+            proc = Popen([helperpath + 'mssqlDrop.bat', dbname, args.instance])
+            proc.wait()
+        else:
+            subprocess.call(['scp', '-q', helperpath + 'mssqlDrop.bat', args.server + ':'])
+            subprocess.call(['ssh', args.server, 'mssqlDrop.bat', dbname, args.instance])
+
         if args.verbosity > 0:
             print("Dropped database " + dbname)
 
@@ -110,12 +134,16 @@ def NormaliseNVP(arglist):
     except:
         if args.verbosity > 0:
             print("Dropping database " + dbname)
-        proc = Popen([helperpath + 'mssqlDrop.bat', dbname, args.instance])
-        proc.wait()
+        if args.server is None:
+            subprocess.call([helperpath + 'mssqlDrop.bat', dbname, args.instance])
+        else:
+            subprocess.call(['scp', '-q', helperpath + 'mssqlDrop.bat', args.server + ':'])
+            subprocess.call(['ssh', args.server, 'mssqlDrop.bat', dbname, args.instance])
         raise
 
     finally:
-        os.remove(tmpinfilename)
+        if args.server is None:
+            os.remove(tmpinfilename)
 
 if __name__ == '__main__':
     NormaliseNVP(None)
