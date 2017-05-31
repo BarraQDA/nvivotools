@@ -1,0 +1,7 @@
+future
+pdfminer
+Pillow
+pymssql
+python-dateutil
+SQLAlchemy
+sqlalchemy_sqlany
