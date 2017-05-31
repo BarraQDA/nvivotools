@@ -66,6 +66,21 @@ def NormaliseNVP(arglist):
 
     args = parser.parse_args(arglist)
 
+    # Function to execute a command either locally or remotely
+    def executecommand(command):
+        if not args.server:     # ie server is on same machine as this script
+            return subprocess.check_output(command).strip()
+        else:
+            return subprocess.check_output(['ssh', args.server] + [('"' + word + '"') if ' ' in word else word for word in command]).strip()
+
+    # Function to execute a helper script either locally or remotely
+    def executescript(script, arglist=None):
+        if not args.server:     # ie server is on same machine as this script
+            return subprocess.check_output([helperpath + script] + (arglist or [])).strip()
+        else:
+            subprocess.call(['scp', '-q', helperpath + script, args.server + ':' + tmpdir])
+            return subprocess.check_output(['ssh', args.server, tmpdir + '\\' + script] + (arglist or [])).strip()
+
     # Fill in extra arguments that NVivo module expects
     args.mac       = False
     args.windows   = True
@@ -74,41 +89,48 @@ def NormaliseNVP(arglist):
         if os.name != 'nt':
             raise RuntimeError("This is not a Windows machine so --server must be specified.")
 
-        infile = file(args.infile, 'rb')
-        tmpinfilename = tempfile.mktemp()
-        tmpinfileptr  = file(tmpinfilename, 'wb')
-        tmpinfileptr.write(args.infile.read())
-        args.infile.close()
-        tmpinfileptr.close()
+        infilename = args.infile
     else:
-        subprocess.call(['scp', '-q', args.infile, args.server + ':'])
+        tmpdir = subprocess.check_output(['ssh', args.server, r'echo %tmp%']).strip()
+        infilename = subprocess.check_output(['ssh', args.server, r'echo %tmp%\nvivotools%random%.nvp']).strip()
+        subprocess.call(['scp', '-q', args.infile, args.server + ':' + infilename])
 
     tmpoutfilename = tempfile.mktemp()
 
+    # Generate reasonable default output file name
     if args.outfilename is None:
         args.outfilename = args.infile.rsplit('.',1)[0] + '.norm'
 
     helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'Windows' + os.path.sep
 
     if args.instance is None:
-        if not args.server:     # ie server is on same machine as this script
-            args.instance = subprocess.check_output([helperpath + 'mssqlInstance.bat'], stdout=PIPE)
+        regquery = executecommand(['reg', 'query', 'HKLM\\Software\\Microsoft\\Microsoft SQL Server\\Instance Names\\SQL']).splitlines()
+        for regqueryline in regquery[1:]:
+            regquerydata = regqueryline.split()
+            instancename = regquerydata[0]
+            instanceversion = regquerydata[2].split('.')[0]
+            if args.verbosity >= 2:
+                print("Found SQL server instance " + instancename + "  version " + instanceversion)
+            if (args.nvivoversion == '10' and instanceversion == 'MSSQL10_50') or (args.nvivoversion == '11' and instanceversion == 'MSSQL12'):
+                args.instance = instancename
+                break
         else:
-            subprocess.call(['scp', '-q', helperpath + 'mssqlInstance.bat', args.server + ':'])
-            args.instance = subprocess.check_output(['ssh', args.server, 'mssqlInstance.bat']).strip()
+            raise RuntimeError('No suitable SQL server instance found')
 
-        #args.instance = proc.stdout.readline()[0:-len(os.linesep)]
-        if args.verbosity > 0:
-            print("Using MSSQL instance: " + args.instance)
+    if args.verbosity > 0:
+        print("Using MSSQL instance: " + args.instance)
+
+    if args.port is None:
+        regquery = executecommand(['reg', 'query', 'HKLM\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\' + args.instance + '\\MSSQLServer\\SuperSocketNetLib\\Tcp']).splitlines()
+        args.port = int(regquery[1].split()[2])
+
+    if args.verbosity > 0:
+        print("Using port: " + str(args.port))
 
     # Get reasonably distinct yet recognisable DB name
-    dbname = 'nt' + str(os.getpid())
+    dbname = 'nvivo' + str(os.getpid())
 
-    if args.server is None:
-        subprocess.call([helperpath + 'mssqlAttach.bat', tmpinfilename, dbname, args.instance])
-    else:
-        subprocess.call(['scp', '-q', helperpath + 'mssqlAttach.bat', args.server + ':'])
-        subprocess.call(['ssh', args.server, 'mssqlAttach.bat', os.path.basename(args.infile), dbname, args.instance])
+    executescript('mssqlAttach.bat', [infilename, dbname, args.instance])
 
     if args.verbosity > 0:
         print("Attached database " + dbname)
@@ -119,31 +141,15 @@ def NormaliseNVP(arglist):
 
         NVivo.Normalise(args)
 
-        if args.server is None:
-            proc = Popen([helperpath + 'mssqlDrop.bat', dbname, args.instance])
-            proc.wait()
-        else:
-            subprocess.call(['scp', '-q', helperpath + 'mssqlDrop.bat', args.server + ':'])
-            subprocess.call(['ssh', args.server, 'mssqlDrop.bat', dbname, args.instance])
-
-        if args.verbosity > 0:
-            print("Dropped database " + dbname)
-
         shutil.move(tmpoutfilename, args.outfilename)
 
     except:
-        if args.verbosity > 0:
-            print("Dropping database " + dbname)
-        if args.server is None:
-            subprocess.call([helperpath + 'mssqlDrop.bat', dbname, args.instance])
-        else:
-            subprocess.call(['scp', '-q', helperpath + 'mssqlDrop.bat', args.server + ':'])
-            subprocess.call(['ssh', args.server, 'mssqlDrop.bat', dbname, args.instance])
         raise
 
     finally:
-        if args.server is None:
-            os.remove(tmpinfilename)
+        executescript('mssqlDrop.bat', [dbname, args.instance])
+        if args.verbosity > 0:
+            print("Dropped database " + dbname)
 
 if __name__ == '__main__':
     NormaliseNVP(None)
