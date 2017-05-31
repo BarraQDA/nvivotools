@@ -30,7 +30,6 @@ import uuid
 import chardet
 import codecs
 import tempfile
-from subprocess import Popen, PIPE
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
