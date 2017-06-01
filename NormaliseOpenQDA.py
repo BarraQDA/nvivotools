@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 from builtins import chr
 from sqlalchemy import *
 from sqlalchemy import exc
@@ -199,7 +200,7 @@ try:
 
 # Users
     if args.users != 'skip':
-        print("Normalising users")
+        print("Normalising users", file=sys.stderr)
 
         # Collect unique users from images and imageCoding tables
         userlist = [row.owner for row in oqdadb.execute(select([oqdaimageCoding.c.owner]))] + \
@@ -217,7 +218,7 @@ try:
 # Project
     #if args.project != 'skip':
     if True:
-        print("Normalising project")
+        print("Normalising project", file=sys.stderr)
 
         # Get earliest and latest timestamp
         dateset = set([row.date for row in oqdadb.execute(select([oqdaimageCoding.c.date]))] +
@@ -233,7 +234,7 @@ try:
 
 # Nodes
     if args.nodes != 'skip':
-        print("Normalising nodes")
+        print("Normalising nodes", file=sys.stderr)
 
         sel = select([oqdacodes.c.id,
                       oqdacodes.c.name,
@@ -260,7 +261,7 @@ try:
 
 # Sources
     if args.sources != 'skip':
-        print("Normalising sources")
+        print("Normalising sources", file=sys.stderr)
 
         # Create dummy source category
         sourcecatuuid = uuid.uuid4()
@@ -294,7 +295,7 @@ try:
             source['uuid']         = uuid.uuid4()
             source['Category']     = sourcecatuuid
             source['ObjectType']   = 'JPEG'
-            print("Downloading " + source['name'])
+            print("Downloading " + source['name'], file=sys.stderr)
             if args.user != None:
                 opener.open(args.url + source['name'])
                 urllib2.install_opener(opener)
@@ -316,7 +317,7 @@ try:
 
 # Source attributes
     if args.source_attributes != 'skip':
-        print("Normalising source attributes")
+        print("Normalising source attributes", file=sys.stderr)
 
         sel = select([oqdaimageAttributes.c.images_id,
                       oqdaimageAttributes.c.value,
@@ -342,7 +343,7 @@ try:
 
 # Tagging
     if args.taggings != 'skip':
-        print("Normalising taggings")
+        print("Normalising taggings", file=sys.stderr)
 
         sel = select([oqdaimageCoding.c.images_id,
                       oqdaimageCoding.c.codes_id,

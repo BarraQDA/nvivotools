@@ -16,9 +16,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 from sqlalchemy import *
 from sqlalchemy import exc
 import os
+import sys
 import re
 from datetime import date, time, datetime
 from dateutil import parser as dateparser
@@ -277,7 +279,7 @@ def Norm2RQDA(args):
 # Project
         if args.project != 'skip':
             if args.verbosity > 0:
-                print("Converting project")
+                print("Converting project", file=sys.stderr)
 
             curproject = rqdacon.execute(select([rqdaproject.c.memo])).first()
             if curproject is not None and args.project == 'overwrite':
@@ -306,7 +308,7 @@ def Norm2RQDA(args):
 # Source categories
         if args.source_categories != 'skip':
             if args.verbosity > 0:
-                print("Converting source categories")
+                print("Converting source categories", file=sys.stderr)
 
             sourcecats  = [dict(row) for row in normdb.execute(select([
                     normSourceCategory.c.Id.label('Uuid'),
@@ -335,7 +337,7 @@ def Norm2RQDA(args):
 # Sources
         if args.sources != 'skip':
             if args.verbosity > 0:
-                print("Converting sources")
+                print("Converting sources", file=sys.stderr)
 
             sources = [dict(row) for row in normdb.execute(select([
                     normSource.c.Id.label('Uuid'),
@@ -424,12 +426,12 @@ def Norm2RQDA(args):
                     })
             else:
                 if attribute['class'] != attrclass:
-                    print("WARNING: Inconsistent type for attribute: " + value['variable'])
+                    print("WARNING: Inconsistent type for attribute: " + value['variable'], file=sys.stderr)
 
 # Source attributes
         if args.source_attributes != 'skip':
             if args.verbosity > 0:
-                print("Converting source attributes")
+                print("Converting source attributes", file=sys.stderr)
 
             normAttributeUser = normUser.alias(name='AttributeUser')
             sourcevalues = [dict(row) for row in normdb.execute(select([
@@ -465,7 +467,7 @@ def Norm2RQDA(args):
 # Node categories
         if args.node_categories != 'skip':
             if args.verbosity > 0:
-                print("Converting node categories")
+                print("Converting node categories", file=sys.stderr)
 
             codecats  = [dict(row) for row in normdb.execute(select([
                     normNodeCategory.c.Id.label('Uuid'),
@@ -496,7 +498,7 @@ def Norm2RQDA(args):
 # Nodes
         if args.nodes != 'skip':
             if args.verbosity > 0:
-                print("Converting nodes")
+                print("Converting nodes", file=sys.stderr)
 
             # Nodes without any attributes are mapped to RQDA codes, those with attributes
             # are mapped to RQDA cases.
@@ -626,7 +628,7 @@ def Norm2RQDA(args):
 # Tagging
         if args.taggings != 'skip':
             if args.verbosity > 0:
-                print("Converting taggings")
+                print("Converting taggings", file=sys.stderr)
 
             taggings = [dict(row) for row in normdb.execute(select([
                     normTagging.c.Id,
@@ -652,7 +654,7 @@ def Norm2RQDA(args):
                 tagging['status'] = 1
                 matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
                 if matchfragment is None:
-                    print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + sourcename[tagging['SourceUuid']])
+                    print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + sourcename[tagging['SourceUuid']], file=sys.stderr)
                     continue
 
                 if tagging['Node'] is None:
@@ -922,7 +924,7 @@ def RQDA2Norm(args):
 # Project
         if args.project != 'skip':
             if args.verbosity > 0:
-                print("Converting project")
+                print("Converting project", file=sys.stderr)
 
             project = dict(rqdadb.execute(select([
                     rqdaproject.c.databaseversion,
@@ -949,7 +951,7 @@ def RQDA2Norm(args):
 # Source categories
         if args.source_categories != 'skip':
             if args.verbosity > 0:
-                print("Converting source categories")
+                print("Converting source categories", file=sys.stderr)
 
             sourcecats  = [dict(row) for row in rqdadb.execute(select([
                     rqdafilecat.c.catid,
@@ -977,7 +979,7 @@ def RQDA2Norm(args):
 # Sources
         if args.sources != 'skip':
             if args.verbosity > 0:
-                print("Converting sources")
+                print("Converting sources", file=sys.stderr)
 
             sources = [dict(row) for row in rqdadb.execute(select([
                     rqdasource.c.id.label('fid'),
@@ -1010,7 +1012,7 @@ def RQDA2Norm(args):
                         'fid': source['fid']
                     })]
                 if len(sourcecats) > 1:
-                    print("WARNING: Source: " + source['Name'] + " belongs to more than one category. Only first category will be retained")
+                    print("WARNING: Source: " + source['Name'] + " belongs to more than one category. Only first category will be retained", file=sys.stderr)
                 if len(sourcecats) > 0:
                     source['Category'] = sourcecatuuid[sourcecats[0]['catid']]
 
@@ -1020,7 +1022,7 @@ def RQDA2Norm(args):
 # Source attributes
         if args.source_attributes != 'skip':
             if args.verbosity > 0:
-                print("Converting source attributes")
+                print("Converting source attributes", file=sys.stderr)
 
             sourcevalues = [dict(row) for row in rqdadb.execute(select([
                     rqdafileAttr.c.variable.label('Name'),
@@ -1078,7 +1080,7 @@ def RQDA2Norm(args):
 # Node categories
         if args.node_categories != 'skip':
             if args.verbosity > 0:
-                print("Converting node categories")
+                print("Converting node categories", file=sys.stderr)
 
             nodecats  = [dict(row) for row in rqdadb.execute(select([
                     rqdacodecat.c.catid,
@@ -1106,7 +1108,7 @@ def RQDA2Norm(args):
 # Nodes
         if args.nodes != 'skip':
             if args.verbosity > 0:
-                print("Converting nodes")
+                print("Converting nodes", file=sys.stderr)
 
             nodes  = [dict(row) for row in rqdadb.execute(select([
                     rqdafreecode.c.id.label('cid'),
@@ -1136,7 +1138,7 @@ def RQDA2Norm(args):
                         'cid': node['cid']
                     })]
                 if len(nodecats) > 1:
-                    print("WARNING: Node: " + node['Name'] + " belongs to more than one category. Only first category will be retained")
+                    print("WARNING: Node: " + node['Name'] + " belongs to more than one category. Only first category will be retained", file=sys.stderr)
                 if len(nodecats) > 0:
                     node['Category'] = nodecatuuid[nodecats[0]['catid']]
 
@@ -1146,7 +1148,7 @@ def RQDA2Norm(args):
 # Cases
         if args.cases != 'skip':
             if args.verbosity > 0:
-                print("Converting cases")
+                print("Converting cases", file=sys.stderr)
 
             cases  = [dict(row) for row in rqdadb.execute(select([
                     rqdacases.c.id.label('caseid'),
@@ -1174,7 +1176,7 @@ def RQDA2Norm(args):
 # Case attributes
         if args.case_attributes != 'skip':
             if args.verbosity > 0:
-                print("Converting case attributes")
+                print("Converting case attributes", file=sys.stderr)
 
             casevalues = [dict(row) for row in rqdadb.execute(select([
                     rqdacaseAttr.c.variable.label('Name'),
@@ -1265,7 +1267,7 @@ def RQDA2Norm(args):
 # Annotations, codings and case linkages
         if args.taggings != 'skip':
             if args.verbosity > 0:
-                print("Converting annotations, codings and case linkages")
+                print("Converting annotations, codings and case linkages", file=sys.stderr)
 
             taggings = []
 

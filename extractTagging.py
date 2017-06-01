@@ -16,13 +16,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import os
 import sys
 import argparse
 from sqlalchemy import *
 from sqlalchemy import exc
 import re
-
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
@@ -76,15 +76,15 @@ try:
         })
 
     for tagging in taggings:
-        print("Node: " + tagging['NodeName'] + " Source: " + tagging['SourceName'] + "[" + tagging['Fragment'] + "]")
+        print("Node: " + tagging['NodeName'] + " Source: " + tagging['SourceName'] + "[" + tagging['Fragment'] + "]", file=sys.stderr)
 
         matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
         if matchfragment is None:
-            print("WARNING: Unrecognised tagging fragment")
+            print("WARNING: Unrecognised tagging fragment", file=sys.stderr)
         else:
-            print(tagging['Content'][int(matchfragment.group(1)):int(matchfragment.group(2))+1])
+            print(tagging['Content'][int(matchfragment.group(1)):int(matchfragment.group(2))+1], file=sys.stderr)
 
-        print("")
+        print("", file=sys.stderr)
 
     normdb.dispose()
 

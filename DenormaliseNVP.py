@@ -16,9 +16,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import argparse
 import NVivo
 import os
+import sys
 import shutil
 import subprocess
 import tempfile
@@ -115,7 +117,7 @@ def DenormaliseNVP(arglist):
             instancename = regquerydata[0]
             instanceversion = regquerydata[2].split('.')[0]
             if args.verbosity >= 2:
-                print("Found SQL server instance " + instancename + "  version " + instanceversion)
+                print("Found SQL server instance " + instancename + "  version " + instanceversion, file=sys.stderr)
             if (args.nvivoversion == '10' and instanceversion == 'MSSQL10_50') or (args.nvivoversion == '11' and instanceversion == 'MSSQL12'):
                 args.instance = instancename
                 break
@@ -123,21 +125,21 @@ def DenormaliseNVP(arglist):
             raise RuntimeError('No suitable SQL server instance found')
 
     if args.verbosity > 0:
-        print("Using MSSQL instance: " + args.instance)
+        print("Using MSSQL instance: " + args.instance, file=sys.stderr)
 
     if args.port is None:
         regquery = executecommand(['reg', 'query', 'HKLM\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\' + args.instance + '\\MSSQLServer\\SuperSocketNetLib\\Tcp']).splitlines()
         args.port = int(regquery[1].split()[2])
 
     if args.verbosity > 0:
-        print("Using port: " + str(args.port))
+        print("Using port: " + str(args.port), file=sys.stderr)
 
     # Get reasonably distinct yet recognisable DB name
     dbname = 'nvivo' + str(os.getpid())
 
     executescript('mssqlAttach.bat', [tmpoutfilename, dbname, args.instance])
     if args.verbosity > 0:
-        print("Attached database " + dbname)
+        print("Attached database " + dbname, file=sys.stderr)
 
     try:
         args.indb = 'sqlite:///' + args.infile
@@ -147,7 +149,7 @@ def DenormaliseNVP(arglist):
 
         executescript('mssqlSave.bat', [tmpoutfilename, dbname, args.instance])
         if args.verbosity > 0:
-            print("Saved database " + dbname)
+            print("Saved database " + dbname, file=sys.stderr)
 
         if args.server is None:
             shutil.move(tmpoutfilename, args.outfilename)
@@ -160,7 +162,7 @@ def DenormaliseNVP(arglist):
     finally:
         executescript('mssqlDrop.bat', [dbname, args.instance])
         if args.verbosity > 0:
-            print("Dropped database " + dbname)
+            print("Dropped database " + dbname, file=sys.stderr)
 
 if __name__ == '__main__':
     DenormaliseNVP(None)

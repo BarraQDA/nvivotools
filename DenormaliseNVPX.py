@@ -16,7 +16,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import argparse
+import NVivo
+import os
+import sys
+import shutil
+from subprocess import Popen, PIPE
+import tempfile
 
 parser = argparse.ArgumentParser(description='Create an NVivo for Mac file from a normalised SQLite file.')
 
@@ -66,14 +73,6 @@ args = parser.parse_args()
 args.mac       = True
 args.windows   = False
 
-import NVivo
-import os
-import shutil
-import signal
-from subprocess import Popen, PIPE
-import tempfile
-import time
-
 tmpinfilename = tempfile.mktemp()
 tmpinfileptr  = file(tmpinfilename, 'wb')
 tmpinfileptr.write(args.infile.read())
@@ -111,7 +110,7 @@ while dbproc.poll() is None:
         break
 
 if args.verbosity > 0:
-    print("Started database server on port " + freeport)
+    print("Started database server on port " + freeport, file=sys.stderr)
 
 args.indb = 'sqlite:///' + tmpinfilename
 args.outdb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' + freeport + '/NVivo' + freeport

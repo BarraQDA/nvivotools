@@ -1,0 +1,12 @@
+Name,Parent,Description,Category,Aggregate,Color,integer attribute,Decimal attribute,Boolean attribute,Date attribute,Time attribute,Datetime attribute,Text attribute
+With attributes,,Node with all attribute types,All attribute types,,,123,123.456,TRUE,1967-12-10,16:20:00,01/03/16 09:15,Now is the time…
+Top level no category,,,,,,,,,,,,
+Second level not aggregating no category,Top level no category,,,,,,,,,,,
+Third level not aggregating no category,Second level not aggregating no category,,,,,,,,,,,
+Second level aggregating no category,Top level no category,,,TRUE,,,,,,,,
+Third level aggregating no category,Second level aggregating no category,,,TRUE,,,,,,,,
+Top level with category,,,Random category,,,,,,,,,
+Second level not aggregating with category,Top level with category,,Random category,,,,,,,,,
+Third level not aggregating with category,Second level not aggregating with category,,Random category,,,,,,,,,
+Second level aggregating with category,Top level with category,,Random category,TRUE,,,,,,,,
+Third level aggregating with category,Second level aggregating with category,,Random category,TRUE,,,,,,,,

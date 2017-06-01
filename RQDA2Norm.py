@@ -16,7 +16,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import argparse
+import RQDA
+import os
+import shutil
+import tempfile
 
 parser = argparse.ArgumentParser(description='Convert an RQDA project to normalised NVivo format.')
 
@@ -51,13 +56,6 @@ parser.add_argument('outfilename', type=str, nargs='?',
                     help="Output normalised (.norm) file")
 
 args = parser.parse_args()
-
-import RQDA
-import os
-import shutil
-import signal
-import tempfile
-import time
 
 tmpinfilename = tempfile.mktemp()
 tmpinfileptr  = file(tmpinfilename, 'wb')

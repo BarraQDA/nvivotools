@@ -16,7 +16,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import argparse
+import NVivo
+import RQDA
+import os
+import shutil
+import tempfile
 
 parser = argparse.ArgumentParser(description='Convert an NVivo project to an RQDA project.')
 
@@ -58,14 +64,6 @@ parser.add_argument('outrqdadb', type=str, nargs='?',
                     help="Output database")
 
 args = parser.parse_args()
-
-import NVivo
-import RQDA
-import os
-import shutil
-import signal
-import tempfile
-import time
 
 if args.outrqdadb is None:
     args.outrqdadb = args.innvivodb.rsplit('.',1)[0] + '.rqda'

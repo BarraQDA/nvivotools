@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 from builtins import chr
 from sqlalchemy import *
 from sqlalchemy import exc
@@ -308,7 +309,7 @@ def Normalise(args):
 # Users
         if args.users != 'skip':
             if args.verbosity > 0:
-                print("Normalising users")
+                print("Normalising users", file=sys.stderr)
 
             users = [dict(row) for row in nvivodb.execute(select([
                     nvivoUserProfile.c.Id,
@@ -320,7 +321,7 @@ def Normalise(args):
 # Project
         if args.project != 'skip':
             if args.verbosity > 0:
-                print("Normalising project")
+                print("Normalising project", file=sys.stderr)
 
             project = dict(nvivodb.execute(select([
                     nvivoProject.c.Title,
@@ -355,7 +356,7 @@ def Normalise(args):
 # Node Categories
         if args.node_categories != 'skip':
             if args.verbosity > 0:
-                print("Normalising node categories")
+                print("Normalising node categories", file=sys.stderr)
 
             nodecategories = [dict(row) for row in nvivodb.execute(select([
                     nvivoItem.c.Id,
@@ -384,7 +385,7 @@ def Normalise(args):
 # Nodes
         if args.nodes != 'skip':
             if args.verbosity > 0:
-                print("Normalising nodes")
+                print("Normalising nodes", file=sys.stderr)
 
             nvivoCategoryRole = nvivoRole.alias(name='CategoryRole')
             nvivoParentRole   = nvivoRole.alias(name='ParentRole')
@@ -429,7 +430,7 @@ def Normalise(args):
 # Node attributes
         if args.node_attributes != 'skip':
             if args.verbosity > 0:
-                print("Normalising node attributes")
+                print("Normalising node attributes", file=sys.stderr)
 
             nvivoNodeItem     = nvivoItem.alias(name='NodeItem')
             nvivoNameItem     = nvivoItem.alias(name='NameItem')
@@ -521,7 +522,7 @@ def Normalise(args):
 # Source categories
         if args.source_categories != 'skip':
             if args.verbosity > 0:
-                print("Normalising source categories")
+                print("Normalising source categories", file=sys.stderr)
 
             sourcecats  = [dict(row) for row in nvivodb.execute(select([
                     nvivoItem.c.Id,
@@ -549,7 +550,7 @@ def Normalise(args):
 # Sources
         if args.sources != 'skip':
             if args.verbosity > 0:
-                print("Normalising sources")
+                print("Normalising sources", file=sys.stderr)
 
             nvivoCategoryRole = nvivoRole.alias(name='CategoryRole')
             nvivoParentRole   = nvivoRole.alias(name='ParentRole')
@@ -612,7 +613,7 @@ def Normalise(args):
 # Source attributes
         if args.source_attributes != 'skip':
             if args.verbosity > 0:
-                print("Normalising source attributes")
+                print("Normalising source attributes", file=sys.stderr)
 
             nvivoNameItem  = nvivoItem.alias(name='NameItem')
             nvivoNameRole  = nvivoRole.alias(name='NameRole')
@@ -742,7 +743,7 @@ def Normalise(args):
 
         if args.taggings != 'skip':
             if args.verbosity > 0:
-                print("Normalising taggings")
+                print("Normalising taggings", file=sys.stderr)
 
             taggings  = [dict(row) for row in nvivodb.execute(select([
                     nvivoNodeReference.c.Id,
@@ -771,7 +772,7 @@ def Normalise(args):
 # Annotations
         if args.annotations != 'skip':
             if args.verbosity > 0:
-                print("Normalising annotations")
+                print("Normalising annotations", file=sys.stderr)
 
             annotations  = [dict(row) for row in nvivodb.execute(select([
                     nvivoAnnotation.c.Id,
@@ -868,7 +869,7 @@ def Denormalise(args):
 # Users
         if args.users != 'skip':
             if args.verbosity > 0:
-                print("Denormalising users")
+                print("Denormalising users", file=sys.stderr)
 
             users = [dict(row) for row in normdb.execute(select([
                     normUser.c.Id,
@@ -935,7 +936,7 @@ def Denormalise(args):
             notapplicablelabel = u''.join(map(lambda ch: chr(ord(ch) + 0x377), notapplicablelabel))
 
         if args.project != 'skip':
-            print("Denormalising project")
+            print("Denormalising project", file=sys.stderr)
 
             project['Description'] = project['Description'] or u''
             if args.windows:
@@ -975,7 +976,7 @@ def Denormalise(args):
         def skip_merge_or_overwrite_categories(normtable, itemtype, name, operation):
             if operation != 'skip':
                 if args.verbosity > 0:
-                    print('Denormalising ' + name.lower() + ' categories')
+                    print('Denormalising ' + name.lower() + ' categories', file=sys.stderr)
                 # Look up head category
                 headcategoryname = name.title() + u' Classifications'
                 if args.windows:
@@ -994,7 +995,7 @@ def Denormalise(args):
                     raise RuntimeError("NVivo file contains no head " + name + " category.")
                 else:
                     if args.verbosity > 1:
-                        print("Found head " + name + " category Id: " + str(headcategory['Id']))
+                        print("Found head " + name + " category Id: " + str(headcategory['Id']), file=sys.stderr)
                 categories = [dict(row) for row in normdb.execute(select([
                         normtable.c.Id,
                         normtable.c.Name,
@@ -1063,7 +1064,7 @@ def Denormalise(args):
 # Nodes
         if args.nodes != 'skip':
             if args.verbosity > 0:
-                print("Denormalising nodes")
+                print("Denormalising nodes", file=sys.stderr)
 
             # Look up head node
             headnodename = u'Nodes'
@@ -1083,7 +1084,7 @@ def Denormalise(args):
                 raise RuntimeError("NVivo file contains no head node.")
             else:
                 if args.verbosity > 1:
-                    print("Found head node Id: " + str(headnode['Id']))
+                    print("Found head node Id: " + str(headnode['Id']), file=sys.stderr)
 
             nodes = [dict(row) for row in normdb.execute(select([
                     normNode.c.Id,
@@ -1157,7 +1158,7 @@ def Denormalise(args):
             nodestoinsert = [node for node in nodes if not {'_Id':node['Id']} in curids]
             if args.verbosity > 1:
                 for node in nodestoinsert:
-                    print "Inserting node: " + node['PlainTextName']
+                    print("Inserting node: " + node['PlainTextName'], file=sys.stderr)
 
             tagchildnodes(None, None, [], 0)
             aggregatepairs = []
@@ -1384,7 +1385,7 @@ def Denormalise(args):
                     if curitem is not None:
                         # Need to adjust every instance of this attribute/category combination
                         if args.verbosity > 1:
-                            print("Duplicating " + name + " attribute '" + attribute['PlainTextName'] + "' for category '" + itemname(value['Category']) + "' with tag: " + str(maxattributetags[value['Category']]))
+                            print("Duplicating " + name + " attribute '" + attribute['PlainTextName'] + "' for category '" + itemname(value['Category']) + "' with tag: " + str(maxattributetags[value['Category']]), file=sys.stderr)
                         attribute = attribute.copy()
                         attributes += [attribute]
                         attribute['Id'] = uuid.uuid4()
@@ -1394,7 +1395,7 @@ def Denormalise(args):
                                 valueiter['Attribute'] = attribute['Id']
                     else:
                         if args.verbosity > 1:
-                            print("Creating " + name + " attribute '" + attribute['PlainTextName'] + "' for category '" + itemname(value['Category']) + "' with tag: " + str(maxattributetags[value['Category']]))
+                            print("Creating " + name + " attribute '" + attribute['PlainTextName'] + "' for category '" + itemname(value['Category']) + "' with tag: " + str(maxattributetags[value['Category']]), file=sys.stderr)
 
                     attribute['Tag'] = maxattributetags[value['Category']]
                     attribute['Category'] = value['Category']
@@ -1562,7 +1563,7 @@ def Denormalise(args):
                         maxvaluetags[categoryattribute] = (maxvaluetags[categoryattribute] or -1) + 1
                         value['Tag'] = maxvaluetags[categoryattribute]
                         if args.verbosity > 1:
-                            print("Creating value '" + value['PlainTextValue'] + "' for " + name + " attribute '" + attribute['PlainTextName'] + "' with tag: "+ str(value['Tag']))
+                            print("Creating value '" + value['PlainTextValue'] + "' for " + name + " attribute '" + attribute['PlainTextName'] + "' with tag: "+ str(value['Tag']), file=sys.stderr)
 
                         value['Id']  = uuid.uuid4()
                         nvivocon.execute(nvivoItem.insert().values({
@@ -1593,7 +1594,7 @@ def Denormalise(args):
                         value.update(valuestatus)
                         if valuestatus['ExistingValueId'] is not None:
                             if args.verbosity > 1:
-                                print("Deassigning existing value '" + itemname(value['ExistingValueId']) + "' from " + name + " attribute '" + attribute['PlainTextName']  + "' of " + name + " '" + itemname(value['Item']) + "'")
+                                print("Deassigning existing value '" + itemname(value['ExistingValueId']) + "' from " + name + " attribute '" + attribute['PlainTextName']  + "' of " + name + " '" + itemname(value['Item']) + "'", file=sys.stderr)
                             nvivocon.execute(nvivoRole.delete(and_(
                                     nvivoRole.c.Item1_Id == bindparam('Item'),
                                     nvivoRole.c.Item2_Id == bindparam('ExistingValueId'),
@@ -1601,7 +1602,7 @@ def Denormalise(args):
                                 )), value )
 
                         if args.verbosity > 1:
-                            print("Assigning value '" + value['PlainTextValue'] + "' to " + name + " attribute '" + attribute['PlainTextName']  + "' of " + name + " '" + itemname(value['Item']) + "'")
+                            print("Assigning value '" + value['PlainTextValue'] + "' to " + name + " attribute '" + attribute['PlainTextName']  + "' of " + name + " '" + itemname(value['Item']) + "'", file=sys.stderr)
                         nvivocon.execute(nvivoRole.insert().values({
                                 'Item1_Id': bindparam('Item'),
                                 'Item2_Id': bindparam('NewValueId'),
@@ -1613,7 +1614,7 @@ def Denormalise(args):
                 # Set value of undefined attribute to 'Unassigned'
                 attributes = [dict(row) for row in nvivocon.execute(missingvaluesel, addedattribute)]
                 if len(attributes) > 0 and args.verbosity > 1:
-                    print("Assigning default value '" + itemname(addedattribute['DefaultValueId']) + "' to attribute '" + itemname(addedattribute['Attribute']) + "' of " + str(len(attributes)) + " " + name + "(s).")
+                    print("Assigning default value '" + itemname(addedattribute['DefaultValueId']) + "' to attribute '" + itemname(addedattribute['Attribute']) + "' of " + str(len(attributes)) + " " + name + "(s).", file=sys.stderr)
                 for attribute in attributes:
                     attribute.update(addedattribute)
 
@@ -1628,7 +1629,7 @@ def Denormalise(args):
 # Node attributes
         if args.node_attributes != 'skip':
             if args.verbosity > 0:
-                print("Denormalising node attributes")
+                print("Denormalising node attributes", file=sys.stderr)
 
             attributes = [dict(row) for row in normdb.execute(select([
                     normNodeAttribute.c.Id,
@@ -1725,7 +1726,7 @@ def Denormalise(args):
 # Function to massage source data
         def massagesource(source):
             if args.verbosity > 1:
-                print("Source: " + source['Name'])
+                print("Source: " + source['Name'], file=sys.stderr)
             source['Item_Id']       = source['Item_Id']     or uuid.uuid4()
             source['Description']   = source['Description'] or u''
             source['PlainTextName'] = source['Name']
@@ -1836,7 +1837,7 @@ def Denormalise(args):
                 # Look for unoconvcmd just once
                 if massagesource.unoconvcmd is None:
                     if args.verbosity > 1:
-                        print("Searching for unoconv executable.")
+                        print("Searching for unoconv executable.", file=sys.stderr)
                     # Look first on path for OS installed version, otherwise use our copy
                     for path in os.environ["PATH"].split(os.pathsep):
                         unoconvpath = os.path.join(path, 'unoconv')
@@ -1966,7 +1967,7 @@ def Denormalise(args):
 # Sources
         if args.sources != 'skip':
             if args.verbosity > 0:
-                print("Denormalising sources")
+                print("Denormalising sources", file=sys.stderr)
 
             # Look up head source
             headsourcename = u'Internals'
@@ -1985,7 +1986,7 @@ def Denormalise(args):
                 raise RuntimeError("NVivo file contains no head Internal source.")
             else:
                 if args.verbosity > 1:
-                    print("Found head source Id: " + str(headsource['Id']))
+                    print("Found head source Id: " + str(headsource['Id']), file=sys.stderr)
 
             sources = [dict(row) for row in normdb.execute(select([
                         normSource.c.Id.label('Item_Id'),
@@ -2100,7 +2101,7 @@ def Denormalise(args):
 # Source attributes
         if args.source_attributes != 'skip':
             if args.verbosity > 0:
-                print("Denormalising source attributes")
+                print("Denormalising source attributes", file=sys.stderr)
 
             attributes = [dict(row) for row in normdb.execute(select([
                     normSourceAttribute.c.Id,
@@ -2131,7 +2132,7 @@ def Denormalise(args):
 # Taggings and annotations
         if args.taggings != 'skip' or args.annotations != 'skip':
             if args.verbosity > 0:
-                print("Denormalising taggings and/or annotations")
+                print("Denormalising taggings and/or annotations", file=sys.stderr)
 
             sources = [dict(row) for row in nvivocon.execute(select([
                     nvivoSource.c.Item_Id,
@@ -2161,7 +2162,7 @@ def Denormalise(args):
                 tagging['ClusterId'] = None
                 matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
                 if matchfragment is None:
-                    print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + itemname(tagging['Source']) )
+                    print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + itemname(tagging['Source']) , file=sys.stderr)
                     taggings.remove(tagging)
                     continue
 

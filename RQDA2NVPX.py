@@ -16,7 +16,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import argparse
+import NVivo
+import RQDA
+import os
+import sys
+import shutil
+import tempfile
+from subprocess import Popen, PIPE
 
 parser = argparse.ArgumentParser(description='Convert an RQDA project to NVivo for Mac (.nvpx) format.')
 
@@ -67,15 +75,6 @@ args = parser.parse_args()
 args.mac       = True
 args.windows   = False
 
-import NVivo
-import RQDA
-import os
-import shutil
-import signal
-import tempfile
-import time
-from subprocess import Popen, PIPE
-
 tmpinfilename = tempfile.mktemp()
 tmpinfileptr  = file(tmpinfilename, 'wb')
 tmpinfileptr.write(args.infile.read())
@@ -119,7 +118,7 @@ while dbproc.poll() is None:
         break
 
 if args.verbosity > 0:
-    print("Started database server on port " + freeport)
+    print("Started database server on port " + freeport, file=sys.stderr)
 
 args.indb  = 'sqlite:///' + tmpnormfilename
 args.outdb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' + freeport + '/NVivo' + freeport

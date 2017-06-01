@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import print_function
 from sqlalchemy import exc, TypeDecorator, CHAR, String, create_engine, MetaData, bindparam
 from sqlalchemy.engine import reflection
 import warnings
@@ -56,7 +57,7 @@ try:
     for minuendtable in minuendmd.sorted_tables:
         if args.difference != None:
             if minuendtable.name not in differencemd.tables.keys():
-                print("Creating table: " + minuendtable.name)
+                print("Creating table: " + minuendtable.name, file=sys.stderr)
                 minuendtable.create(differenceconn)
 
     for minuendtable in minuendmd.sorted_tables:
@@ -78,18 +79,18 @@ try:
 
             if len(differencerows) > 0:
                 if args.difference != None:
-                    print("Finding foreign key references for table " + minuendtable.name)
+                    print("Finding foreign key references for table " + minuendtable.name, file=sys.stderr)
                     for fk in inspector.get_foreign_keys(minuendtable.name):
                         if not fk['name']:
                             continue
 
-                        #print("   " + fk['name'])
+                        #print("   " + fk['name'], file=sys.stderr)
                         fkreferredtable = minuendmd.tables[fk['referred_table']]
                         fkselect = fkreferredtable.select()
                         for referred_column, constrained_column in zip(fk['referred_columns'], fk['constrained_columns']):
                             fkselect = fkselect.where(fkreferredtable.c[referred_column]  == bindparam(constrained_column))
 
-                        #print(fkselect)
+                        #print(fkselect, file=sys.stderr)
 
                         fkrows = []
                         fkexists = []
@@ -103,13 +104,13 @@ try:
                         fkinsert = [ x for x in fkrows if not x in fkexists ]
                         if len(fkinsert) > 0:
                             differencereferredtable = differencemd.tables[fk['referred_table']]
-                            #print( "fkinsert: " + str(fkinsert))                            differenceconn.execute(differencereferredtable.insert(), fkinsert)
+                            #print( "fkinsert: " + str(fkinsert))                            differenceconn.execute(differencereferredtable.insert(), fkinsert, file=sys.stderr)
 
                     differenceconn.execute(minuendtable.insert(), differencerows)
                 else:
-                    print("-------------- " + minuendtable.name + " --------------")
+                    print("-------------- " + minuendtable.name + " --------------", file=sys.stderr)
                     for row in differencerows:
-                        print(row)
+                        print(row, file=sys.stderr)
 
 # All done.
 

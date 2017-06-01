@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import print_function
 from sqlalchemy import *
 from sqlalchemy import exc
 import warnings
@@ -68,10 +69,10 @@ try:
                     if modifiedDate <= before:
                         modifiedDate += adjust
                     if createdDate > datetimeNow or modifiedDate > datetimeNow:
-                        print("WARNING: future date")
+                        print("WARNING: future date", file=sys.stderr)
 
                     if createdDate > modifiedDate:
-                        print("WARNING: created date later than modified date")
+                        print("WARNING: created date later than modified date", file=sys.stderr)
                         #row['_ModifiedDate'] = row['_CreatedDate']
 
                     row['_CreatedDate']  = createdDate

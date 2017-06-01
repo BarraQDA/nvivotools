@@ -16,7 +16,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import argparse
+import NVivo
+import RQDA
+import os
+import sys
+import shutil
+import tempfile
+from subprocess import Popen, PIPE
 
 parser = argparse.ArgumentParser(description='Convert an NVivo for Windows (.nvp) file into an RQDA project.')
 
@@ -62,15 +70,6 @@ args = parser.parse_args()
 args.mac       = False
 args.windows   = True
 
-import NVivo
-import RQDA
-import os
-import shutil
-import signal
-import tempfile
-import time
-from subprocess import Popen, PIPE
-
 tmpinfilename = tempfile.mktemp()
 tmpinfileptr  = file(tmpinfilename, 'wb')
 tmpinfileptr.write(args.infile.read())
@@ -88,7 +87,7 @@ if args.instance is None:
     proc = Popen([helperpath + 'mssqlInstance.bat'], stdout=PIPE)
     args.instance = proc.stdout.readline()[0:-len(os.linesep)]
     if args.verbosity > 0:
-        print("Using MSSQL instance: " + args.instance)
+        print("Using MSSQL instance: " + args.instance, file=sys.stderr)
 
 # Get reasonably distinct yet recognisable DB name
 dbname = 'nt' + str(os.getpid())
@@ -96,7 +95,7 @@ dbname = 'nt' + str(os.getpid())
 proc = Popen([helperpath + 'mssqlAttach.bat', tmpinfilename, dbname, args.instance])
 proc.wait()
 if args.verbosity > 0:
-    print("Attached database " + dbname)
+    print("Attached database " + dbname, file=sys.stderr)
 
 args.indb = 'mssql+pymssql://nvivotools:nvivotools@localhost/' + dbname
 args.outdb = 'sqlite:///' + tmpnormfilename
@@ -106,7 +105,7 @@ NVivo.Normalise(args)
 proc = Popen([helperpath + 'mssqlDrop.bat', dbname, args.instance])
 proc.wait()
 if args.verbosity > 0:
-    print("Dropped database " + dbname)
+    print("Dropped database " + dbname, file=sys.stderr)
 os.remove(tmpinfilename)
 
 tmpoutfilename = tempfile.mktemp()
