@@ -1733,8 +1733,16 @@ def Denormalise(args):
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description'].replace('\n', '\r\n')))
 
-            source['PlainText'] = unicode(source['Content'], 'utf-8')
-            source['MetaData']  = None
+            content = source['Content']
+            if content is None:
+                source['PlainText'] = None
+            else:
+                source['PlainText'] = content if type(content) == unicode else unicode(content, 'utf-8')
+
+            # Initialise all columns to prevent missing values later
+            for key in ['Item_Id', 'TypeId', 'Object', 'PlainText', 'LengthX', 'LengthY', 'MetaData', 'Thumbnail', 'Properties']:
+                if key not in source.keys():
+                    source[key] = None
 
             # Do our best to imitate NVivo's treatment of sources. In particular, generating
             # the PlainText column is very tricky. If it was already filled in the Object column
@@ -1811,11 +1819,12 @@ def Denormalise(args):
                 tmpfilename = tempfile.mktemp()
                 if source['Object'] is not None:
                     if source['ObjectTypeName'] == 'TXT':
-                        tmpfile = codecs.open(tmpfilename + '.TXT', 'w', 'utf-8-sig')
+                        tmpfile = codecs.open(tmpfilename + '.TXT', 'w', 'utf-8')
+                        tmpfile.write(source['Object'].encode('utf-8'))
                     else:
                         tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
+                        tmpfile.write(source['Object'])
 
-                    tmpfile.write(unicode(source['Object'], 'utf-8'))
                 elif source['PlainText'] is not None:
                     tmpfile = codecs.open(tmpfilename + '.' + source['ObjectTypeName'], 'w', 'utf-8-sig')
                     tmpfile.write(source['PlainText'])
@@ -2042,6 +2051,7 @@ def Denormalise(args):
             for source in sourcestoinsert:
                 massagesource(source)
 
+
             if len(sourcestoinsert) > 0:
                 nvivocon.execute(nvivoItem.insert().values(itemvalues), sourcestoinsert)
                 nvivocon.execute(nvivoSource.insert().values({
@@ -2151,7 +2161,7 @@ def Denormalise(args):
                 tagging['ClusterId'] = None
                 matchfragment = re.match("([0-9]+):([0-9]+)(?:,([0-9]+)(?::([0-9]+))?)?", tagging['Fragment'])
                 if matchfragment is None:
-                    raise RuntimeError("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + itemname(tagging['Source']) )
+                    print("WARNING: Unrecognised tagging fragment: " + tagging['Fragment'] + " for Source: " + itemname(tagging['Source']) )
                     taggings.remove(tagging)
                     continue
 
@@ -2193,6 +2203,7 @@ def Denormalise(args):
                     nvivotaggings += [tagging]
                 else:
                     tagging['Item_Id'] = tagging['Source']
+                    tagging['Text'] = tagging['Text'] or u''
                     nvivoannotations += [tagging]
 
             if args.taggings != 'skip':
