@@ -92,8 +92,9 @@ def editSources(arglist):
                     val = getattr(args, arg)
                     if type(val) == str or type(val) == unicode:
                         comments += '#     --' + arg + '="' + val + '"\n'
-                    elif type(val) == bool and val:
-                        comments += '#     --' + arg + '\n'
+                    elif type(val) == bool:
+                        if val:
+                            comments += '#     --' + arg + '\n'
                     elif type(val) == list:
                         for valitem in val:
                             if type(valitem) == str:

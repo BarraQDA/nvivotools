@@ -82,8 +82,9 @@ def editNodes(arglist):
                         comments += '#     --' + arg + '=' + str(val) + '\n'
                     elif type(val) == str:
                         comments += '#     --' + arg + '="' + val + '"\n'
-                    elif type(val) == bool and val:
-                        comments += '#     --' + arg + '\n'
+                    elif type(val) == bool:
+                        if val:
+                            comments += '#     --' + arg + '\n'
                     elif type(val) == list:
                         for valitem in val:
                             if type(valitem) == int:
