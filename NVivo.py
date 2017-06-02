@@ -585,10 +585,9 @@ def Normalise(args):
                     source['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Name']))
                     source['Description'] = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Description'])).replace('\r\n', '\n')
 
-                if source['PlainText'] is not None:
-                    source['Content'] = source['PlainText']
-                else:
-                    source['Content'] = None
+                source['Content'] = source['PlainText']
+                if source['Content']:
+                    source['Content'] = source['Content'].replace('\r\n', '\n')
 
                 source['ObjectType'] = NVivo.ObjectTypeName.get(source['ObjectTypeId'], str(source['ObjectTypeId']))
 
@@ -702,7 +701,8 @@ def Normalise(args):
 
 # Tagging
         def build_tagging_or_annotation(item):
-            # On Mac, text sections refer to indexes on non-space characters
+            # On Mac, text sections refer to indexes on non-space characters, but non-breaking
+            # spaces are counted.
             if args.mac:
                 # TODO: Deal with case where we have skipped sources
                 source = next(source for source in sources if source['Id'] == item['Source'])
@@ -726,6 +726,11 @@ def Normalise(args):
 
                 item['StartX']  = startx
                 item['LengthX'] = lengthx
+            # Otherwise correct for adjusted line terminators: PlainText is original, Content
+            # is adjusted.
+            else:
+                item['StartX']  -= source['Content'][0:startx].count('\r\n')
+                item['LengthX'] -= source['Content'][startx-1:startx+lengthx-1].count('\r\n')
 
             item['Node'] = None
             item['Fragment'] = ''
@@ -1735,9 +1740,7 @@ def Denormalise(args):
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description'].replace('\n', '\r\n')))
 
             content = source['Content']
-            if content is None:
-                source['PlainText'] = None
-            else:
+            if content:
                 source['PlainText'] = content if type(content) == unicode else unicode(content, 'utf-8')
 
             # Initialise all columns to prevent missing values later
@@ -1818,13 +1821,12 @@ def Denormalise(args):
                     source['SourceType'] = NVivo.SourceType.Doc
 
                 tmpfilename = tempfile.mktemp()
-                if source['Object'] is not None:
-                    if source['ObjectTypeName'] == 'TXT':
-                        tmpfile = codecs.open(tmpfilename + '.TXT', 'w', 'utf-8')
-                        tmpfile.write(source['Object'].encode('utf-8'))
-                    else:
-                        tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
-                        tmpfile.write(source['Object'])
+                if source['ObjectTypeName'] == 'TXT':
+                    tmpfile = codecs.open(tmpfilename + '.TXT', 'w', 'utf-8')
+                    tmpfile.write(unicode(source['Object'] or source['Content']))
+                elif source['Object'] is not None:
+                    tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
+                    tmpfile.write(source['Object'])
 
                 elif source['PlainText'] is not None:
                     tmpfile = codecs.open(tmpfilename + '.' + source['ObjectTypeName'], 'w', 'utf-8-sig')
@@ -1848,7 +1850,8 @@ def Denormalise(args):
                                 massagesource.unoconvcmd = ['python', unoconvpath]
                             break
                     if massagesource.unoconvcmd is None:
-                        unoconvpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'unoconv')
+                        # Look in subdirectory 'helpers' of script direectory
+                        unoconvpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'helpers/unoconv')
                         if os.path.exists(unoconvpath):
                             if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
                                 massagesource.unoconvcmd = [unoconvpath]
@@ -1867,14 +1870,17 @@ def Denormalise(args):
                         if err != '':
                             raise RuntimeError(err)
 
-                        # Read text output from unocode, then massage it by first dropping a final line
-                        # terminator, then changing to Windows (CRLF) or Mac (LFLF) line terminators
                         source['PlainText'] = codecs.open(tmpfilename + '.txt', 'r', 'utf-8-sig').read()
                         os.remove(tmpfilename + '.txt')
 
-                    if source['PlainText'].endswith('\n'):
-                        source['PlainText'] = source['PlainText'][:-1]
-                    source['PlainText'] = source['PlainText'].replace('\n', '\n\n' if args.mac else '\r\n')
+                # Read text output from unocode, then massage it by dropping a final line
+                # terminator, and fixing Windows line terminatorss.
+                if source['PlainText'].endswith('\n'):
+                    source['PlainText'] = source['PlainText'][:-1]
+                if args.windows:
+                    source['Content']   = source['PlainText']
+                    # Replace \n not preceded by \r with \r\n
+                    source['PlainText'] = re.sub('(?<=[^\r])\n', '\r\n', source['PlainText'])
 
                 # Convert object to DOC/ODT if isn't already
                 source['Object'] = ''
@@ -2166,7 +2172,7 @@ def Denormalise(args):
                     taggings.remove(tagging)
                     continue
 
-                tagging['StartX']  = int(matchfragment.group(1))
+                tagging['StartX']  = int(matchfragment.group(1)) - 1
                 tagging['LengthX'] = int(matchfragment.group(2)) - int(matchfragment.group(1)) + 1
                 tagging['StartY']  = None
                 tagging['LengthY'] = None
@@ -2179,7 +2185,7 @@ def Denormalise(args):
                         tagging['LengthY'] = int(endY) - tagging['StartY'] + 1
 
                 # On Mac need to remove white space (but not non-breaking spaces) from startX
-                # andLengthX to calculate StartText and LengthText
+                # and LengthX to calculate StartText and LengthText
                 if args.mac:
                     source = next(source for source in sources if source['Item_Id'] == tagging['Source'])
                     if source['PlainText'] is not None:
@@ -2190,6 +2196,13 @@ def Denormalise(args):
                     else:
                         tagging['StartText']  = tagging['StartX']
                         tagging['LengthText'] = tagging['LengthX']
+
+                # On Windows (only) need to adjust for two-character line terminators
+                if args.windows:
+                    startx  = tagging['StartX']
+                    lengthx = tagging['LengthX']
+                    tagging['StartX']  += len(re.findall('[^\r]\n', source['Content'][0:startx]))
+                    tagging['LengthX'] += len(re.findall('[^\r]\n', source['Content'][startx-1:startx+lengthx-1]))
 
                 if tagging['ObjectType'] == 'JPEG':
                     tagging['ReferenceTypeId'] = 2
