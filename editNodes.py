@@ -36,8 +36,6 @@ def editNodes(arglist):
 
     parser.add_argument('-v', '--verbosity',  type=int, default=1)
 
-    parser.add_argument('-i', '--infile', type = str, help = 'CSV file containing node information')
-
     parser.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
     parser.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
     parser.add_argument('-c', '--category',    type = lambda s: unicode(s, 'utf8'))
@@ -49,12 +47,55 @@ def editNodes(arglist):
     parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
                         help = 'User name, default is project "modified by".')
 
-    parser.add_argument('normFile', type=str)
+    parser.add_argument('--no-comments', action='store_true', help='Do not produce a comments logfile')
+
+    parser.add_argument('-o', '--outfile',  type=str, help='Output normalised NVivo (.norm) file')
+    parser.add_argument(        'infile',   type=str, help='Input CSV file')
 
     args = parser.parse_args()
+    hiddenargs = ['verbosity']
 
     try:
-        norm = NVivoNorm(args.normFile)
+        incomments = ''
+        if args.infile:
+            csvFile = file(args.infile, 'r')
+
+            # Skip comments at start of CSV file.
+            while True:
+                line = csvFile.readline()
+                if line[:1] == '#':
+                    incomments += line
+                else:
+                    csvfieldnames = next(unicodecsv.reader([line]))
+                    break
+
+        if not args.no_comments:
+            logfilename = args.outfile.rsplit('.',1)[0] + '.log'
+
+            comments = (' ' + args.outfile + ' ').center(80, '#') + '\n'
+            comments += '# ' + os.path.basename(sys.argv[0]) + '\n'
+            arglist = args.__dict__.keys()
+            for arg in arglist:
+                if arg not in hiddenargs:
+                    val = getattr(args, arg)
+                    if type(val) == int:
+                        comments += '#     --' + arg + '=' + str(val) + '\n'
+                    elif type(val) == str:
+                        comments += '#     --' + arg + '="' + val + '"\n'
+                    elif type(val) == bool and val:
+                        comments += '#     --' + arg + '\n'
+                    elif type(val) == list:
+                        for valitem in val:
+                            if type(valitem) == int:
+                                comments += '#     --' + arg + '=' + str(valitem) + '\n'
+                            elif type(valitem) == str:
+                                comments += '#     --' + arg + '="' + valitem + '"\n'
+
+            logfilename = args.infile.rsplit('.',1)[0] + '.log'
+            with open(logfilename, 'w') as logfile:
+                logfile.write(comments)
+
+        norm = NVivoNorm(args.outfile)
         norm.begin()
 
         datetimeNow = datetime.utcnow()
@@ -97,18 +138,6 @@ def editNodes(arglist):
                 })
 
         if args.infile:
-            csvFile = file(args.infile, 'r')
-
-            # Skip comments at start of CSV file.
-            incomments = ''
-            while True:
-                line = csvFile.readline()
-                if line[:1] == '#':
-                    incomments += line
-                else:
-                    csvfieldnames = next(unicodecsv.reader([line]))
-                    break
-
             csvreader=unicodecsv.DictReader(csvFile, fieldnames=csvfieldnames)
             nodeRows = []
             for row in csvreader:
