@@ -142,7 +142,8 @@ def editSources(arglist):
                     })
                 norm.con.execute(norm.Project.insert(), {
                     'Version': '0.2',
-                    'Title': "Created by NVivotools http://barraqda.org/nvivotools/",
+                    'Title': args.infile,
+                    'Description': "Created by NVivotools http://barraqda.org/nvivotools/",
                     'CreatedBy':    userId,
                     'CreatedDate':  datetimeNow,
                     'ModifiedBy':   userId,
