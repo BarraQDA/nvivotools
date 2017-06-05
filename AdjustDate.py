@@ -48,36 +48,40 @@ try:
         CreatedDate  = table.c.get('CreatedDate')
         ModifiedDate = table.c.get('ModifiedDate')
         if CreatedDate is not None and ModifiedDate is not None:
-            print ("Table " + table.name)
             # Prepend columns with '_' to avoid bindparam conflict error with reserved names
             rows = [{'_'+key:value for key,value in dict(row).iteritems()} for row in con.execute(
                 select(
                     table.primary_key.columns + [CreatedDate, ModifiedDate]).where(or_(
-                    table.c.CreatedDate <= before,
-                    table.c.CreatedDate >  table.c.ModifiedDate)))]
+                    table.c.CreatedDate <= bindparam('Before'),
+                    table.c.CreatedDate >  table.c.ModifiedDate)), {
+                        'Before': before
+                    })]
 
             keycondition = [column == bindparam('_'+column.name) for column in table.primary_key.columns]
 
             print ("Updating " + str(len(rows)) + " rows.")
-            if not args.dry_run:
-                for row in rows:
-                    #print (row['_CreatedDate'], args.before)
+            for row in rows:
+                if type(row['_CreatedDate']) == unicode:    # ???
                     createdDate  = dateparser.parse(row['_CreatedDate'])
                     modifiedDate = dateparser.parse(row['_ModifiedDate'])
-                    if createdDate <= before:
-                        createdDate  += adjust
-                    if modifiedDate <= before:
-                        modifiedDate += adjust
-                    if createdDate > datetimeNow or modifiedDate > datetimeNow:
-                        print("WARNING: future date", file=sys.stderr)
+                else:
+                    createdDate  = row['_CreatedDate']
+                    modifiedDate = row['_ModifiedDate']
+                if createdDate <= before:
+                    createdDate  += adjust
+                if modifiedDate <= before:
+                    modifiedDate += adjust
+                if createdDate > datetimeNow or modifiedDate > datetimeNow:
+                    print("WARNING: future date", file=sys.stderr)
 
-                    if createdDate > modifiedDate:
-                        print("WARNING: created date later than modified date", file=sys.stderr)
-                        #row['_ModifiedDate'] = row['_CreatedDate']
+                if createdDate > modifiedDate:
+                    print("WARNING: created date", createdDate, "later than modified date", modifiedDate, file=sys.stderr)
+                    #row['_ModifiedDate'] = row['_CreatedDate']
 
-                    row['_CreatedDate']  = createdDate
-                    row['_ModifiedDate'] = modifiedDate
+                row['_CreatedDate']  = createdDate
+                row['_ModifiedDate'] = modifiedDate
 
+                if not args.dry_run:
                     con.execute(table.update(
                         and_(*keycondition)).values({
                             'CreatedDate':  bindparam('_CreatedDate'),
