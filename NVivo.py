@@ -2140,13 +2140,6 @@ def Denormalise(args):
             if args.verbosity > 0:
                 print("Denormalising taggings and/or annotations", file=sys.stderr)
 
-            sources = [dict(row) for row in nvivocon.execute(select([
-                    nvivoSource.c.Item_Id,
-                    nvivoSource.c.PlainText
-                ]).where(
-                    nvivoItem.c.Id == nvivoSource.c.Item_Id
-                ))]
-
             taggings = [dict(row) for row in normdb.execute(select([
                     normTagging.c.Id,
                     normTagging.c.Source,
@@ -2184,10 +2177,11 @@ def Denormalise(args):
                     if endY is not None:
                         tagging['LengthY'] = int(endY) - tagging['StartY'] + 1
 
+                source = next(source for source in sources if source['Item_Id'] == tagging['Source'])
+
                 # On Mac need to remove white space (but not non-breaking spaces) from startX
                 # and LengthX to calculate StartText and LengthText
                 if args.mac:
-                    source = next(source for source in sources if source['Item_Id'] == tagging['Source'])
                     if source['PlainText'] is not None:
                         tagging['StartText']  = tagging['StartX'] - sum(c.isspace() and c != u'\xa0'
                                                 for c in source['PlainText'][0:tagging['StartX']])
@@ -2197,12 +2191,12 @@ def Denormalise(args):
                         tagging['StartText']  = tagging['StartX']
                         tagging['LengthText'] = tagging['LengthX']
 
-                # On Windows (only) need to adjust for two-character line terminators
+                # On Windows need to adjust for two-character line terminators
                 if args.windows:
                     startx  = tagging['StartX']
                     lengthx = tagging['LengthX']
-                    tagging['StartX']  += len(re.findall('[^\r]\n', source['Content'][0:startx]))
-                    tagging['LengthX'] += len(re.findall('[^\r]\n', source['Content'][startx-1:startx+lengthx-1]))
+                    tagging['StartX']  += len(re.findall('(?<=[^\r])\n', source['Content'][0:startx]))
+                    tagging['LengthX'] += len(re.findall('(?<=[^\r])\n', source['Content'][startx:startx+lengthx]))
 
                 if tagging['ObjectType'] == 'JPEG':
                     tagging['ReferenceTypeId'] = 2
