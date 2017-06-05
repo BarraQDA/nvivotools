@@ -86,9 +86,9 @@ class mssqlAPI(object):
             shutil.copy(filename, mdbFilename)
         else:
             mdbFilename = self.tmpdir + r'\mssqltools' + str(random.randint(0,99999)).zfill(5)
-            subprocess.call(['scp', '-q', filename, args.server + ':' + mdbFilename])
+            subprocess.call(['scp', '-q', filename, self.server + ':' + mdbFilename])
 
-        self.executescript('mssqlAttach.bat', [self.mdbFilename, dbname, self.instance])
+        self.executescript('mssqlAttach.bat', [mdbFilename, dbname, self.instance])
         if self.verbosity > 0:
             print("Attached database " + dbname, file=sys.stderr)
 
@@ -104,7 +104,7 @@ class mssqlAPI(object):
         else:
             mdbFilename = self.tmpdir + r'\mssqltools' + str(random.randint(0,99999)).zfill(5)
             self.executescript('mssqlSave.bat', [mdbFilename, dbname, self.instance])
-            subprocess.call(['scp', '-q', args.server + ':' + mdbFilename, filename])
+            subprocess.call(['scp', '-q', self.server + ':' + mdbFilename, filename])
 
     def list(self):
         dblist = self.executescript('mssqlList.bat', [self.instance]).split()
