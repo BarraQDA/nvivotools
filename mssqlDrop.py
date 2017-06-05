@@ -18,6 +18,8 @@
 
 from __future__ import print_function
 import argparse
+import sys
+import fnmatch
 from mssqlTools import mssqlAPI
 
 def mssqlDrop(arglist):
@@ -36,7 +38,7 @@ def mssqlDrop(arglist):
                         help="Microsoft SQL Server instance")
 
     parser.add_argument('dbname',   type=str,
-                        help="Name to assign database")
+                        help="Name or regular expression of database to drop")
 
     args = parser.parse_args(arglist)
 
@@ -46,7 +48,13 @@ def mssqlDrop(arglist):
                    version = ('MSSQL12' if args.nvivoversion == '11' else 'MSSQL10_50'),
                    verbosity = args.verbosity)
 
-    api.drop(args.dbname)
+    dbnames = api.list()
+    for dbname in dbnames:
+        if fnmatch.fnmatch(dbname, args.dbname):
+            if args.verbosity >= 1:
+                print("Dropping database: " + dbname, file=sys.stderr)
+
+            api.drop(dbname)
 
 if __name__ == '__main__':
     mssqlDrop(None)

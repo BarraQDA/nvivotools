@@ -20,6 +20,8 @@ from __future__ import print_function
 import os
 import sys
 import subprocess
+import tempfile
+import shutil
 import random
 
 class mssqlAPI(object):
@@ -46,7 +48,7 @@ class mssqlAPI(object):
         self.instance  = instance
         self.verbosity = verbosity
 
-        self.helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'Windows' + os.path.sep
+        self.helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep
 
         if self.server is None:  # ie MSSQL server is on local machine
             if os.name != 'nt':
@@ -69,15 +71,15 @@ class mssqlAPI(object):
             else:
                 raise RuntimeError('No suitable SQL self.server self.instance found')
 
-        if self.verbosity > 0:
-            print("Using MSSQL self.instance: " + self.instance, file=sys.stderr)
+        if self.verbosity >= 1:
+            print("Using MSSQL instance: " + self.instance, file=sys.stderr)
 
         if self.port is None:
             regquery = self.executecommand(['reg', 'query', 'HKLM\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\' + self.instance + '\\MSSQLServer\\SuperSocketNetLib\\Tcp']).splitlines()
             self.port = int(regquery[1].split()[2])
 
-        if self.verbosity > 0:
-            print("Using self.port: " + str(self.port), file=sys.stderr)
+        if self.verbosity >= 1:
+            print("Using port: " + str(self.port), file=sys.stderr)
 
     def attach(self, filename, dbname):
         # Generate a filename for the temporary MDB file
@@ -89,14 +91,23 @@ class mssqlAPI(object):
             subprocess.call(['scp', '-q', filename, self.server + ':' + mdbFilename])
 
         self.executescript('mssqlAttach.bat', [mdbFilename, dbname, self.instance])
-        if self.verbosity > 0:
+        if self.verbosity >= 1:
             print("Attached database " + dbname, file=sys.stderr)
 
+    def create(self, dbname):
+        self.executescript('mssqlCreate.bat', [dbname, self.instance])
+        if self.verbosity >= 1:
+            print("Created database " + dbname, file=sys.stderr)
+
     def detach(self, dbname):
-        self.executescript('mssqlDetach.bat', [dbname, self.instance])
+        serverinstance = ('%COMPUTERNAME%' if self.server else os.environ['COMPUTERNAME']) + '\\' + self.instance
+
+        self.executecommand(['sqlcmd', '-S', serverinstance, '-Q', 'EXEC sp_detach_db ' + dbname])
 
     def drop(self, dbname):
-        self.executescript('mssqlDrop.bat', [dbname, self.instance])
+        serverinstance = ('%COMPUTERNAME%' if self.server else os.environ['COMPUTERNAME']) + '\\' + self.instance
+
+        self.executecommand(['sqlcmd', '-S', serverinstance, '-Q', 'DROP DATABASE ' + dbname])
 
     def save(self, filename, dbname):
         if self.server is None:  # ie MSSQL server is on local machine
@@ -107,6 +118,9 @@ class mssqlAPI(object):
             subprocess.call(['scp', '-q', self.server + ':' + mdbFilename, filename])
 
     def list(self):
-        dblist = self.executescript('mssqlList.bat', [self.instance]).split()
+        serverinstance = ('%COMPUTERNAME%' if self.server else os.environ['COMPUTERNAME']) + '\\' + self.instance
+
+        dblist = self.executecommand(['sqlcmd', '-W', '-S', serverinstance, '-h', '-1', '-Q', 'SET NOCOUNT ON; SELECT name FROM master.dbo.sysdatabases']).split()
+
         # Ignore the first four internal databases: master, tempdb, model and msdb
         return dblist[4:]
