@@ -415,9 +415,13 @@ def editSources(arglist):
             for textColumn in args.textcolumns:
                 normSourceText = sourceRow.get(textColumn) or ''
                 if normSourceText:
+                    if normSourceRow['Content']:
+                        normSourceRow['Content'] += '\n\n'
+                    normSourceRow['Content'] += textColumn + '\n\n'
+
                     nodeId = sourceNodeId[textColumn]
                     start  = len(normSourceRow['Content']) + 1
-                    end    = start + len(normSourceText) - 1
+                    end    = start + len(normSourceText)
                     normSourceText += '\n'
                     normSourceRow['Content'] += normSourceText
 
