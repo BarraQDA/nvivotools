@@ -20,8 +20,8 @@ from __future__ import print_function
 import argparse
 from mssqlTools import mssqlAPI
 
-def mssqlList(arglist):
-    parser = argparse.ArgumentParser(description='List databases attached to an MS SQL Server instance.')
+def mssqlSave(arglist):
+    parser = argparse.ArgumentParser(description='Detach a database and save database file from an MS SQL Server instance.')
 
     parser.add_argument('-v', '--verbosity', type=int, default=1)
 
@@ -35,6 +35,11 @@ def mssqlList(arglist):
     parser.add_argument('-i', '--instance', type=str,
                         help="Microsoft SQL Server instance")
 
+    parser.add_argument('filename', type=str,
+                        help="File to save as")
+    parser.add_argument('dbname',   type=str,
+                        help="Name to assign database")
+
     args = parser.parse_args(arglist)
 
     api = mssqlAPI(args.server,
@@ -43,7 +48,7 @@ def mssqlList(arglist):
                    version = ('MSSQL12' if args.nvivoversion == '11' else 'MSSQL10_50'),
                    verbosity = args.verbosity)
 
-    print(api.list())
+    api.save(args.filename, args.dbname)
 
 if __name__ == '__main__':
-    mssqlList(None)
+    mssqlSave(None)
