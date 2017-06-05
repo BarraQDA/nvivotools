@@ -1244,11 +1244,6 @@ def Denormalise(args):
                     nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id
                 )))
 
-            # Since NVivo doesn't like them, strip values and replace null or empty values
-            # with Unassigned.
-            for value in values:
-                value['Value'] = value['Value'].strip() or unassignedlabel
-
             # Build dictionary of item categories
             uniqueitems = set(value['Item'] for value in values)
             itemcategory = {}
@@ -1335,6 +1330,7 @@ def Denormalise(args):
             maxvaluetags = {}
             addedattributes = []
             for value in values:
+                value['Value'] = value['Value'].strip()
                 attribute = next(attribute for attribute in attributes if attribute['Id'] == value['Attribute'])
                 if attribute['Type'] in NVivo.DataTypeName.values():
                     datatype = NVivo.DataTypeName.keys()[NVivo.DataTypeName.values().index(attribute['Type'])]
@@ -1361,9 +1357,13 @@ def Denormalise(args):
                 else:
                     value['Value'] = unicode(value['Value'])
 
-                value['PlainTextValue'] = value['Value']
-                if args.windows:
-                    value['Value'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), value['Value']))
+                if value['Value']:
+                    value['PlainTextValue'] = value['Value']
+                    if args.windows:
+                        value['Value'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), value['Value']))
+                else:
+                    value['Value']          = unassignedlabel
+                    value['PlainTextValue'] = u''
 
                 curvalues = [dict(row) for row in nvivocon.execute(valuesel, value)]
                 if len(curvalues) > 1:
@@ -1654,7 +1654,11 @@ def Denormalise(args):
                     normNodeValue.c.CreatedDate,
                     normNodeValue.c.ModifiedBy,
                     normNodeValue.c.ModifiedDate
-                ]))]
+                ]).where(
+                    normNodeAttribute.c.Id == normNodeValue.c.Attribute
+                ).order_by(
+                    normNodeAttribute.c.Name
+                ))]
 
             skip_merge_or_overwrite_attributes(attributes, values, 'node', args.node_attributes)
 
@@ -2127,7 +2131,11 @@ def Denormalise(args):
                     normSourceValue.c.CreatedDate,
                     normSourceValue.c.ModifiedBy,
                     normSourceValue.c.ModifiedDate
-                ]))]
+                ]).where(
+                    normSourceAttribute.c.Id == normSourceValue.c.Attribute
+                ).order_by(
+                    normSourceAttribute.c.Name
+                ))]
 
             skip_merge_or_overwrite_attributes(attributes, values, 'source', args.source_attributes)
 
