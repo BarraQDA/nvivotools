@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import os
 import sys
 import argparse
@@ -45,7 +46,7 @@ def editSources(arglist):
                                            help = 'Columns from input CSV file to include as attributes')
     parser.add_argument(      '--exclude', type = str, nargs = '*', default = [],
                                            help = 'Columns from input CSV file to exclude as attributes')
-    parser.add_argument('--textcolumns',   type = str, nargs = '*',
+    parser.add_argument('--textcolumns',   type = str, nargs = '*', default = [],
                                            help = 'Columns from input CSV file to include as coded text')
 
     parser.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
@@ -61,7 +62,8 @@ def editSources(arglist):
 
     parser.add_argument('--no-comments', action='store_true', help='Do not produce a comments logfile')
 
-    parser.add_argument('-o', '--outfile',  type=str, help='Output normalised NVivo (.norm) file')
+    parser.add_argument('-o', '--outfile',  type=str, required=True,
+                        help='Output normalised NVivo (.norm) file')
     parser.add_argument(        'infile',   type=str, help='Input CSV file')
 
     args = parser.parse_args()
@@ -406,8 +408,6 @@ def editSources(arglist):
                 normSourceRow['ObjectType'] = 'TXT'
                 normSourceRow['Content'] = (sourceRow.get('Text') or '').encode('utf-8')
 
-            normSourceRow['Object']  = buffer(normSourceRow['Content'])
-
             # Skip source without an object
             if not normSourceRow.get('ObjectType'):
                 continue
@@ -421,7 +421,7 @@ def editSources(arglist):
 
                     nodeId = sourceNodeId[textColumn]
                     start  = len(normSourceRow['Content']) + 1
-                    end    = start + len(normSourceText)
+                    end    = start + len(normSourceText) - 1
                     normSourceText += '\n'
                     normSourceRow['Content'] += normSourceText
 
@@ -437,6 +437,8 @@ def editSources(arglist):
                             'ModifiedBy':   userId,
                             'ModifiedDate': datetimeNow
                         })
+
+            normSourceRow['Object'] = bytearray(normSourceRow['Content'], 'utf-8')
 
             if source is None:    # New source
                 normSourceRow.update({
