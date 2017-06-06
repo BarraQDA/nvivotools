@@ -1407,7 +1407,7 @@ def Denormalise(args):
                     maxvaluetags[(value['Category'], attribute['Id'])] = 1
 
                     if args.mac:
-                        attribute['HierarchicalName'] = nvivocon.execute(
+                        attribute['NameHierarchicalName'] = nvivocon.execute(
                                 hierarchicalnamesel,
                                 {'Id': attribute['Category']}
                             ).first()['HierarchicalName'] + ':' + attribute['Name']
@@ -1423,7 +1423,7 @@ def Denormalise(args):
                         }
                     if args.mac:
                         itemvalues.update({
-                            'HierarchicalName': bindparam('HierarchicalName')
+                            'HierarchicalName': bindparam('NameHierarchicalName')
                         })
                     nvivocon.execute(nvivoItem.insert().values(itemvalues), attribute)
                     nvivocon.execute(nvivoRole.insert().values({
@@ -1440,6 +1440,8 @@ def Denormalise(args):
                     # Create unassigned and not applicable attribute values
                     attribute['UnassignedValueId'] = uuid.uuid4()
                     attribute['Unassigned'] = unassignedlabel
+                    if args.mac:
+                        attribute['HierarchicalName'] = attribute['NameHierarchicalName'] + '\\' + unassignedlabel
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('UnassignedValueId'),
                             'Name':     bindparam('Unassigned'),
@@ -1469,6 +1471,8 @@ def Denormalise(args):
 
                     attribute['NotApplicableValueId'] = uuid.uuid4()
                     attribute['NotApplicable'] = notapplicablelabel
+                    if args.mac:
+                        attribute['HierarchicalName'] = attribute['NameHierarchicalName'] + '\\' + notapplicablelabel
                     nvivocon.execute(nvivoItem.insert().values({
                             'Id':       bindparam('NotApplicableValueId'),
                             'Name':     bindparam('NotApplicable'),
@@ -1499,6 +1503,8 @@ def Denormalise(args):
                         if args.windows:
                             attribute['True']  = u''.join(map(lambda ch: chr(ord(ch) + 0x377), attribute['True']))
                             attribute['False'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), attribute['False']))
+                        if args.mac:
+                            attribute['HierarchicalName'] = attribute['NameHierarchicalName'] + '\\' + attribute['False']
 
                         nvivocon.execute(nvivoItem.insert().values({
                                 'Id':       bindparam('FalseValueId'),
@@ -1521,6 +1527,8 @@ def Denormalise(args):
                                 'Properties': literal_column('\'<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="IsDefault" Value="False"/></Properties>\'')
                         }), attribute)
 
+                        if args.mac:
+                            attribute['HierarchicalName'] = attribute['NameHierarchicalName'] + '\\' + attribute['True']
                         nvivocon.execute(nvivoItem.insert().values({
                                 'Id':       bindparam('TrueValueId'),
                                 'Name':     bindparam('True'),
@@ -1571,6 +1579,8 @@ def Denormalise(args):
                             print("Creating value '" + value['PlainTextValue'] + "' for " + name + " attribute '" + attribute['PlainTextName'] + "' with tag: "+ str(value['Tag']), file=sys.stderr)
 
                         value['Id']  = uuid.uuid4()
+                        if args.mac:
+                            value['HierarchicalName'] = attribute['NameHierarchicalName'] + '\\' + value['Value']
                         nvivocon.execute(nvivoItem.insert().values({
                                 'Id':       bindparam('Id'),
                                 'Name':     bindparam('Value'),
@@ -1578,7 +1588,9 @@ def Denormalise(args):
                                 'TypeId':   literal_column(NVivo.ItemType.AttributeValue),
                                 'System':   literal_column('0'),
                                 'ReadOnly': literal_column('0'),
-                                'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
+                                'InheritPermissions': literal_column(NVivo.RoleType.ParentItem),
+                                'ColorArgb': literal_column('0')
+
                             }), value )
                         value['Attribute'] = value['Attribute']
                         nvivocon.execute(nvivoRole.insert().values({
@@ -1827,7 +1839,7 @@ def Denormalise(args):
                 tmpfilename = tempfile.mktemp()
                 if source['ObjectTypeName'] == 'TXT':
                     tmpfile = codecs.open(tmpfilename + '.TXT', 'w', 'utf-8')
-                    tmpfile.write(unicode(source['Object'] or source['Content']))
+                    tmpfile.write(unicode(source['Object'], 'utf-8') if source['Object'] else source['Content'])
                 elif source['Object'] is not None:
                     tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
                     tmpfile.write(source['Object'])
@@ -1969,7 +1981,7 @@ def Denormalise(args):
                 source['ObjectType'] = int(source['ObjectTypeName'])
 
             if args.mac:
-                source['HierarchicalName'] = headsourcename + u'\\\\' + node['Name']
+                source['HierarchicalName'] = headsourcename + u'\\\\' + source['Name']
 
         # Unitialise static variable
         massagesource.unoconvcmd = None
@@ -2061,7 +2073,6 @@ def Denormalise(args):
             sourcestoinsert = [source for source in sources if not {'Item_Id':source['Item_Id']} in curids]
             for source in sourcestoinsert:
                 massagesource(source)
-
 
             if len(sourcestoinsert) > 0:
                 nvivocon.execute(nvivoItem.insert().values(itemvalues), sourcestoinsert)
