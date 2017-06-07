@@ -42,6 +42,8 @@ def editSources(arglist):
     parser.add_argument('-v', '--verbosity',  type=int, default=1)
 
     parser.add_argument('-i', '--infile',  type = str, help = 'Input CSV file')
+    parser.add_argument('-l', '--limit',   type=int, help='Limit number of lines from input file')
+
     parser.add_argument('-C', '--columns', type = str, nargs = '*',
                                            help = 'Columns from input CSV file to include as attributes')
     parser.add_argument(      '--exclude', type = str, nargs = '*', default = [],
@@ -164,6 +166,9 @@ def editSources(arglist):
                 sourceRow['Source']      = sourceRow.get('Source',      args.source)
                 sourceRow['Text']        = sourceRow.get('Text',        args.text)
                 sourceRows.append(sourceRow)
+
+                if args.limit and len(sourceRows) == args.limit:
+                    break
 
             colNames = csvfieldnames
         else:
@@ -415,6 +420,8 @@ def editSources(arglist):
             for textColumn in args.textcolumns:
                 normSourceText = sourceRow.get(textColumn) or ''
                 if normSourceText:
+                    normSourceText += '\n'
+
                     if normSourceRow['Content']:
                         normSourceRow['Content'] += '\n\n'
                     normSourceRow['Content'] += textColumn + '\n\n'
@@ -422,7 +429,6 @@ def editSources(arglist):
                     nodeId = sourceNodeId[textColumn]
                     start  = len(normSourceRow['Content']) + 1
                     end    = start + len(normSourceText) - 1
-                    normSourceText += '\n'
                     normSourceRow['Content'] += normSourceText
 
                     taggingId = uuid.uuid4()
