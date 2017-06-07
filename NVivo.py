@@ -18,6 +18,9 @@
 
 from __future__ import print_function
 from builtins import chr
+from mssqlTools import mssqlAPI
+import socket
+import random
 from sqlalchemy import *
 from sqlalchemy import exc
 from xml.dom.minidom import *
@@ -81,6 +84,51 @@ class NVivo:
         ItemCategory = '14'
         NodeAggregate = '15'
 
+    ILLEGALNAMECHARS = re.compile(r'[\\:/\*\?"<>|]')
+
+# Function to mount a database file and return an SQLite connection string.
+# Guesses filetype from extension
+def mount(filename, dbname=None, server=None, port=None, instance=None, nvivoversion=10, verbosity=1):
+    extension = os.path.splitext(filename)[1]
+    if extension == '.norm':
+        return ('mssql:///' + filename)
+    elif extension == '.nvpx':
+        # Find a free sock for SQL Anywhere server to bind to
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(("",0))
+        freeport = str(s.getsockname()[1])
+        s.close()
+
+        if not dbname:
+            dbname = "NVivo" + str(random.randint(0,99999)).zfill(5)
+
+        DEVNULL = open(os.devnull, 'wb')
+        dbproc = Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], stdout=PIPE, stdin=DEVNULL)
+
+        # Wait until SQL Anywhere engine starts...
+        while dbproc.poll() is None:
+            line = dbproc.stdout.readline()
+            if line == 'Now accepting requests\n':
+                break
+
+        if verbosity > 0:
+            print("Started database server on port " + freeport, file=sys.stderr)
+
+        return 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' + freeport + '/' + dbname
+    elif extension == '.nvp':
+        if not dbname:
+            dbname = "NVivo" + str(random.randint(0,99999)).zfill(5)
+
+        api = mssqlAPI(server,
+                       port,
+                       instance,
+                       version = ('MSSQL12' if nvivoversion == '11' else 'MSSQL10_50'),
+                       verbosity = verbosity)
+        api.attach(filename, dbname)
+
+        return 'mssql+pymssql://nvivotools:nvivotools@' + (api.server or 'localhost') + ((':' + str(api.port)) if api.port else '') + '/' + dbname
+    else:
+        raise RuntimeError("Unknown file extension: " + extension)
 
 # Generic merge/overwrite/replace function
 def merge_overwrite_or_replace(conn, table, columns, data, operation, verbosity):
@@ -1037,10 +1085,11 @@ def Denormalise(args):
                 rowstoinsert = [row for row in categories if not {'_Id':row['Id']} in curids]
                 if len(rowstoinsert) > 0:
                     itemvalues = {
-                            'Id':       bindparam('_Id'),
-                            'TypeId':   literal_column(itemtype),
-                            'System':   literal_column('0'),
-                            'ReadOnly': literal_column('0'),
+                            'Id':        bindparam('_Id'),
+                            'TypeId':    literal_column(itemtype),
+                            'ColorArgb': literal_column('0'),
+                            'System':    literal_column('0'),
+                            'ReadOnly':  literal_column('0'),
                             'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
                         }
                     if args.mac:
@@ -1111,6 +1160,8 @@ def Denormalise(args):
                 node['_Id']           = node['Id']      # So we can bind parameter
                 node['Description']   = node['Description'] or u''
                 node['PlainTextName'] = node['Name']
+                node['Name'] = re.sub(NVivo.ILLEGALNAMECHARS, '_', node['Name']).strip()
+
                 if args.windows:
                     node['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Name']))
                     node['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), node['Description'].replace('\n', '\r\n')))
@@ -1323,6 +1374,8 @@ def Denormalise(args):
 
             for attribute in attributes:
                 attribute['PlainTextName'] = attribute['Name']
+                # Clean up attribute name for NVivo
+                attribute['Name'] = re.sub(NVivo.ILLEGALNAMECHARS, '_', attribute['Name']).strip()
                 if args.windows:
                     attribute['Name'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), attribute['Name']))
 
@@ -1413,12 +1466,13 @@ def Denormalise(args):
                             ).first()['HierarchicalName'] + ':' + attribute['Name']
 
                     itemvalues = {
-                            'Id':       bindparam('Id'),
-                            'Name':     bindparam('Name'),
+                            'Id':          bindparam('Id'),
+                            'Name':        bindparam('Name'),
                             'Description': literal_column("''"),
-                            'TypeId':   literal_column(NVivo.ItemType.AttributeName),
-                            'System':   literal_column('0'),
-                            'ReadOnly': literal_column('0'),
+                            'TypeId':      literal_column(NVivo.ItemType.AttributeName),
+                            'ColorArgb':   literal_column('0'),
+                            'System':      literal_column('0'),
+                            'ReadOnly':    literal_column('0'),
                             'InheritPermissions': literal_column(NVivo.RoleType.ParentItem)
                         }
                     if args.mac:
@@ -1751,9 +1805,12 @@ def Denormalise(args):
             source['Item_Id']       = source['Item_Id']     or uuid.uuid4()
             source['Description']   = source['Description'] or u''
             source['PlainTextName'] = source['Name']
+            source['Name'] = re.sub(NVivo.ILLEGALNAMECHARS, '_', source['Name']).strip()
             if args.windows:
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description'].replace('\n', '\r\n')))
+            if source['Color'] is None:
+                source['Color'] = 0
 
             content = source['Content']
             if content:
@@ -2197,7 +2254,7 @@ def Denormalise(args):
 
                 tagging['StartY']  = None
                 tagging['LengthY'] = None
-                tagging['StartZ']  = 0
+                tagging['StartZ']  = None
                 startY = matchfragment.group(3)
                 if startY is not None:
                     tagging['StartY'] = int(startY)
