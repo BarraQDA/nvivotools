@@ -2184,8 +2184,17 @@ def Denormalise(args):
                     taggings.remove(tagging)
                     continue
 
+                source = next(source for source in sources if source['Item_Id'] == tagging['Source'])
+
+                # Normalised file startX is 1-based, Nvivo is 0-based
                 tagging['StartX']  = int(matchfragment.group(1)) - 1
                 tagging['LengthX'] = int(matchfragment.group(2)) - int(matchfragment.group(1)) + 1
+                # Correct boundary errors
+                if tagging['StartX'] < 0:
+                    tagging['StartX'] = 0
+                if source['PlainText'] is not None and tagging['StartX'] + tagging['LengthX'] > len(source['PlainText']):
+                    tagging['LengthX'] = len(source['PlainText']) - tagging['StartX']
+
                 tagging['StartY']  = None
                 tagging['LengthY'] = None
                 tagging['StartZ']  = 0
@@ -2196,7 +2205,6 @@ def Denormalise(args):
                     if endY is not None:
                         tagging['LengthY'] = int(endY) - tagging['StartY'] + 1
 
-                source = next(source for source in sources if source['Item_Id'] == tagging['Source'])
 
                 # On Mac need to remove white space (but not non-breaking spaces) from startX
                 # and LengthX to calculate StartText and LengthText
