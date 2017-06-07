@@ -17,14 +17,30 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import print_function
+import os
+import subprocess
+import re
+import sys
+
+# First set up environment for SQL Anywhere server and restart process if necessary
+helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep
+
+# Set environment variables for SQL Anywhere server
+if not os.environ.get('_sqlanywhere'):
+    envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
+    for envline in envlines:
+        env = re.match(r"(?P<name>\w+)='(?P<value>\S+)'", envline).groupdict()
+        os.environ[env['name']] = env['value']
+
+    os.environ['_sqlanywhere'] = 'TRUE'
+    os.execv(sys.argv[0], sys.argv)
+
+# Environment is now ready
 import argparse
 import NVivo
 import RQDA
-import os
-import sys
 import shutil
 import tempfile
-from subprocess import Popen, PIPE
 
 parser = argparse.ArgumentParser(description='Convert an NVivo for Mac (.nvpx) file into an RQDA project.')
 
@@ -91,7 +107,7 @@ freeport = str(s.getsockname()[1])
 s.close()
 
 DEVNULL = open(os.devnull, 'wb')
-dbproc = Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga', '-xd',  tmpinfilename, '-n', 'NVivo'+freeport], stdout=PIPE, stdin=DEVNULL)
+dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga', '-xd',  tmpinfilename, '-n', 'NVivo'+freeport], stdout=subprocess.PIPE, stdin=DEVNULL)
 
 # Wait until SQL Anywhere engine starts...
 while dbproc.poll() is None:

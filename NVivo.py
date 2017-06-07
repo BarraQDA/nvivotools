@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright 2016 Jonathan Schultz
+# Copyright 2017 Jonathan Schultz
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -28,7 +28,7 @@ import warnings
 import sys
 import os
 import codecs
-from subprocess import Popen, PIPE
+import subprocess
 import argparse
 import uuid
 import re
@@ -103,7 +103,7 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
             dbname = "NVivo" + str(random.randint(0,99999)).zfill(5)
 
         DEVNULL = open(os.devnull, 'wb')
-        dbproc = Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], stdout=PIPE, stdin=DEVNULL)
+        dbproc = subprocess.Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], stdout=subprocess.PIPE, stdin=DEVNULL)
 
         # Wait until SQL Anywhere engine starts...
         while dbproc.poll() is None:
@@ -1938,7 +1938,7 @@ def Denormalise(args):
                         source['PlainText'] = codecs.open(tmpfilename + '.TXT', 'r', 'utf-8-sig').read()
                     else:
                         # Use unoconv to convert to text
-                        p = Popen(massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
+                        p = subprocess.Popen(massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=subprocess.PIPE)
                         err = p.stderr.read()
                         if err != '':
                             raise RuntimeError(err)
@@ -1959,7 +1959,7 @@ def Denormalise(args):
                 source['Object'] = ''
                 if source['ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
                     destformat = 'odt' if args.mac else 'doc'
-                    p = Popen(massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=PIPE)
+                    p = subprocess.Popen(massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=subprocess.PIPE)
                     err = p.stderr.read()
                     if err != '':
                         err = "unoconv invocation error: " + str(massagesource.unoconvcmd) + "\n" + err
