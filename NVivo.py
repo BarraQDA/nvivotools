@@ -86,6 +86,8 @@ class NVivo:
 
     ILLEGALNAMECHARS = re.compile(r'[\\:/\*\?"<>|]')
 
+    helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep
+
 # Function to mount a database file and return an SQLite connection string.
 # Guesses filetype from extension
 def mount(filename, dbname=None, server=None, port=None, instance=None, nvivoversion=10, verbosity=1):
@@ -93,6 +95,16 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
     if extension == '.norm':
         return ('mssql:///' + filename)
     elif extension == '.nvpx':
+        # Set environment variables for SQL Anywhere server
+        if not os.environ.get('_sqlanywhere'):
+            envlines = subprocess.check_output(NVivo.helperpath + 'sqlanyenv.sh').splitlines()
+            for envline in envlines:
+                env = re.match(r"(?P<name>\w+)='(?P<value>\S+)'", envline).groupdict()
+                os.environ[env['name']] = env['value']
+
+            os.environ['_sqlanywhere'] = 'TRUE'
+            os.execv(sys.argv[0], sys.argv)
+
         # Find a free sock for SQL Anywhere server to bind to
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind(("",0))
@@ -103,7 +115,7 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
             dbname = "NVivo" + str(random.randint(0,99999)).zfill(5)
 
         DEVNULL = open(os.devnull, 'wb')
-        dbproc = subprocess.Popen(['sh', os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], stdout=subprocess.PIPE, stdin=DEVNULL)
+        dbproc = subprocess.Popen(['sh', NVivo.helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], stdout=subprocess.PIPE, stdin=DEVNULL)
 
         # Wait until SQL Anywhere engine starts...
         while dbproc.poll() is None:
@@ -1923,8 +1935,7 @@ def Denormalise(args):
                                 massagesource.unoconvcmd = ['python', unoconvpath]
                             break
                     if massagesource.unoconvcmd is None:
-                        # Look in subdirectory 'helpers' of script direectory
-                        unoconvpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'helpers/unoconv')
+                        unoconvpath = os.path.join(NVivo.helperpath + 'unoconv')
                         if os.path.exists(unoconvpath):
                             if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
                                 massagesource.unoconvcmd = [unoconvpath]
