@@ -21,19 +21,22 @@ import os
 import subprocess
 import re
 import sys
+import glob
 
 # First set up environment for SQL Anywhere server and restart process if necessary
 helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep
 
-# Set environment variables for SQL Anywhere server
-if not os.environ.get('_sqlanywhere'):
-    envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
-    for envline in envlines:
-        env = re.match(r"(?P<name>\w+)='(?P<value>\S+)'", envline).groupdict()
-        os.environ[env['name']] = env['value']
+# On non-Windows OS, need to set up environment for SQL Anywhere server and restart process.
+if os.name != 'nt':
+    # Check if already done
+    if not os.environ.get('_sqlanywhere'):
+        envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
+        for envline in envlines:
+            env = re.match(r"(?P<name>\w+)='(?P<value>\S+)'", envline).groupdict()
+            os.environ[env['name']] = env['value']
 
-    os.environ['_sqlanywhere'] = 'TRUE'
-    os.execv(sys.argv[0], sys.argv)
+        os.environ['_sqlanywhere'] = 'TRUE'
+        os.execv(sys.argv[0], sys.argv)
 
 # Environment is now ready
 import argparse
@@ -117,13 +120,30 @@ freeport = str(s.getsockname()[1])
 s.close()
 
 DEVNULL = open(os.devnull, 'wb')
-dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga', '-xd',  tmpoutfilename, '-n', 'NVivo'+freeport], stdout=subprocess.PIPE, stdin=DEVNULL)
 
-# Wait until SQL Anywhere engine starts...
-while dbproc.poll() is None:
-    line = dbproc.stdout.readline()
-    if line == 'Now accepting requests\n':
-        break
+if os.name != 'nt':
+    dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport], stdout=subprocess.PIPE, stdin=DEVNULL)
+    # Wait until SQL Anywhere engine starts...
+    while dbproc.poll() is None:
+        line = dbproc.stdout.readline()
+        if line == 'Now accepting requests\n':
+            break
+else:
+    pathlist=os.environ['PATH'].split(';')
+    for path in pathlist:
+        dbengpaths = glob.glob(path + '\\dbeng*.exe')
+        if dbengpaths:
+            dbengfile = os.path.basename(dbengpaths[0])
+            break
+    else:
+        raise RuntimeError("Could not find SQL Anywere executable")
+
+    dbproc = subprocess.Popen(['dbspawn', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  tmpoutfilename, '-n', 'NVivo'+freeport], stdout=subprocess.PIPE, stdin=DEVNULL)
+    # Wait until SQL Anywhere engine starts...
+    while dbproc.poll() is None:
+        line = dbproc.stdout.readline()
+        if 'SQL Anywhere Start Server In Background Utility' in line:
+            break
 
 if args.verbosity > 0:
     print("Started database server on port " + freeport, file=sys.stderr)
