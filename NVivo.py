@@ -19,6 +19,7 @@
 from __future__ import print_function
 from builtins import chr
 from mssqlTools import mssqlAPI
+import glob
 import socket
 import random
 from sqlalchemy import *
@@ -95,15 +96,16 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
     if extension == '.norm':
         return ('mssql:///' + filename)
     elif extension == '.nvpx':
-        # Set environment variables for SQL Anywhere server
-        if not os.environ.get('_sqlanywhere'):
-            envlines = subprocess.check_output(NVivo.helperpath + 'sqlanyenv.sh').splitlines()
-            for envline in envlines:
-                env = re.match(r"(?P<name>\w+)='(?P<value>\S+)'", envline).groupdict()
-                os.environ[env['name']] = env['value']
+        if os.name != 'nt':
+            # Set environment variables for SQL Anywhere server
+            if not os.environ.get('_sqlanywhere'):
+                envlines = subprocess.check_output(NVivo.helperpath + 'sqlanyenv.sh').splitlines()
+                for envline in envlines:
+                    env = re.match(r"(?P<name>\w+)='(?P<value>\S+)'", envline).groupdict()
+                    os.environ[env['name']] = env['value']
 
-            os.environ['_sqlanywhere'] = 'TRUE'
-            os.execv(sys.argv[0], sys.argv)
+                os.environ['_sqlanywhere'] = 'TRUE'
+                os.execv(sys.argv[0], sys.argv)
 
         # Find a free sock for SQL Anywhere server to bind to
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -115,13 +117,30 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
             dbname = "NVivo" + str(random.randint(0,99999)).zfill(5)
 
         DEVNULL = open(os.devnull, 'wb')
-        dbproc = subprocess.Popen(['sh', NVivo.helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], stdout=subprocess.PIPE, stdin=DEVNULL)
 
-        # Wait until SQL Anywhere engine starts...
-        while dbproc.poll() is None:
-            line = dbproc.stdout.readline()
-            if line == 'Now accepting requests\n':
-                break
+        if os.name != 'nt':
+            dbproc = subprocess.Popen(['sh', NVivo.helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], stdout=subprocess.PIPE, stdin=DEVNULL)
+            # Wait until SQL Anywhere engine starts...
+            while dbproc.poll() is None:
+                line = dbproc.stdout.readline()
+                if line == 'Now accepting requests\n':
+                    break
+        else:
+            pathlist=os.environ['PATH'].split(';')
+            for path in pathlist:
+                dbengpaths = glob.glob(path + '\\dbeng*.exe')
+                if dbengpaths:
+                    dbengfile = os.path.basename(dbengpaths[0])
+                    break
+            else:
+                raise RuntimeError("Could not find SQL Anywere executable")
+
+            dbproc = subprocess.Popen(['dbspawn', '-f', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], stdout=subprocess.PIPE, stdin=DEVNULL)
+            # Wait until SQL Anywhere engine starts...
+            while dbproc.poll() is None:
+                line = dbproc.stdout.readline()
+                if 'SQL Anywhere Start Server In Background Utility' in line:
+                    break
 
         if verbosity > 0:
             print("Started database server on port " + freeport, file=sys.stderr)
