@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+import NVivo
 from sqlalchemy import *
 from sqlalchemy import exc
 import warnings
@@ -33,8 +34,10 @@ try:
     args = parser.parse_args()
 
     before = dateparser.parse(args.before)
-
     adjust = timedelta(seconds=timeparse(args.adjust))
+
+    if '://' not in args.db:
+        args.db = NVivo.mount(args.db)
 
     db = create_engine(args.db)
     md = MetaData(bind=db)
@@ -59,7 +62,7 @@ try:
 
             keycondition = [column == bindparam('_'+column.name) for column in table.primary_key.columns]
 
-            print ("Updating " + str(len(rows)) + " rows.")
+            print ("Table " + table.name + " Updating " + str(len(rows)) + " rows.")
             for row in rows:
                 if type(row['_CreatedDate']) == unicode:    # ???
                     createdDate  = dateparser.parse(row['_CreatedDate'])
