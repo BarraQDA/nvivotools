@@ -74,7 +74,7 @@ def editSources(arglist):
     try:
         incomments = ''
         if args.infile:
-            csvFile = file(args.infile, 'r')
+            csvFile = file(args.infile, 'rU')
 
             # Skip comments at start of CSV file.
             while True:
@@ -411,20 +411,22 @@ def editSources(arglist):
                 normSourceRow['Content'] = codecs.open(sourcerow['Source'], 'r', encoding=encoding).read().encode('utf-8')
             else:
                 normSourceRow['ObjectType'] = 'TXT'
-                normSourceRow['Content'] = (sourceRow.get('Text') or '').encode('utf-8')
+                normSourceRow['Content'] = sourceRow.get('Text') or u''
+                #normSourceRow['Content'] = (sourceRow.get('Text') or u'').encode('utf-8')
+
 
             # Skip source without an object
             if not normSourceRow.get('ObjectType'):
                 continue
 
             for textColumn in args.textcolumns:
-                normSourceText = sourceRow.get(textColumn) or ''
+                normSourceText = sourceRow.get(textColumn) or u''
                 if normSourceText:
-                    normSourceText += '\n'
+                    normSourceText += u'\n'
 
                     if normSourceRow['Content']:
-                        normSourceRow['Content'] += '\n\n'
-                    normSourceRow['Content'] += textColumn + '\n\n'
+                        normSourceRow['Content'] += u'\n\n'
+                    normSourceRow['Content'] += textColumn + u'\n\n'
 
                     nodeId = sourceNodeId[textColumn]
                     start  = len(normSourceRow['Content']) + 1
