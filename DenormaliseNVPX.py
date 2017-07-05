@@ -80,28 +80,54 @@ parser.add_argument('-a', '--annotations', choices=["skip", "merge"], default="m
 parser.add_argument('-b', '--base', dest='basefile', type=argparse.FileType('rb'), nargs='?',
                     help="Base NVPX file to insert into")
 
-parser.add_argument('infile', type=argparse.FileType('rb'),
+parser.add_argument('--no-comments', action='store_true', help='Do not produce a comments logfile')
+
+parser.add_argument('infile', type=str,
                     help="Input normalised SQLite file (extension .norm)")
-parser.add_argument('outfilename', metavar='outfile', type=str, nargs='?',
+parser.add_argument('outfile', type=str, nargs='?',
                     help="Output NVPX file")
 
 
 args = parser.parse_args()
+hiddenargs = ['cmdline', 'verbosity', 'mac', 'windows']
 
 # Fill in extra arguments that NVivo module expects
 args.mac       = True
 args.windows   = False
 
-tmpinfilename = tempfile.mktemp()
-tmpinfileptr  = file(tmpinfilename, 'wb')
-tmpinfileptr.write(args.infile.read())
-args.infile.close()
-tmpinfileptr.close()
+if not args.no_comments:
+    logfilename = args.outfile.rsplit('.',1)[0] + '.log'
 
-if args.outfilename is None:
-    args.outfilename = args.infile.name.rsplit('.',1)[0] + '.nvpx'
-    if os.path.exists(args.outfilename):
-        shutil.move(args.outfilename, args.outfilename + '.bak')
+    comments = (' ' + args.outfile + ' ').center(80, '#') + '\n'
+    comments += '# ' + os.path.basename(sys.argv[0]) + '\n'
+    arglist = args.__dict__.keys()
+    for arg in arglist:
+        if arg not in hiddenargs:
+            val = getattr(args, arg)
+            if type(val) == str or type(val) == unicode:
+                comments += '#     --' + arg + '="' + val + '"\n'
+            elif type(val) == bool:
+                if val:
+                    comments += '#     --' + arg + '\n'
+            elif type(val) == list:
+                for valitem in val:
+                    if type(valitem) == str:
+                        comments += '#     --' + arg + '="' + valitem + '"\n'
+                    else:
+                        comments += '#     --' + arg + '=' + str(valitem) + '\n'
+            elif val is not None:
+                comments += '#     --' + arg + '=' + str(val) + '\n'
+
+    with open(logfilename, 'w') as logfile:
+        logfile.write(comments)
+
+tmpinfilename = tempfile.mktemp()
+shutil.copy(args.infile, tmpinfilename)
+
+if args.outfile is None:
+    args.outfile = args.infile.rsplit('.',1)[0] + '.nvpx'
+    if os.path.exists(args.outfile):
+        shutil.move(args.outfile, args.outfile + '.bak')
 
 if args.basefile is None:
     args.basefile = file(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + ('emptyNVivo10Mac.nvpx' if args.nvivoversion == '10' else 'emptyNVivo11Mac.nvpx'), 'rb')
@@ -154,7 +180,7 @@ args.outdb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' 
 NVivo.Denormalise(args)
 
 if not args.cmdline:
-    args.outfilename = os.path.basename(args.outfilename)
+    args.outfile = os.path.basename(args.outfile)
 
-shutil.move(tmpoutfilename, args.outfilename)
+shutil.move(tmpoutfilename, args.outfile)
 os.remove(tmpinfilename)
