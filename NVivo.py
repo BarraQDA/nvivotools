@@ -1844,7 +1844,7 @@ def Denormalise(args):
                 source['Color'] = 0
 
             content = source['Content']
-            if content:
+            if content is not None:
                 source['PlainText'] = content if type(content) == unicode else unicode(content, 'utf-8')
 
             # Initialise all columns to prevent missing values later
