@@ -104,7 +104,7 @@ def NormaliseNVP(arglist):
     if args.outfilename is None:
         args.outfilename = args.infile.rsplit('.',1)[0] + '.norm'
 
-    helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'Windows' + os.path.sep
+    helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep
 
     if args.instance is None:
         regquery = executecommand(['reg', 'query', 'HKLM\\Software\\Microsoft\\Microsoft SQL Server\\Instance Names\\SQL']).splitlines()
