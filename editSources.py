@@ -142,12 +142,12 @@ def editSources(arglist):
                 userId = uuid.uuid4()
                 norm.con.execute(norm.User.insert(), {
                         'Id':   userId,
-                        'Name': "Default User"
+                        'Name': u"Default User"
                     })
                 norm.con.execute(norm.Project.insert(), {
-                    'Version': '0.2',
-                    'Title': args.infile,
-                    'Description': "Created by NVivotools http://barraqda.org/nvivotools/",
+                    'Version': u'0.2',
+                    'Title': unicode(args.infile),
+                    'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
                     'CreatedBy':    userId,
                     'CreatedDate':  datetimeNow,
                     'ModifiedBy':   userId,
@@ -199,7 +199,9 @@ def editSources(arglist):
         sourceNodeId = {}
         for colName in colNames:
             # Does column define an attribute?
-            if (not args.columns or colName in args.columns) and colName not in ['Name', 'Description', 'Category', 'Color', 'Source', 'Text'] + args.exclude + args.textcolumns:
+            if ((not args.columns or colName in args.columns)
+                and colName
+                and colName not in ['Name', 'Description', 'Category', 'Color', 'Source', 'Text'] + args.exclude + args.textcolumns):
 
                 # Determine whether attribute is already defined
                 sourceattribute = norm.con.execute(select([
@@ -269,8 +271,8 @@ def editSources(arglist):
                     norm.con.execute(norm.SourceAttribute.insert(), {
                         'Id':           attributeId,
                         'Name':         colName,
-                        'Description':  "Created by NVivotools http://barraqda.org/nvivotools/",
-                        'Type':         attributeType,
+                        'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
+                        'Type':         unicode(attributeType),
                         'Length':       attributeLength,
                         'CreatedBy':    userId,
                         'CreatedDate':  datetimeNow,
@@ -299,8 +301,8 @@ def editSources(arglist):
                     nodeId = uuid.uuid4()
                     norm.con.execute(norm.Node.insert(), {
                         'Id':           nodeId,
-                        'Name':         colName,
-                        'Description':  "Created by NVivotools http://barraqda.org/nvivotools/",
+                        'Name':         unicode(colName),
+                        'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
                         'CreatedBy':    userId,
                         'CreatedDate':  datetimeNow,
                         'ModifiedBy':   userId,
@@ -334,15 +336,15 @@ def editSources(arglist):
                     norm.con.execute(norm.SourceCategory.insert(), {
                         'Id':           categoryId,
                         'Name':         categoryName,
-                        'Description':  "Created by NVivotools http://barraqda.org/nvivotools/",
+                        'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
                         'CreatedBy':    userId,
                         'CreatedDate':  datetimeNow,
                         'ModifiedBy':   userId,
                         'ModifiedDate': datetimeNow
                         })
 
-            sourceName        = sourceRow.get('Name') or str(rowNum).zfill(digits)
-            sourceDescription = sourceRow.get('Description') or "Created by NVivotools http://barraqda.org/nvivotools/"
+            sourceName        = sourceRow.get('Name') or unicode(rowNum).zfill(digits)
+            sourceDescription = sourceRow.get('Description') or u"Created by NVivotools http://barraqda.org/nvivotools/"
 
             source = norm.con.execute(select([
                         norm.Source.c.Id
@@ -383,7 +385,7 @@ def editSources(arglist):
                         '_Source':      sourceId,
                         'Attribute':    attributeId,
                         '_Attribute':   attributeId,
-                        'Value':        attributeValue,
+                        'Value':        unicode(attributeValue),
                         'CreatedBy':    userId,
                         'CreatedDate':  datetimeNow,
                         'ModifiedBy':   userId,
@@ -402,7 +404,7 @@ def editSources(arglist):
             normSourceRow['Color'] = sourceRow.get('Color')
 
             if sourceRow.get('Source'):
-                normSourceRow['ObjectType'] = 'TXT'
+                normSourceRow['ObjectType'] = u'TXT'
 
                 # detect file encoding
                 raw = file(sourcerow['Source'], 'rb').read(32) # at most 32 bytes are returned
@@ -410,7 +412,7 @@ def editSources(arglist):
 
                 normSourceRow['Content'] = codecs.open(sourcerow['Source'], 'r', encoding=encoding).read().encode('utf-8')
             else:
-                normSourceRow['ObjectType'] = 'TXT'
+                normSourceRow['ObjectType'] = u'TXT'
                 normSourceRow['Content'] = sourceRow.get('Text') or u''
                 #normSourceRow['Content'] = (sourceRow.get('Text') or u'').encode('utf-8')
 
@@ -426,25 +428,28 @@ def editSources(arglist):
 
                     if normSourceRow['Content']:
                         normSourceRow['Content'] += u'\n\n'
-                    normSourceRow['Content'] += textColumn + u'\n\n'
 
-                    nodeId = sourceNodeId[textColumn]
-                    start  = len(normSourceRow['Content']) + 1
-                    end    = start + len(normSourceText) - 1
+                    # If more than one text column then make header in content and tag text
+                    if len(args.textcolumns) > 1:
+                        normSourceRow['Content'] += textColumn + u'\n\n'
+
+                        start  = len(normSourceRow['Content']) + 1
+                        end    = start + len(normSourceText) - 1
+                        nodeId    = sourceNodeId[textColumn]
+                        taggingId = uuid.uuid4()
+                        norm.con.execute(norm.Tagging.insert(), {
+                                'Id':           taggingId,
+                                'Source':       sourceId,
+                                'Node':         nodeId,
+                                'Fragment':     unicode(start) + u':' + unicode(end),
+                                'Memo':         None,
+                                'CreatedBy':    userId,
+                                'CreatedDate':  datetimeNow,
+                                'ModifiedBy':   userId,
+                                'ModifiedDate': datetimeNow
+                            })
+
                     normSourceRow['Content'] += normSourceText
-
-                    taggingId = uuid.uuid4()
-                    norm.con.execute(norm.Tagging.insert(), {
-                            'Id':           taggingId,
-                            'Source':       sourceId,
-                            'Node':         nodeId,
-                            'Fragment':     str(start) + ':' + str(end),
-                            'Memo':         None,
-                            'CreatedBy':    userId,
-                            'CreatedDate':  datetimeNow,
-                            'ModifiedBy':   userId,
-                            'ModifiedDate': datetimeNow
-                        })
 
             normSourceRow['Object'] = bytearray(normSourceRow['Content'], 'utf-8')
 
