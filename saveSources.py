@@ -37,7 +37,7 @@ def loadSources(arglist):
     parser.add_argument('-s', '--source',  type=str, default = '%',
                                            help='Source or name or pattern')
 
-    parser.add_argument('-p', '--path', type=str, default='',
+    parser.add_argument('-p', '--path', type=str, default='.',
                         help='Output file directory')
     parser.add_argument('infile',  type=str,
                         help='Input normalised file')
