@@ -19,6 +19,7 @@
 from __future__ import print_function
 import argparse
 import NVivo
+from mssqlTools import mssqlAPI
 import os
 import sys
 import shutil
@@ -79,14 +80,6 @@ def DenormaliseNVP(arglist):
             # This quoting of arguments is a bit of a hack but seems to work
             return subprocess.check_output(['ssh', args.server] + [('"' + word + '"') if ' ' in word else word for word in command]).strip()
 
-    # Function to execute a helper script either locally or remotely
-    def executescript(script, arglist=None):
-        if not args.server:     # ie server is on same machine as this script
-            return subprocess.check_output([helperpath + script] + (arglist or [])).strip()
-        else:
-            subprocess.call(['scp', '-q', helperpath + script, args.server + ':' + tmpdir])
-            return subprocess.check_output(['ssh', args.server, tmpdir + '\\' + script] + (arglist or [])).strip()
-
     # Fill in extra arguments that NVivo module expects
     args.mac       = False
     args.windows   = True
@@ -100,15 +93,6 @@ def DenormaliseNVP(arglist):
     if args.server is None:
         if os.name != 'nt':
             raise RuntimeError("This does not appear to be a Windows machine so --server must be specified.")
-
-        tmpoutfilename = tempfile.mktemp()
-        shutil.copy(args.basefile, tmpoutfilename)
-    else:
-        tmpdir = subprocess.check_output(['ssh', args.server, r'echo %tmp%']).strip()
-        tmpoutfilename = subprocess.check_output(['ssh', args.server, r'echo %tmp%\nvivotools%random%.nvp']).strip()
-        subprocess.call(['scp', '-q', args.basefile, args.server + ':' + tmpoutfilename])
-
-    helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'Windows' + os.path.sep
 
     if args.instance is None:
         regquery = executecommand(['reg', 'query', 'HKLM\\Software\\Microsoft\\Microsoft SQL Server\\Instance Names\\SQL']).splitlines()
@@ -134,35 +118,29 @@ def DenormaliseNVP(arglist):
     if args.verbosity > 0:
         print("Using port: " + str(args.port), file=sys.stderr)
 
+    mssqlapi = mssqlAPI(args.server,
+                        args.port,
+                        args.instance,
+                        version = ('MSSQL12' if args.nvivoversion == '11' else 'MSSQL10_50'),
+                        verbosity = args.verbosity)
+
     # Get reasonably distinct yet recognisable DB name
     dbname = 'nvivo' + str(os.getpid())
 
-    executescript('mssqlAttach.bat', [tmpoutfilename, dbname, args.instance])
-    if args.verbosity > 0:
-        print("Attached database " + dbname, file=sys.stderr)
-
+    mssqlapi.attach(args.basefile, dbname)
     try:
         args.indb = 'sqlite:///' + args.infile
         args.outdb = 'mssql+pymssql://nvivotools:nvivotools@' + (args.server or 'localhost') + ((':' + str(args.port)) if args.port else '') + '/' + dbname
 
         NVivo.Denormalise(args)
 
-        executescript('mssqlSave.bat', [tmpoutfilename, dbname, args.instance])
-        if args.verbosity > 0:
-            print("Saved database " + dbname, file=sys.stderr)
-
-        if args.server is None:
-            shutil.move(tmpoutfilename, args.outfilename)
-        else:
-            subprocess.call(['scp', '-q', args.server + ':' + tmpoutfilename, args.outfilename])
+        mssqlapi.save(args.outfilename, dbname)
 
     except:
         raise
 
     finally:
-        executescript('mssqlDrop.bat', [dbname, args.instance])
-        if args.verbosity > 0:
-            print("Dropped database " + dbname, file=sys.stderr)
+        mssqlapi.drop(dbname)
 
 if __name__ == '__main__':
     DenormaliseNVP(None)

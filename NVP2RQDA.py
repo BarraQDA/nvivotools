@@ -81,7 +81,7 @@ if args.outfilename is None:
 
 tmpnormfilename = tempfile.mktemp()
 
-helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'Windows' + os.path.sep
+helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep
 
 if args.instance is None:
     proc = Popen([helperpath + 'mssqlInstance.bat'], stdout=PIPE)

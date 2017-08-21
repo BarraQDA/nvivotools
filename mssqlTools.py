@@ -100,12 +100,12 @@ class mssqlAPI(object):
             print("Created database " + dbname, file=sys.stderr)
 
     def detach(self, dbname):
-        serverinstance = ('%COMPUTERNAME%' if self.server else os.environ['COMPUTERNAME']) + '\\' + self.instance
+        serverinstance = 'localhost\\' + self.instance
 
         self.executecommand(['sqlcmd', '-S', serverinstance, '-Q', 'EXEC sp_detach_db ' + dbname])
 
     def drop(self, dbname):
-        serverinstance = ('%COMPUTERNAME%' if self.server else os.environ['COMPUTERNAME']) + '\\' + self.instance
+        serverinstance = 'localhost\\' + self.instance
 
         self.executecommand(['sqlcmd', '-S', serverinstance, '-Q', 'DROP DATABASE ' + dbname])
 
@@ -118,7 +118,7 @@ class mssqlAPI(object):
             subprocess.call(['scp', '-q', self.server + ':' + mdbFilename, filename])
 
     def list(self):
-        serverinstance = ('%COMPUTERNAME%' if self.server else os.environ['COMPUTERNAME']) + '\\' + self.instance
+        serverinstance = 'localhost\\' + self.instance
 
         dblist = self.executecommand(['sqlcmd', '-W', '-S', serverinstance, '-h', '-1', '-Q', 'SET NOCOUNT ON; SELECT name FROM master.dbo.sysdatabases']).split()
 
