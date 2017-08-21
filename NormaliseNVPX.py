@@ -78,7 +78,7 @@ parser.add_argument('-a', '--annotations', choices=["skip", "merge", "overwrite"
 
 parser.add_argument('infile', type=argparse.FileType('rb'),
                     help="Input NVivo for Mac file (extension .nvpx)")
-parser.add_argument('outfilename', type=str, nargs='?',
+parser.add_argument('outfile', type=str, nargs='?',
                     help="Output normalised SQLite file")
 
 args = parser.parse_args()
@@ -93,10 +93,13 @@ tmpinfileptr.write(args.infile.read())
 args.infile.close()
 tmpinfileptr.close()
 
-tmpoutfilename = tempfile.mktemp()
+tmpoutfile = tempfile.mktemp()
 
-if args.outfilename is None:
-    args.outfilename = args.infile.name.rsplit('.',1)[0] + '.norm'
+if args.outfile is None:
+    args.outfile = args.infile.name.rsplit('.',1)[0] + '.norm'
+elif os.path.isdir(args.outfile):
+    args.outfile = os.path.join(args.outfile,
+                                os.path.basename(args.infile.name.rsplit('.',1)[0] + '.norm'))
 
 # Find a free sock for SQL Anywhere server to bind to
 import socket
@@ -135,14 +138,17 @@ if args.verbosity > 0:
     print("Started database server on port " + freeport, file=sys.stderr)
 
 args.indb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' + freeport + '/NVivo' + freeport
-args.outdb = 'sqlite:///' + tmpoutfilename
+args.outdb = 'sqlite:///' + tmpoutfile
 
 NVivo.Normalise(args)
 
 if not args.cmdline:
-    args.outfilename = os.path.basename(args.outfilename)
+    args.outfile = os.path.basename(args.outfile)
 
-shutil.move(tmpoutfilename, args.outfilename)
+if os.path.exists(args.outfile):
+    shutil.move(args.outfile, args.outfile + '.bak')
+
+shutil.move(tmpoutfile, args.outfile)
 # Need to change file mode so that delete works under Windows
 os.chmod(tmpinfilename, 0777)
 os.remove(tmpinfilename)

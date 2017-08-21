@@ -82,7 +82,7 @@ parser.add_argument('-b', '--base', dest='basefile', type=argparse.FileType('rb'
 
 parser.add_argument('--no-comments', action='store_true', help='Do not produce a comments logfile')
 
-parser.add_argument('infile', type=str,
+parser.add_argument('infile', type=argparse.FileType('rb'),
                     help="Input normalised SQLite file (extension .norm)")
 parser.add_argument('outfile', type=str, nargs='?',
                     help="Output NVPX file")
@@ -122,12 +122,16 @@ if not args.no_comments:
         logfile.write(comments)
 
 tmpinfilename = tempfile.mktemp()
-shutil.copy(args.infile, tmpinfilename)
+tmpinfileptr  = file(tmpinfilename, 'wb')
+tmpinfileptr.write(args.infile.read())
+args.infile.close()
+tmpinfileptr.close()
 
 if args.outfile is None:
-    args.outfile = args.infile.rsplit('.',1)[0] + '.nvpx'
-    if os.path.exists(args.outfile):
-        shutil.move(args.outfile, args.outfile + '.bak')
+    args.outfile = args.infile.name.rsplit('.',1)[0] + '.nvpx'
+elif os.path.isdir(args.outfile):
+    args.outfile = os.path.join(args.outfile,
+                                os.path.basename(args.infile.name.rsplit('.',1)[0] + '.nvpx'))
 
 if args.basefile is None:
     args.basefile = file(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + ('emptyNVivo10Mac.nvpx' if args.nvivoversion == '10' else 'emptyNVivo11Mac.nvpx'), 'rb')
@@ -181,6 +185,9 @@ NVivo.Denormalise(args)
 
 if not args.cmdline:
     args.outfile = os.path.basename(args.outfile)
+
+if os.path.exists(args.outfile):
+    shutil.move(args.outfile, args.outfile + '.bak')
 
 shutil.move(tmpoutfilename, args.outfile)
 os.remove(tmpinfilename)
