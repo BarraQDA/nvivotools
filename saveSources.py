@@ -47,11 +47,8 @@ def loadSources(arglist):
     hiddenargs = ['verbosity']
 
     try:
-        if args.path[-1] != os.sep:
-            args.path += os.sep
-
         if not args.no_comments:
-            logfilename = args.path + 'saveSources.log'
+            logfilename = os.path.join(args.path, 'saveSources.log')
 
             comments = (' ' + args.path + ' ').center(80, '#') + '\n'
             comments += '# ' + os.path.basename(sys.argv[0]) + '\n'
@@ -82,7 +79,7 @@ def loadSources(arglist):
         query = select([norm.Source.c.Name, norm.Source.c.Object, norm.Source.c.ObjectType]).where(
                         norm.Source.c.Name.like(literal(args.source)))
         for row in norm.con.execute(query):
-            outfile = open(args.path + row.Name + '.' + row.ObjectType.lower(), 'wb')
+            outfile = open(os.path.join(args.path, row.Name + '.' + row.ObjectType.lower()), 'wb')
             outfile.write(row.Object)
             outfile.close()
 
