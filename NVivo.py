@@ -811,7 +811,6 @@ def Normalise(args):
                 item['StartX']  -= source['Content'][0:startx].count('\r\n')
                 item['LengthX'] -= source['Content'][startx-1:startx+lengthx-1].count('\r\n')
 
-            item['Node'] = None
             item['Fragment'] = ''
             if item['StartX'] is not None and item['LengthX'] is not None:
                 item['Fragment'] += str(item['StartX']) + ':' + str(item['StartX'] + item['LengthX'] - 1);
@@ -873,6 +872,7 @@ def Normalise(args):
                 ]))]
 
             for annotation in annotations:
+                annotation['Node'] = None
                 build_tagging_or_annotation(annotation)
 
             merge_overwrite_or_replace(normcon, normTagging, ['Id'], annotations, args.annotations, args.verbosity)
