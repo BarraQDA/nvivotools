@@ -1,4 +1,5 @@
 future
+unicodecsv
 pdfminer
 Pillow
 pymssql
