@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright 2016 Jonathan Schultz
+# Copyright 2016-7 Jonathan Schultz
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,10 +35,82 @@ import tempfile
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
-def editSource(sourceRows, args, norm):
+def add_arguments(parser):
+    parser.description = "Insert or update source in normalised file."
+
+    generalgroup = parser.add_argument_group('General')
+    generalgroup.add_argument('-o', '--outfile', type=str, required=True,
+                                                 help='Output normalised NVivo (.norm) file')
+    generalgroup.add_argument(        'infile',  type = str, nargs = '*',
+                                                 help = 'Input CSV or source content filename pattern')
+    generalgroup.add_argument('-u', '--user',    type = lambda s: unicode(s, 'utf8'),
+                                                 help = 'User name, default is project "modified by".')
+
+    singlegroup = parser.add_argument_group('Single source')
+    singlegroup.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
+    singlegroup.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
+    singlegroup.add_argument('-c', '--category',    type = lambda s: unicode(s, 'utf8'))
+    singlegroup.add_argument('-a', '--attributes',  type = str, action='append', help='Attributes in format name:value')
+    singlegroup.add_argument(      '--color',       type = str)
+    singlegroup.add_argument('-t', '--text',        type = str, help = 'Source text')
+
+    csvgroup = parser.add_argument_group('CSV file')
+    csvgroup.add_argument('-C', '--columns', type = str, nargs = '*',
+                                             help = 'Columns from input CSV file to include as attributes')
+    csvgroup.add_argument(      '--exclude', type = str, nargs = '*', default = [],
+                                             help = 'Columns from input CSV file to exclude as attributes')
+    csvgroup.add_argument('--textcolumns',   type = str, nargs = '*', default = [],
+                                             help = 'Columns from input CSV file to include as coded text')
+
+    advancedgroup = parser.add_argument_group('Advanced')
+    advancedgroup.add_argument('-e', '--encoding',  type=str,
+                                                    help='File encoding; if not specified then we will try to detect.')
+    advancedgroup.add_argument('-v', '--verbosity', type=int, default=1)
+    advancedgroup.add_argument('-l', '--limit',     type=int,
+                                                    help='Limit number of lines from input file')
+    advancedgroup.add_argument('--no-comments',     action='store_true',
+                                                    help='Do not produce a comments logfile')
+
+    parser.set_defaults(func=editSources)
+    parser.set_defaults(build_comments=build_comments)
+    parser.set_defaults(hiddenargs=['hiddenargs', 'verbosity', 'no_comments'])
+
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    add_arguments(parser)
+    return vars(parser.parse_args())
+
+def build_comments(kwargs):
+    comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
+    comments += '# ' + os.path.basename(__file__) + '\n'
+    hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
+    for argname, argval in kwargs.iteritems():
+        if argname not in hiddenargs:
+            if type(argval) == str or type(argval) == unicode:
+                comments += '#     --' + argname + '="' + argval + '"\n'
+            elif type(argval) == bool:
+                if argval:
+                    comments += '#     --' + argname + '\n'
+            elif type(argval) == list:
+                for valitem in argval:
+                    if type(valitem) == str:
+                        comments += '#     --' + argname + '="' + valitem + '"\n'
+                    else:
+                        comments += '#     --' + argname + '=' + str(valitem) + '\n'
+            elif argval is not None:
+                comments += '#     --' + argname + '=' + str(argval) + '\n'
+
+    return comments
+
+def editSource(sourceRows, norm,
+               userId, datetimeNow,
+               name, description, category, attributes, color, text,
+               columns, exclude, textcolumns,
+               encoding, verbosity, limit, no_comments,
+               comments):
     # Fill in attributes from command-line
-    if args.attributes:
-        for attribute in args.attributes:
+    if attributes:
+        for attribute in attributes:
             attMatch = re.match("(?P<attname>[^:]+):(?P<attvalue>.+)?", attribute)
             if not parseattribute:
                 raise RuntimeError("Incorrect attribute format " + attribute)
@@ -53,9 +125,9 @@ def editSource(sourceRows, args, norm):
     sourceNodeId = {}
     for colName in sourceRows[0].keys():
         # Does column define an attribute?
-        if ((not args.columns or colName in args.columns)
+        if ((not columns or colName in columns)
             and colName
-            and colName not in ['Name', 'Description', 'Category', 'Color', 'ObjectFile', 'Text'] + args.exclude + args.textcolumns):
+            and colName not in ['Name', 'Description', 'Category', 'Color', 'ObjectFile', 'Text'] + exclude + textcolumns):
 
             # Determine whether attribute is already defined
             sourceattribute = norm.con.execute(select([
@@ -128,10 +200,10 @@ def editSource(sourceRows, args, norm):
                     'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
                     'Type':         unicode(attributeType),
                     'Length':       attributeLength,
-                    'CreatedBy':    args.userId,
-                    'CreatedDate':  args.datetimeNow,
-                    'ModifiedBy':   args.userId,
-                    'ModifiedDate': args.datetimeNow
+                    'CreatedBy':    userId,
+                    'CreatedDate':  datetimeNow,
+                    'ModifiedBy':   userId,
+                    'ModifiedDate': datetimeNow
                 })
                 sourceAttributes[colName] = {
                     'Id':           attributeId,
@@ -140,7 +212,7 @@ def editSource(sourceRows, args, norm):
                 }
 
         # Does column define a node?
-        elif colName in args.textcolumns and len(args.textcolumns) > 1:
+        elif colName in textcolumns and len(textcolumns) > 1:
 
             node = norm.con.execute(select([
                     norm.Node.c.Id
@@ -157,10 +229,10 @@ def editSource(sourceRows, args, norm):
                     'Id':           nodeId,
                     'Name':         unicode(colName),
                     'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
-                    'CreatedBy':    args.userId,
-                    'CreatedDate':  args.datetimeNow,
-                    'ModifiedBy':   args.userId,
-                    'ModifiedDate': args.datetimeNow
+                    'CreatedBy':    userId,
+                    'CreatedDate':  datetimeNow,
+                    'ModifiedBy':   userId,
+                    'ModifiedDate': datetimeNow
                 })
 
             sourceNodeId[colName] = nodeId
@@ -191,10 +263,10 @@ def editSource(sourceRows, args, norm):
                     'Id':           categoryId,
                     'Name':         categoryName,
                     'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
-                    'CreatedBy':    args.userId,
-                    'CreatedDate':  args.datetimeNow,
-                    'ModifiedBy':   args.userId,
-                    'ModifiedDate': args.datetimeNow
+                    'CreatedBy':    userId,
+                    'CreatedDate':  datetimeNow,
+                    'ModifiedBy':   userId,
+                    'ModifiedDate': datetimeNow
                     })
 
         sourceName        = sourceRow.get('Name') or unicode(rowNum).zfill(digits)
@@ -240,10 +312,10 @@ def editSource(sourceRows, args, norm):
                     'Attribute':    attributeId,
                     '_Attribute':   attributeId,
                     'Value':        unicode(attributeValue),
-                    'CreatedBy':    args.userId,
-                    'CreatedDate':  args.datetimeNow,
-                    'ModifiedBy':   args.userId,
-                    'ModifiedDate': args.datetimeNow
+                    'CreatedBy':    userId,
+                    'CreatedDate':  datetimeNow,
+                    'ModifiedBy':   userId,
+                    'ModifiedDate': datetimeNow
                 })
 
         normSourceRow = {
@@ -252,8 +324,8 @@ def editSource(sourceRows, args, norm):
                 'Name':         sourceName,
                 'Description':  sourceDescription,
                 'Category':     categoryId,
-                'ModifiedBy':   args.userId,
-                'ModifiedDate': args.datetimeNow
+                'ModifiedBy':   userId,
+                'ModifiedDate': datetimeNow
             }
         normSourceRow['Color'] = sourceRow.get('Color')
 
@@ -263,11 +335,14 @@ def editSource(sourceRows, args, norm):
             ObjectFileExt = ObjectFileExt[1:].upper()
             normSourceRow['ObjectType'] = unicode(ObjectFileExt)
             if ObjectFileExt == 'TXT':
-                # detect file encoding
-                raw = file(ObjectFile, 'rb').read(32) # at most 32 bytes are returned
-                encoding = chardet.detect(raw)['encoding']
+                # Detect file encoding if not specified
+                if not encoding:
+                    raw = file(ObjectFile, 'rb').read(32) # at most 32 bytes are returned
+                    encoding = chardet.detect(raw)['encoding']
 
-                normSourceRow['Content'] = codecs.open(ObjectFile, 'r', encoding=encoding).read().encode('utf-8')
+                normSourceRow['Content'] = codecs.open(ObjectFile, 'r', encoding=encoding).read()
+                if encoding != 'utf8':
+                    normSourceRow['Content'] = normSourceRow['Content'].encode('utf8')
             else:
                 normSourceRow['Object'] = open(ObjectFile, 'rb').read()
         else:
@@ -276,7 +351,7 @@ def editSource(sourceRows, args, norm):
 
         if normSourceRow.get('ObjectType') == u'TXT':
 
-            for textColumn in args.textcolumns:
+            for textColumn in textcolumns:
                 normSourceText = sourceRow.get(textColumn) or u''
                 if normSourceText:
                     normSourceText += u'\n'
@@ -285,7 +360,7 @@ def editSource(sourceRows, args, norm):
                         normSourceRow['Content'] += u'\n\n'
 
                     # If more than one text column then make header in content and tag text
-                    if len(args.textcolumns) > 1:
+                    if len(textcolumns) > 1:
                         normSourceRow['Content'] += textColumn + u'\n\n'
 
                         start  = len(normSourceRow['Content']) + 1
@@ -298,10 +373,10 @@ def editSource(sourceRows, args, norm):
                                 'Node':         nodeId,
                                 'Fragment':     unicode(start) + u':' + unicode(end),
                                 'Memo':         None,
-                                'CreatedBy':    args.userId,
-                                'CreatedDate':  args.datetimeNow,
-                                'ModifiedBy':   args.userId,
-                                'ModifiedDate': args.datetimeNow
+                                'CreatedBy':    userId,
+                                'CreatedDate':  datetimeNow,
+                                'ModifiedBy':   userId,
+                                'ModifiedDate': datetimeNow
                             })
 
                     normSourceRow['Content'] += normSourceText
@@ -310,8 +385,8 @@ def editSource(sourceRows, args, norm):
 
         if source is None:    # New source
             normSourceRow.update({
-                'CreatedBy':    args.userId,
-                'CreatedDate':  args.datetimeNow,
+                'CreatedBy':    userId,
+                'CreatedDate':  datetimeNow,
             })
             sourcesToInsert.append(normSourceRow)
             sourceValuesToInsert += sourceValues
@@ -332,119 +407,72 @@ def editSource(sourceRows, args, norm):
     if sourceValuesToInsert:
         norm.con.execute(norm.SourceValue.insert(), sourceValuesToInsert)
 
-
-def editSources(arglist):
-
-    parser = argparse.ArgumentParser(description='Insert or update source in normalised file.',
-                                    fromfile_prefix_chars='@')
-
-    parser.add_argument('-v', '--verbosity',  type=int, default=1)
-
-    parser.add_argument('-l', '--limit',   type=int, help='Limit number of lines from input file')
-
-    parser.add_argument('-C', '--columns', type = str, nargs = '*',
-                                           help = 'Columns from input CSV file to include as attributes')
-    parser.add_argument(      '--exclude', type = str, nargs = '*', default = [],
-                                           help = 'Columns from input CSV file to exclude as attributes')
-    parser.add_argument('--textcolumns',   type = str, nargs = '*', default = [],
-                                           help = 'Columns from input CSV file to include as coded text')
-
-    parser.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
-    parser.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
-    parser.add_argument('-c', '--category',    type = lambda s: unicode(s, 'utf8'))
-    parser.add_argument('-a', '--attributes',  type = str, action='append', help='Attributes in format name:value')
-    parser.add_argument(      '--color',       type = str)
-    parser.add_argument('-t', '--text',        type = str, help = 'Source text')
-
-    parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
-                                               help = 'User name, default is project "modified by".')
-
-    parser.add_argument('--no-comments', action='store_true', help='Do not produce a comments logfile')
-
-    parser.add_argument('-o', '--outfile',  type=str, required=True,
-                        help='Output normalised NVivo (.norm) file')
-    parser.add_argument(        'infile',   type = str, nargs = '*',
-                                            help = 'Input CSV or source content filename pattern')
-
-    args = parser.parse_args()
-    hiddenargs = ['verbosity']
-
+def editSources(outfile, infile, user,
+                name, description, category, attributes, color, text,
+                columns, exclude, textcolumns,
+                encoding, verbosity, limit, no_comments,
+                comments, **dummy):
     try:
 
-        if not args.no_comments:
-            logfilename = args.outfile.rsplit('.',1)[0] + '.log'
-
-            comments = (' ' + args.outfile + ' ').center(80, '#') + '\n'
-            comments += '# ' + os.path.basename(sys.argv[0]) + '\n'
-            arglist = args.__dict__.keys()
-            for arg in arglist:
-                if arg not in hiddenargs:
-                    val = getattr(args, arg)
-                    if type(val) == str or type(val) == unicode:
-                        comments += '#     --' + arg + '="' + val + '"\n'
-                    elif type(val) == bool:
-                        if val:
-                            comments += '#     --' + arg + '\n'
-                    elif type(val) == list:
-                        for valitem in val:
-                            if type(valitem) == str:
-                                comments += '#     --' + arg + '="' + valitem + '"\n'
-                            else:
-                                comments += '#     --' + arg + '=' + str(valitem) + '\n'
-                    elif val is not None:
-                        comments += '#     --' + arg + '=' + str(val) + '\n'
-
+        if not no_comments:
+            logfilename = outfile.rsplit('.',1)[0] + '.log'
+            if os.path.isfile(logfilename):
+                incomments = open(logfilename, 'r').read()
+            else:
+                incomments = ''
             logfile = open(logfilename, 'w')
             logfile.write(comments)
+            logfile.write(incomments)
+            logfile.close()
 
-        norm = NVivoNorm(args.outfile)
+        norm = NVivoNorm(outfile)
         norm.begin()
 
         # Put timestamp and user ID into args so editSource can access them.
 
-        args.datetimeNow = datetime.utcnow()
+        datetimeNow = datetime.utcnow()
 
-        if args.user:
+        if user:
             user = norm.con.execute(select([
                     norm.User.c.Id
                 ]).where(
                     norm.User.c.Name == bindparam('Name')
                 ), {
-                    'Name': args.user
+                    'Name': user
                 }).first()
             if user:
-                args.userId = user['Id']
+                userId = user['Id']
             else:
-                args.userId = uuid.uuid4()
+                userId = uuid.uuid4()
                 norm.con.execute(norm.User.insert(), {
-                        'Id':   args.userId,
-                        'Name': args.user
+                        'Id':   userId,
+                        'Name': user
                     })
         else:
             project = norm.con.execute(select([
                     norm.Project.c.ModifiedBy
                 ])).first()
             if project:
-                args.userId = project['ModifiedBy']
+                userId = project['ModifiedBy']
             else:
-                args.userId = uuid.uuid4()
+                userId = uuid.uuid4()
                 norm.con.execute(norm.User.insert(), {
-                        'Id':   args.userId,
+                        'Id':   userId,
                         'Name': u"Default User"
                     })
                 norm.con.execute(norm.Project.insert(), {
                     'Version': u'0.2',
-                    'Title': unicode(args.infile),
+                    'Title': unicode(infile),
                     'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
-                    'CreatedBy':    args.userId,
-                    'CreatedDate':  args.datetimeNow,
-                    'ModifiedBy':   args.userId,
-                    'ModifiedDate': args.datetimeNow
+                    'CreatedBy':    userId,
+                    'CreatedDate':  datetimeNow,
+                    'ModifiedBy':   userId,
+                    'ModifiedDate': datetimeNow
                 })
 
-        for infilepattern in args.infile:
+        for infilepattern in infile:
             for infilename in glob.glob(infilepattern):
-                if args.verbosity >= 2:
+                if verbosity >= 2:
                     print("Loading " + infilename, file=sys.stderr)
 
                 infilebasename, infiletype = os.path.splitext(os.path.basename(infilename))
@@ -463,44 +491,53 @@ def editSources(arglist):
                             csvfieldnames = next(unicodecsv.reader([line]))
                             break
 
-                    if not args.no_comments:
+                    if not no_comments:
                         logfile.write(incomments)
 
                     csvreader=unicodecsv.DictReader(csvFile, fieldnames=csvfieldnames)
                     sourceRows = []
                     for row in csvreader:
                         sourceRow = dict(row)
-                        sourceRow['Name']        = sourceRow.get('Name',        args.name)
-                        sourceRow['Description'] = sourceRow.get('Description', args.description or u"Created by NVivotools http://barraqda.org/nvivotools/")
-                        sourceRow['Category']    = sourceRow.get('Category',    args.category)
-                        sourceRow['Color']       = sourceRow.get('Color',       args.color)
-                        sourceRow['Text']        = sourceRow.get('Text',        args.text)
+                        sourceRow['Name']        = sourceRow.get('Name',        name)
+                        sourceRow['Description'] = sourceRow.get('Description', description or u"Created by NVivotools http://barraqda.org/nvivotools/")
+                        sourceRow['Category']    = sourceRow.get('Category',    category)
+                        sourceRow['Color']       = sourceRow.get('Color',       color)
+                        sourceRow['Text']        = sourceRow.get('Text',        text)
                         sourceRows.append(sourceRow)
 
-                        if args.limit and len(sourceRows) == args.limit:
+                        if limit and len(sourceRows) == limit:
                             break
 
                 else:
                     sourceRows = [{
-                        'Name':        args.name or infilebasename,
-                        'Description': args.description or u"Created by NVivotools http://barraqda.org/nvivotools/",
-                        'Category':    args.category,
-                        'Color':       args.color,
+                        'Name':        name or infilebasename,
+                        'Description': description or u"Created by NVivotools http://barraqda.org/nvivotools/",
+                        'Category':    category,
+                        'Color':       color,
                         'ObjectFile':  infilename,
                     }]
 
-                editSource(sourceRows, args, norm)
+            editSource(sourceRows, norm,
+                       userId, datetimeNow,
+                       name, description, category, attributes, color, text,
+                       columns, exclude, textcolumns,
+                       encoding, verbosity, limit, no_comments,
+                       comments)
 
-        if not args.infile:
+        if not infile:
             sourceRows = [{
-                'Name':        args.name,
-                'Description': args.description or u"Created by NVivotools http://barraqda.org/nvivotools/",
-                'Category':    args.category,
-                'Color':       args.color,
-                'Text':        args.text
+                'Name':        name,
+                'Description': description or u"Created by NVivotools http://barraqda.org/nvivotools/",
+                'Category':    category,
+                'Color':       color,
+                'Text':        text
             }]
-            editSource(sourceRows, args, norm)
-
+            editSource(sourceRows, norm,
+                       userId, datetimeNow,
+                       name, description, category, attributes, color, text,
+                       columns, exclude, textcolumns,
+                       encoding, verbosity, limit, no_comments,
+                       comments)
 
         norm.commit()
         del norm
@@ -510,5 +547,10 @@ def editSources(arglist):
         norm.rollback()
         del norm
 
+def main():
+    kwargs = parse_arguments()
+    kwargs['comments'] = build_comments(kwargs)
+    kwargs['func'](**kwargs)
+
 if __name__ == '__main__':
-    editSources(None)
+    main()

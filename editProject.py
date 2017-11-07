@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright 2016 Jonathan Schultz
+# Copyright 2016-7 Jonathan Schultz
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import os
 import sys
 import argparse
@@ -29,47 +30,93 @@ import uuid
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
-def editProject(arglist):
+def add_arguments(parser):
+    parser.description = "Insert or update project in normalised file."
 
-    parser = argparse.ArgumentParser(description='Insert or update project in normalised file.')
+    generalgroup = parser.add_argument_group('General')
+    generalgroup.add_argument('-o', '--outfile', type=str, required=True,
+                                                 help='Output normalised NVivo (.norm) file')
+    generalgroup.add_argument('-t', '--title',       type = lambda s: unicode(s, 'utf8'))
+    generalgroup.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
+    generalgroup.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
+                              help='User, default is first user from user table')
 
-    parser.add_argument('-v', '--verbosity',  type=int, default=1)
+    advancedgroup = parser.add_argument_group('Advanced')
+    advancedgroup.add_argument('-v', '--verbosity',  type=int, default=1)
+    advancedgroup.add_argument('--no-comments', action='store_true', help='Do not produce a comments logfile')
 
-    parser.add_argument('-t', '--title',       type=str)
-    parser.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
-    parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
-                        help='User, default is first user from user table')
+    parser.set_defaults(func=editProject)
+    parser.set_defaults(build_comments=build_comments)
+    parser.set_defaults(hiddenargs=['hiddenargs', 'verbosity', 'no_comments'])
 
-    parser.add_argument('normFile', type=str)
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    add_arguments(parser)
+    return vars(parser.parse_args())
 
-    args = parser.parse_args()
+def build_comments(kwargs):
+    comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
+    comments += '# ' + os.path.basename(__file__) + '\n'
+    hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
+    for argname, argval in kwargs.iteritems():
+        if argname not in hiddenargs:
+            if type(argval) == str or type(argval) == unicode:
+                comments += '#     --' + argname + '="' + argval + '"\n'
+            elif type(argval) == bool:
+                if argval:
+                    comments += '#     --' + argname + '\n'
+            elif type(argval) == list:
+                for valitem in argval:
+                    if type(valitem) == str:
+                        comments += '#     --' + argname + '="' + valitem + '"\n'
+                    else:
+                        comments += '#     --' + argname + '=' + str(valitem) + '\n'
+            elif argval is not None:
+                comments += '#     --' + argname + '=' + str(argval) + '\n'
+
+    return comments
+
+def editProject(outfile, title, description, user,
+                verbosity, no_comments,
+                comments, **dummy):
 
     try:
-        norm = NVivoNorm(args.normFile)
+        if not no_comments:
+            logfilename = outfile.rsplit('.',1)[0] + '.log'
+            if os.path.isfile(logfilename):
+                incomments = open(logfilename, 'r').read()
+            else:
+                incomments = ''
+            logfile = open(logfilename, 'w')
+            logfile.write(comments)
+            logfile.write(incomments)
+            logfile.close()
+
+        norm = NVivoNorm(outfile)
         norm.begin()
 
-        if args.user is not None:
-            user = norm.con.execute(select([
+        if user is not None:
+            userRecord = norm.con.execute(select([
                     norm.User.c.Id
                 ]).where(
                     norm.User.c.Name == bindparam('Name')
                 ), {
-                    'Name': args.user
+                    'Name': user
                 }).first()
-            if user is not None:
-                userId = user['Id']
+            if userRecord is not None:
+                userId = userRecord['Id']
             else:
                 userId = uuid.uuid4()
                 norm.con.execute(norm.User.insert(), {
                         'Id':   userId,
-                        'Name': args.user
+                        'Name': user
                     })
         else:
-            user = norm.con.execute(select([
+            userRecord = norm.con.execute(select([
                     norm.User.c.Id
                 ])).first()
-            if user is not None:
-                userId = user['Id']
+            if userRecord is not None:
+                userId = userRecord['Id']
             else:
                 raise RuntimeError("No user on command line or user file")
 
@@ -79,11 +126,11 @@ def editProject(arglist):
 
         datetimeNow = datetime.utcnow()
 
-        projectColumns = {'Version': '0.2'}
-        if args.title is not None:
-            projectColumns.update({'Title': args.title})
-        if args.description is not None:
-            projectColumns.update({'Description': args.description})
+        projectColumns = {'Version': u'0.2'}
+        if title is not None:
+            projectColumns.update({'Title': title})
+        if description is not None:
+            projectColumns.update({'Description': description})
         if project is None:
             projectColumns.update({'CreatedBy':   userId})
             projectColumns.update({'CreatedDate': datetimeNow})
@@ -103,5 +150,10 @@ def editProject(arglist):
         norm.rollback()
         del norm
 
+def main():
+    kwargs = parse_arguments()
+    kwargs['comments'] = build_comments(kwargs)
+    kwargs['func'](**kwargs)
+
 if __name__ == '__main__':
-    editProject(None)
+    main()
