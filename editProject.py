@@ -28,17 +28,16 @@ from datetime import date, time, datetime
 from distutils import util
 import uuid
 
-exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
-
 def add_arguments(parser):
     parser.description = "Insert or update project in normalised file."
 
     generalgroup = parser.add_argument_group('General')
-    generalgroup.add_argument('-o', '--outfile', type=str, required=True,
-                                                 help='Output normalised NVivo (.norm) file')
-    generalgroup.add_argument('-t', '--title',       type = lambda s: unicode(s, 'utf8'))
-    generalgroup.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
-    generalgroup.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
+    generalgroup.add_argument('-o', '--outfile',     type=str, required=True,
+                                                     help='Output normalised NVivo (.norm) file')
+    generalgroup.add_argument('-t', '--title',       type=lambda s: unicode(s, 'utf8'),
+                                                     required=True)
+    generalgroup.add_argument('-d', '--description', type=lambda s: unicode(s, 'utf8'))
+    generalgroup.add_argument('-u', '--user',        type=lambda s: unicode(s, 'utf8'),
                               help='User, default is first user from user table')
 
     advancedgroup = parser.add_argument_group('Advanced')
@@ -131,13 +130,12 @@ def editProject(outfile, title, description, user,
             projectColumns.update({'Title': title})
         if description is not None:
             projectColumns.update({'Description': description})
-        if project is None:
-            projectColumns.update({'CreatedBy':   userId})
-            projectColumns.update({'CreatedDate': datetimeNow})
-        projectColumns.update({'ModifiedBy':   userId})
-        projectColumns.update({'ModifiedDate': datetimeNow})
+        projectColumns.update({'ModifiedBy':   userId,
+                               'ModifiedDate': datetimeNow})
 
         if project is None:    # New project
+            projectColumns.update({'CreatedBy':   userId,
+                                   'CreatedDate': datetimeNow})
             norm.con.execute(norm.Project.insert(), projectColumns)
         else:
             norm.con.execute(norm.Project.update(), projectColumns)

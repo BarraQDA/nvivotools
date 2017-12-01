@@ -19,98 +19,161 @@
 import os
 import sys
 import argparse
+from NVivoNorm import NVivoNorm
 from sqlalchemy import *
-from sqlalchemy import exc
 import re
 from dateutil import parser as dateparser
 from datetime import date, time, datetime
 from distutils import util
 import uuid
 
-exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
+def add_arguments(parser):
+    parser.description = "Insert or update node category in normalised file."
+
+    generalgroup = parser.add_argument_group('General')
+    generalgroup.add_argument('-o', '--outfile',     type=str, required=True,
+                                                     help='Output normalised NVivo (.norm) file')
+    generalgroup.add_argument('-n', '--name',        type=lambda s: unicode(s, 'utf8'))
+    generalgroup.add_argument('-d', '--description', type=lambda s: unicode(s, 'utf8'))
+    generalgroup.add_argument('-u', '--user',        type=lambda s: unicode(s, 'utf8'),
+                              help = 'User name, default is project "modified by".')
+
+    advancedgroup = parser.add_argument_group('Advanced')
+    advancedgroup.add_argument('-v', '--verbosity',  type=int, default=1)
+    advancedgroup.add_argument('--no-comments', action='store_true', help='Do not produce a comments logfile')
+
+    parser.set_defaults(func=editNodeCategory)
+    parser.set_defaults(build_comments=build_comments)
+    parser.set_defaults(hiddenargs=['hiddenargs', 'verbosity', 'no_comments'])
 
 
-parser = argparse.ArgumentParser(description='Insert or update node category in normalised file.')
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    add_arguments(parser)
+    return vars(parser.parse_args())
 
-parser.add_argument('-v', '--verbosity',  type=int, default=1)
+def build_comments(kwargs):
+    comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
+    comments += '# ' + os.path.basename(__file__) + '\n'
+    hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
+    for argname, argval in kwargs.iteritems():
+        if argname not in hiddenargs:
+            if type(argval) == str or type(argval) == unicode:
+                comments += '#     --' + argname + '="' + argval + '"\n'
+            elif type(argval) == bool:
+                if argval:
+                    comments += '#     --' + argname + '\n'
+            elif type(argval) == list:
+                for valitem in argval:
+                    if type(valitem) == str:
+                        comments += '#     --' + argname + '="' + valitem + '"\n'
+                    else:
+                        comments += '#     --' + argname + '=' + str(valitem) + '\n'
+            elif argval is not None:
+                comments += '#     --' + argname + '=' + str(argval) + '\n'
 
-parser.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
-parser.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
-parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
-                    help = 'User name, default is project "modified by".')
+    return comments
 
-parser.add_argument('normFile', type=str)
+def editNodeCategory(outfile, name, description, user,
+                     verbosity, no_comments,
+                     comments, **dummy):
 
-args = parser.parse_args()
+    try:
+        if not no_comments:
+            logfilename = outfile.rsplit('.',1)[0] + '.log'
+            if os.path.isfile(logfilename):
+                incomments = open(logfilename, 'r').read()
+            else:
+                incomments = ''
+            logfile = open(logfilename, 'w')
+            logfile.write(comments)
+            logfile.write(incomments)
+            logfile.close()
 
-try:
-    normdb  = create_engine('sqlite:///' + args.normFile)
-    normmd  = MetaData(bind=normdb)
-    normcon = normdb.connect()
-    normtr  = normcon.begin()
+        norm = NVivoNorm(outfile)
+        norm.begin()
 
-    normUser          = Table('User',          normmd, autoload=True)
-    normProject       = Table('Project',       normmd, autoload=True)
-    normNodeCategory  = Table('NodeCategory',  normmd, autoload=True)
-
-    if args.user is not None:
-        user = normcon.execute(select([
-                normUser.c.Id
-            ]).where(
-                normUser.c.Name == bindparam('Name')
-            ), {
-                'Name': args.user
-            }).first()
         if user is not None:
-            userId = user['Id']
+            userRecord = norm.con.execute(select([
+                    norm.User.c.Id
+                ]).where(
+                    norm.User.c.Name == bindparam('Name')
+                ), {
+                    'Name': user
+                }).first()
+            if userRecord is not None:
+                userId = userRecord['Id']
+            else:
+                userId = uuid.uuid4()
+                norm.con.execute(norm.User.insert(), {
+                        'Id':   userId,
+                        'Name': user
+                    })
         else:
-            userId = uuid.uuid4()
-            normocon.execute(normUser.insert(), {
-                    'Id':   userId,
-                    'Name': args.user
+            project = norm.con.execute(select([
+                    norm.Project.c.ModifiedBy
+                ])).first()
+            if project:
+                userId = project['ModifiedBy']
+            else:
+                userId = uuid.uuid4()
+                norm.con.execute(norm.User.insert(), {
+                        'Id':   userId,
+                        'Name': u"Default User"
+                    })
+                norm.con.execute(norm.Project.insert(), {
+                    'Version': u'0.2',
+                    'Title': unicode(infile),
+                    'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
+                    'CreatedBy':    userId,
+                    'CreatedDate':  datetimeNow,
+                    'ModifiedBy':   userId,
+                    'ModifiedDate': datetimeNow
                 })
-    else:
-        project = normcon.execute(select([
-                normProject.c.ModifiedBy
-            ])).first()
-        userId = project['ModifiedBy']
 
-    cat = normcon.execute(select([
-                normNodeCategory.c.Id
-            ]).where(
-                normNodeCategory.c.Name == bindparam('Name')
-            ), {
-                'Name': args.name
-            }).first()
-    Id = uuid.uuid4() if cat is None else cat['Id']
+        catRecord = norm.con.execute(select([
+                    norm.NodeCategory.c.Id
+                ]).where(
+                    norm.NodeCategory.c.Name == bindparam('Name')
+                ), {
+                    'Name': name
+                }).first()
+        catId = uuid.uuid4() if catRecord is None else catRecord['Id']
 
-    datetimeNow = datetime.utcnow()
+        datetimeNow = datetime.utcnow()
 
-    attColumns = {
-            'Id':           Id,
-            '_Id':          Id,
-            'Name':         args.name,
-            'Description':  args.description,
-            'CreatedBy':    userId,
-            'CreatedDate':  datetimeNow,
-            'ModifiedBy':   userId,
-            'ModifiedDate': datetimeNow
-        }
-    if cat is None:    # New category
-        normcon.execute(normNodeCategory.insert(), attColumns)
-    else:
-        normcon.execute(normNodeCategory.update(
-                normNodeCategory.c.Id == bindparam('_Id')),
-                attColumns)
+        attColumns = {
+                'Id':           catId,
+                '_Id':          catId,
+                'Name':         name,
+                'Description':  description,
+                'ModifiedBy':   userId,
+                'ModifiedDate': datetimeNow
+            }
+        if catRecord:
+            norm.con.execute(norm.NodeCategory.update(
+                    norm.NodeCategory.c.Id == bindparam('_Id')),
+                    attColumns)
+        else:
+            attColumns.update({
+                'CreatedBy':    userId,
+                'CreatedDate':  datetimeNow,
+            })
+            norm.con.execute(norm.NodeCategory.insert(), attColumns)
 
-    normtr.commit()
-    normtr = None
-    normcon.close()
-    normdb.dispose()
+        norm.commit()
 
+    except:
+        raise
+        norm.rollback()
 
-except:
-    raise
-    if not normtr is None:
-        normtr.rollback()
-    normdb.dispose()
+    finally:
+        del norm
+
+def main():
+    kwargs = parse_arguments()
+    kwargs['comments'] = build_comments(kwargs)
+    kwargs['func'](**kwargs)
+
+if __name__ == '__main__':
+    main()

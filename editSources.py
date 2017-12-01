@@ -381,7 +381,7 @@ def editSource(sourceRows, norm,
 
                     normSourceRow['Content'] += normSourceText
 
-            normSourceRow['Object'] = bytearray(normSourceRow['Content'], 'utf-8')
+            normSourceRow['Object'] = bytearray(normSourceRow['Content'], 'utf8')
 
         if source is None:    # New source
             normSourceRow.update({
@@ -433,15 +433,15 @@ def editSources(outfile, infile, user,
         datetimeNow = datetime.utcnow()
 
         if user:
-            user = norm.con.execute(select([
+            userRecord = norm.con.execute(select([
                     norm.User.c.Id
                 ]).where(
                     norm.User.c.Name == bindparam('Name')
                 ), {
                     'Name': user
                 }).first()
-            if user:
-                userId = user['Id']
+            if userRecord:
+                userId = userRecord['Id']
             else:
                 userId = uuid.uuid4()
                 norm.con.execute(norm.User.insert(), {
@@ -540,11 +540,12 @@ def editSources(outfile, infile, user,
                        comments)
 
         norm.commit()
-        del norm
 
     except:
         raise
         norm.rollback()
+
+    finally:
         del norm
 
 def main():
