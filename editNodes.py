@@ -28,86 +28,106 @@ from datetime import date, time, datetime
 from distutils import util
 import uuid
 
-exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
+def add_arguments(parser):
+    parser.description = "Insert or update node in normalised file."
 
-def editNodes(arglist):
+    generalgroup = parser.add_argument_group('General')
+    generalgroup.add_argument('-o', '--outfile', type=str, required=True,
+                                                 help='Output normalised NVivo (.norm) file')
+    generalgroup.add_argument(        'infile',  type = str, nargs = '*',
+                                                 help = 'Input CSV file')
+    generalgroup.add_argument('-u', '--user',    type = lambda s: unicode(s, 'utf8'),
+                                                 help = 'User name, default is project "modified by".')
 
-    parser = argparse.ArgumentParser(description='Insert or update node in normalised file.')
+    singlegroup = parser.add_argument_group('Single node')
+    singlegroup.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
+    singlegroup.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
+    singlegroup.add_argument('-c', '--category',    type = lambda s: unicode(s, 'utf8'))
+    singlegroup.add_argument('-p', '--parent',      type = lambda s: unicode(s, 'utf8'))
+    singlegroup.add_argument('-a', '--attributes',  type = str, action='append', help='Attributes in format name:value')
+    singlegroup.add_argument(      '--color',       type = str)
+    singlegroup.add_argument(      '--aggregate',   action = 'store_true')
 
-    parser.add_argument('-v', '--verbosity',  type=int, default=1)
+    advancedgroup = parser.add_argument_group('Advanced')
+    advancedgroup.add_argument('-v', '--verbosity', type=int, default=1)
+    advancedgroup.add_argument('--no-comments',     action='store_true',
+                                                    help='Do not produce a comments logfile')
 
-    parser.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
-    parser.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
-    parser.add_argument('-c', '--category',    type = lambda s: unicode(s, 'utf8'))
-    parser.add_argument('-p', '--parent',      type = lambda s: unicode(s, 'utf8'))
-    parser.add_argument('-a', '--attributes',  type = str, action='append', help='Attributes in format name:value')
-    parser.add_argument(      '--color',       type = str)
-    parser.add_argument(      '--aggregate',   action = 'store_true')
+    parser.set_defaults(func=editNodes)
+    parser.set_defaults(build_comments=build_comments)
+    parser.set_defaults(hiddenargs=['hiddenargs', 'verbosity', 'no_comments'])
 
-    parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
-                        help = 'User name, default is project "modified by".')
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    add_arguments(parser)
+    return vars(parser.parse_args())
 
-    parser.add_argument('--no-comments', action='store_true', help='Do not produce a comments logfile')
+def build_comments(kwargs):
+    comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
+    comments += '# ' + os.path.basename(__file__) + '\n'
+    hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
+    for argname, argval in kwargs.iteritems():
+        if argname not in hiddenargs:
+            if type(argval) == str or type(argval) == unicode:
+                comments += '#     --' + argname + '="' + argval + '"\n'
+            elif type(argval) == bool:
+                if argval:
+                    comments += '#     --' + argname + '\n'
+            elif type(argval) == list:
+                for valitem in argval:
+                    if type(valitem) == str:
+                        comments += '#     --' + argname + '="' + valitem + '"\n'
+                    else:
+                        comments += '#     --' + argname + '=' + str(valitem) + '\n'
+            elif argval is not None:
+                comments += '#     --' + argname + '=' + str(argval) + '\n'
 
-    parser.add_argument('-o', '--outfile',  type=str, help='Output normalised NVivo (.norm) file')
-    parser.add_argument(        'infile',   type=str, help='Input CSV file')
+    return comments
 
-    args = parser.parse_args()
-    hiddenargs = ['verbosity']
+def editNodes(outfile, infile, user,
+              name, description, category, parent, attributes, color, aggregate,
+              verbosity, no_comments,
+              comments, **dummy):
 
     try:
-        incomments = ''
-        if args.infile:
-            csvFile = file(args.infile, 'r')
 
-            # Skip comments at start of CSV file.
+        # Read and skip comments at start of CSV file.
+        csvcomments = ''
+        if infile:
+            csvFile = file(infile, 'r')
+
             while True:
                 line = csvFile.readline()
                 if line[:1] == '#':
-                    incomments += line
+                    csvcomments += line
                 else:
                     csvfieldnames = next(unicodecsv.reader([line]))
                     break
 
-        if not args.no_comments:
-            logfilename = args.outfile.rsplit('.',1)[0] + '.log'
+        if not no_comments:
+            logfilename = outfile.rsplit('.',1)[0] + '.log'
+            if os.path.isfile(logfilename):
+                incomments = open(logfilename, 'r').read()
+            else:
+                incomments = ''
+            logfile = open(logfilename, 'w')
+            logfile.write(comments)
+            logfile.write(csvcomments)
+            logfile.write(incomments)
+            logfile.close()
 
-            comments = (' ' + args.outfile + ' ').center(80, '#') + '\n'
-            comments += '# ' + os.path.basename(sys.argv[0]) + '\n'
-            arglist = args.__dict__.keys()
-            for arg in arglist:
-                if arg not in hiddenargs:
-                    val = getattr(args, arg)
-                    if type(val) == int:
-                        comments += '#     --' + arg + '=' + str(val) + '\n'
-                    elif type(val) == str:
-                        comments += '#     --' + arg + '="' + val + '"\n'
-                    elif type(val) == bool:
-                        if val:
-                            comments += '#     --' + arg + '\n'
-                    elif type(val) == list:
-                        for valitem in val:
-                            if type(valitem) == int:
-                                comments += '#     --' + arg + '=' + str(valitem) + '\n'
-                            elif type(valitem) == str:
-                                comments += '#     --' + arg + '="' + valitem + '"\n'
-
-            logfilename = args.infile.rsplit('.',1)[0] + '.log'
-            with open(logfilename, 'w') as logfile:
-                logfile.write(comments)
-
-        norm = NVivoNorm(args.outfile)
+        norm = NVivoNorm(outfile)
         norm.begin()
 
         datetimeNow = datetime.utcnow()
 
-        if args.user:
+        if user:
             user = norm.con.execute(select([
                     norm.User.c.Id
                 ]).where(
                     norm.User.c.Name == bindparam('Name')
                 ), {
-                    'Name': args.user
+                    'Name': user
                 }).first()
             if user:
                 userId = user['Id']
@@ -115,7 +135,7 @@ def editNodes(arglist):
                 userId = uuid.uuid4()
                 norm.con.execute(norm.User.insert(), {
                         'Id':   userId,
-                        'Name': args.user
+                        'Name': user
                     })
         else:
             project = norm.con.execute(select([
@@ -138,33 +158,33 @@ def editNodes(arglist):
                     'ModifiedDate': datetimeNow
                 })
 
-        if args.infile:
+        if infile:
             csvreader=unicodecsv.DictReader(csvFile, fieldnames=csvfieldnames)
             nodeRows = []
             for row in csvreader:
                 nodeRow = dict(row)
-                nodeRow['Name']        = nodeRow.get('Name',        args.name).strip()
-                nodeRow['Description'] = nodeRow.get('Description', args.description)
-                nodeRow['Category']    = nodeRow.get('Category',    args.category)
-                nodeRow['Parent']      = nodeRow.get('Parent',      args.parent).strip()
-                nodeRow['Aggregate']   = nodeRow.get('Aggregate',   args.aggregate)
-                nodeRow['Category']    = nodeRow.get('Category',    args.category)
-                nodeRow['Color']       = nodeRow.get('Color',       args.color)
+                nodeRow['Name']        = nodeRow.get('Name',        name).strip()
+                nodeRow['Description'] = nodeRow.get('Description', description)
+                nodeRow['Category']    = nodeRow.get('Category',    category)
+                nodeRow['Parent']      = nodeRow.get('Parent',      parent).strip()
+                nodeRow['Aggregate']   = nodeRow.get('Aggregate',   aggregate)
+                nodeRow['Category']    = nodeRow.get('Category',    category)
+                nodeRow['Color']       = nodeRow.get('Color',       color)
                 nodeRows.append(nodeRow)
 
             colNames = csvfieldnames
         else:
             nodeRows = [{
-                'Name':        args.name.strip(),
-                'Description': args.description,
-                'Category':    args.category,
-                'Color':       args.color
+                'Name':        name.strip(),
+                'Description': description,
+                'Category':    category,
+                'Color':       color
             }]
             colNames = ['Name', 'Description', 'Category', 'Color']
 
         # Fill in attributes from command-line
-        if args.attributes:
-            for attribute in args.attributes:
+        if attributes:
+            for attribute in attributes:
                 attMatch = re.match("(?P<attname>[^:]+):(?P<attvalue>.+)?", attribute)
                 if not parseattribute:
                     raise RuntimeError("Incorrect attribute format " + attribute)
@@ -414,12 +434,18 @@ def editNodes(arglist):
             norm.con.execute(norm.NodeValue.insert(), nodeValuesToInsert)
 
         norm.commit()
-        del norm
 
     except:
         raise
         norm.rollback()
+
+    finally:
         del norm
 
+def main():
+    kwargs = parse_arguments()
+    kwargs['comments'] = build_comments(kwargs)
+    kwargs['func'](**kwargs)
+
 if __name__ == '__main__':
-    editNodes(None)
+    main()

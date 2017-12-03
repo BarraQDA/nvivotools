@@ -428,8 +428,6 @@ def editSources(outfile, infile, user,
         norm = NVivoNorm(outfile)
         norm.begin()
 
-        # Put timestamp and user ID into args so editSource can access them.
-
         datetimeNow = datetime.utcnow()
 
         if user:
