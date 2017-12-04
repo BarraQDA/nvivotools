@@ -19,116 +19,213 @@
 import os
 import sys
 import argparse
+from NVivoNorm import NVivoNorm
+import unicodecsv
 from sqlalchemy import *
-from sqlalchemy import exc
 import re
 from dateutil import parser as dateparser
 from datetime import date, time, datetime
 from distutils import util
 import uuid
 
-exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
+def add_arguments(parser):
+    parser.description = "Insert or update tagging in normalised file.'"
 
+    generalgroup = parser.add_argument_group('General')
+    generalgroup.add_argument('-o', '--outfile', type=str, required=True,
+                                                 help='Output normalised NVivo (.norm) file')
+    generalgroup.add_argument(        'infile',  type=str, nargs='?',
+                                                 help='Input CSV file containing tagging info')
+    generalgroup.add_argument('-u', '--user',    type=lambda s: unicode(s, 'utf8'),
+                                                 help='User name, default is project "modified by".')
 
-parser = argparse.ArgumentParser(description='Insert or update tagging in normalised file.',
-                                 fromfile_prefix_chars='@')
+    singlegroup = parser.add_argument_group('Single tagging')
+    singlegroup.add_argument('-s', '--source',      type=lambda s: unicode(s, 'utf8'))
+    singlegroup.add_argument('-n', '--node',        type=lambda s: unicode(s, 'utf8'))
+    singlegroup.add_argument('-f', '--fragment',    type=str)
+    singlegroup.add_argument('-m', '--memo',        type=lambda s: unicode(s, 'utf8'))
 
-parser.add_argument('-v', '--verbosity',  type=int, default=1)
+    advancedgroup = parser.add_argument_group('Advanced')
+    advancedgroup.add_argument('-v', '--verbosity', type=int, default=1)
+    advancedgroup.add_argument('--no-comments',     action='store_true',
+                                                    help='Do not produce a comments logfile')
 
-parser.add_argument('-s', '--source',      type = lambda s: unicode(s, 'utf8'))
-parser.add_argument('-n', '--node',        type = lambda s: unicode(s, 'utf8'))
-parser.add_argument('-f', '--fragment',    type = str, action = 'append')
-parser.add_argument('-m', '--memo',        type = lambda s: unicode(s, 'utf8'))
-parser.add_argument('-u', '--user',        type = lambda s: unicode(s, 'utf8'),
-                    help = 'User name, default is project "modified by".')
+    parser.set_defaults(func=editTagging)
+    parser.set_defaults(build_comments=build_comments)
+    parser.set_defaults(hiddenargs=['hiddenargs', 'verbosity', 'no_comments'])
 
-parser.add_argument('normFile', type=str)
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    add_arguments(parser)
+    return vars(parser.parse_args())
 
-args = parser.parse_args()
+def build_comments(kwargs):
+    comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
+    comments += '# ' + os.path.basename(__file__) + '\n'
+    hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
+    for argname, argval in kwargs.iteritems():
+        if argname not in hiddenargs:
+            if type(argval) == str or type(argval) == unicode:
+                comments += '#     --' + argname + '="' + argval + '"\n'
+            elif type(argval) == bool:
+                if argval:
+                    comments += '#     --' + argname + '\n'
+            elif type(argval) == list:
+                for valitem in argval:
+                    if type(valitem) == str:
+                        comments += '#     --' + argname + '="' + valitem + '"\n'
+                    else:
+                        comments += '#     --' + argname + '=' + str(valitem) + '\n'
+            elif argval is not None:
+                comments += '#     --' + argname + '=' + str(argval) + '\n'
 
-try:
-    normdb  = create_engine('sqlite:///' + args.normFile)
-    normmd  = MetaData(bind=normdb)
-    normcon = normdb.connect()
-    normtr  = normcon.begin()
+    return comments
 
-    normUser    = Table('User',    normmd, autoload=True)
-    normProject = Table('Project', normmd, autoload=True)
-    normSource  = Table('Source',  normmd, autoload=True)
-    normNode    = Table('Node',    normmd, autoload=True)
-    normTagging = Table('Tagging', normmd, autoload=True)
+def editTagging(outfile, infile, user,
+                source, node, fragment, memo,
+                verbosity, no_comments,
+                comments, **dummy):
 
-    if args.user is not None:
-        user = normcon.execute(select([
-                normUser.c.Id
-            ]).where(
-                normUser.c.Name == bindparam('Name')
-            ), {
-                'Name': args.user
-            }).first()
-        if user is not None:
-            userId = user['Id']
-        else:
-            userId = uuid.uuid4()
-            normocon.execute(normUser.insert(), {
-                    'Id':   userId,
-                    'Name': args.user
-                })
-    else:
-        project = normcon.execute(select([
-                normProject.c.ModifiedBy
-            ])).first()
-        userId = project['ModifiedBy']
+    try:
 
-    source = normcon.execute(select([
-                normSource.c.Id
-            ]).where(
-                normSource.c.Name == bindparam('Source')
-            ), {
-                'Source': args.source
-            }).first()
-    if source is None:
-        raise RuntimeError("Source: " + args.source + " not found.")
+        # Read and skip comments at start of CSV file.
+        csvcomments = ''
+        if infile:
+            csvFile = file(infile, 'r')
 
-    node = None
-    if args.node is not None:
-        node = normcon.execute(select([
-                    normNode.c.Id
+            while True:
+                line = csvFile.readline()
+                if line[:1] == '#':
+                    csvcomments += line
+                else:
+                    csvfieldnames = next(unicodecsv.reader([line]))
+                    break
+
+        if not no_comments:
+            logfilename = outfile.rsplit('.',1)[0] + '.log'
+            if os.path.isfile(logfilename):
+                incomments = open(logfilename, 'r').read()
+            else:
+                incomments = ''
+            logfile = open(logfilename, 'w')
+            logfile.write(comments)
+            logfile.write(csvcomments)
+            logfile.write(incomments)
+            logfile.close()
+
+        norm = NVivoNorm(outfile)
+        norm.begin()
+
+        datetimeNow = datetime.utcnow()
+
+        if user:
+            user = norm.con.execute(select([
+                    norm.User.c.Id
                 ]).where(
-                    normNode.c.Name == bindparam('Node')
+                    norm.User.c.Name == bindparam('Name')
                 ), {
-                    'Node': args.node
+                    'Name': user
                 }).first()
-        if node is None:
-            raise RuntimeError("Node: " + args.node + " not found.")
-
-    datetimeNow = datetime.utcnow()
-    if args.fragment:
-        taggings = []
-        for fragment in args.fragment:
-            Id = uuid.uuid4()
-            taggings.append({
-                    'Id':           Id,
-                    'Source':       source['Id'],
-                    'Node':         node['Id'],
-                    'Fragment':     fragment,
-                    'Memo':         args.memo,
+            if user:
+                userId = user['Id']
+            else:
+                userId = uuid.uuid4()
+                norm.con.execute(norm.User.insert(), {
+                        'Id':   userId,
+                        'Name': user
+                    })
+        else:
+            project = norm.con.execute(select([
+                    norm.Project.c.ModifiedBy
+                ])).first()
+            if project:
+                userId = project['ModifiedBy']
+            else:
+                userId = uuid.uuid4()
+                norm.con.execute(norm.User.insert(), {
+                        'Id':   userId,
+                        'Name': "Default User"
+                    })
+                norm.con.execute(norm.Project.insert(), {
+                    'Version': '0.2',
+                    'Title': "Created by NVivotools http://barraqda.org/nvivotools/",
                     'CreatedBy':    userId,
                     'CreatedDate':  datetimeNow,
                     'ModifiedBy':   userId,
                     'ModifiedDate': datetimeNow
                 })
 
-        normcon.execute(normTagging.insert(), taggings)
+        if infile:
+            csvreader=unicodecsv.DictReader(csvFile, fieldnames=csvfieldnames)
+            taggingRows = []
+            for row in csvreader:
+                taggingRow = dict(row)
+                taggingRow['Source']   = taggingRow.get('Source',   source)
+                taggingRow['Node']     = taggingRow.get('Node',     node)
+                taggingRow['Fragment'] = taggingRow.get('Fragment', fragment)
+                taggingRow['Memo']     = taggingRow.get('Memo',     memo)
+                taggingRows.append(taggingRow)
+        else:
+            taggingRows = [{
+                'Source':   source,
+                'Node':     node,
+                'Fragment': fragment,
+                'Memo':     memo
+            }]
 
-    normtr.commit()
-    normtr = None
-    normcon.close()
-    normdb.dispose()
+        taggings = []
+        for taggingRow in taggingRows:
+            sourceRecord = norm.con.execute(select([
+                        norm.Source.c.Id
+                    ]).where(
+                        norm.Source.c.Name == bindparam('Source')
+                    ), {
+                        'Source': taggingRow['Source']
+                    }).first()
+            if sourceRecord is None:
+                raise RuntimeError("Source: " + taggingRow['Source'] + " not found.")
 
+            nodeRecord = None
+            if taggingRow['Node']:
+                nodeRecord = norm.con.execute(select([
+                            norm.Node.c.Id
+                        ]).where(
+                            norm.Node.c.Name == bindparam('Node')
+                        ), {
+                            'Node': taggingRow['Node']
+                        }).first()
+                if nodeRecord is None:
+                    raise RuntimeError("Node: " + taggingRow['Node'] + " not found.")
 
-except:
-    raise
-    if not normtr is None:
-        normtr.rollback()
-    normdb.dispose()
+            if nodeRecord or taggingRow['Memo']:
+                taggings.append({
+                        'Id':           uuid.uuid4(),
+                        'Source':       sourceRecord['Id'],
+                        'Node':         nodeRecord['Id'],
+                        'Fragment':     taggingRow['Fragment'],
+                        'Memo':         taggingRow['Memo'],
+                        'CreatedBy':    userId,
+                        'CreatedDate':  datetimeNow,
+                        'ModifiedBy':   userId,
+                        'ModifiedDate': datetimeNow
+                    })
+
+        if taggings:
+            norm.con.execute(norm.Tagging.insert(), taggings)
+
+        norm.commit()
+
+    except:
+        raise
+        norm.rollback()
+
+    finally:
+        del norm
+
+def main():
+    kwargs = parse_arguments()
+    kwargs['comments'] = build_comments(kwargs)
+    kwargs['func'](**kwargs)
+
+if __name__ == '__main__':
+    main()
