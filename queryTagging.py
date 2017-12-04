@@ -125,7 +125,7 @@ def queryTagging(infile, outfile,
                 norm.NodeCategory.c.Name == bindparam('NodeCategory')
             ))
 
-        sources = norm.con.execute(sourcesel, {
+        taggings = norm.con.execute(sourcesel, {
                 'Source':         source,
                 'SourceCategory': source_category,
                 'Node':           node,
@@ -151,15 +151,19 @@ def queryTagging(infile, outfile,
 
         csvwriter.writeheader()
 
-        for source in sources:
-            source = dict(source)
+        taggings = [dict(tagging) for tagging in taggings]
+        for tagging in taggings:
             matchfragment = re.match("(?P<startX>[0-9]+):(?P<endX>[0-9]+)(?:,(?P<startY>[0-9]+)(?::(?P<endY>[0-9]+))?)?",
-                                     source['Fragment'])
+                                     tagging['Fragment'])
             startX = int(matchfragment.group('startX'))
             endX   = int(matchfragment.group('endX'))
-            source['Text'] = source['Content'][startX:endX+1]
-            csvwriter.writerow(source)
+            tagging['startX'] = startX
+            tagging['endX']   = endX
+            tagging['Text']   = tagging['Content'][startX:endX+1]
 
+        taggings = sorted(taggings, key=lambda tagging: (tagging['Source'], tagging['startX']))
+
+        csvwriter.writerows(taggings)
         csvfile.close()
 
     except:
