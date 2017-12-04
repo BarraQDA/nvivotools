@@ -34,10 +34,10 @@ def add_arguments(parser):
     generalgroup = parser.add_argument_group('General')
     generalgroup.add_argument('-o', '--outfile', type=str, required=True,
                                                  help='Output normalised NVivo (.norm) file')
-    generalgroup.add_argument(        'infile',  type = str, nargs = '*',
-                                                 help = 'Input CSV file')
-    generalgroup.add_argument('-u', '--user',    type = lambda s: unicode(s, 'utf8'),
-                                                 help = 'User name, default is project "modified by".')
+    generalgroup.add_argument(        'infile',  type=str, nargs = '*',
+                                                 help='Input CSV file containing node info')
+    generalgroup.add_argument('-u', '--user',    type=lambda s: unicode(s, 'utf8'),
+                                                 help='User name, default is project "modified by".')
 
     singlegroup = parser.add_argument_group('Single node')
     singlegroup.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
@@ -53,7 +53,7 @@ def add_arguments(parser):
     advancedgroup.add_argument('--no-comments',     action='store_true',
                                                     help='Do not produce a comments logfile')
 
-    parser.set_defaults(func=editNodes)
+    parser.set_defaults(func=editNode)
     parser.set_defaults(build_comments=build_comments)
     parser.set_defaults(hiddenargs=['hiddenargs', 'verbosity', 'no_comments'])
 
@@ -84,7 +84,7 @@ def build_comments(kwargs):
 
     return comments
 
-def editNodes(outfile, infile, user,
+def editNode(outfile, infile, user,
               name, description, category, parent, attributes, color, aggregate,
               verbosity, no_comments,
               comments, **dummy):
