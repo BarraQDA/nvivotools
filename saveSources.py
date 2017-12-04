@@ -26,7 +26,7 @@ from sqlalchemy import *
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
-def loadSources(arglist):
+def saveSources(arglist):
 
     parser = argparse.ArgumentParser(description='Save sources from a normalised NVivo file',
                                     fromfile_prefix_chars='@')
@@ -89,4 +89,4 @@ def loadSources(arglist):
         del norm
 
 if __name__ == '__main__':
-    loadSources(None)
+    saveSources(None)
