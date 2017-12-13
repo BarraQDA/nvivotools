@@ -162,6 +162,7 @@ def editSource(outfile, infile, user,
                     'ModifiedDate': datetimeNow
                 })
 
+        sourceRows = []
         for infilepattern in infile:
             for infilename in glob.glob(infilepattern):
                 if verbosity >= 2:
@@ -187,7 +188,6 @@ def editSource(outfile, infile, user,
                         logfile.write(incomments)
 
                     csvreader=unicodecsv.DictReader(csvFile, fieldnames=csvfieldnames)
-                    sourceRows = []
                     for row in csvreader:
                         sourceRow = dict(row)
                         sourceRow['Name']        = sourceRow.get('Name',        name)
@@ -201,13 +201,13 @@ def editSource(outfile, infile, user,
                             break
 
                 else:
-                    sourceRows = [{
+                    sourceRows.append({
                         'Name':        name or infilebasename,
                         'Description': description or u"Created by NVivotools http://barraqda.org/nvivotools/",
                         'Category':    category,
                         'Color':       color,
                         'ObjectFile':  infilename,
-                    }]
+                    })
 
         if not infile:
             sourceRows = [{
