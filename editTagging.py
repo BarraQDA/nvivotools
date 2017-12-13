@@ -187,21 +187,33 @@ def editTagging(outfile, infile, user,
 
             nodeRecord = None
             if taggingRow['Node']:
-                nodeRecord = norm.con.execute(select([
-                            norm.Node.c.Id
-                        ]).where(
-                            norm.Node.c.Name == bindparam('Node')
-                        ), {
-                            'Node': taggingRow['Node']
-                        }).first()
-                if nodeRecord is None:
-                    raise RuntimeError("Node: " + taggingRow['Node'] + " not found.")
+                for node in taggingRow['Node'].splitlines():
+                    nodeRecord = norm.con.execute(select([
+                                norm.Node.c.Id
+                            ]).where(
+                                norm.Node.c.Name == bindparam('Node')
+                            ), {
+                                'Node': node
+                            }).first()
+                    if nodeRecord is None:
+                        raise RuntimeError("Node: " + node + " not found.")
 
-            if nodeRecord or taggingRow['Memo']:
+                    taggings.append({
+                            'Id':           uuid.uuid4(),
+                            'Source':       sourceRecord['Id'],
+                            'Node':         nodeRecord['Id'],
+                            'Fragment':     taggingRow['Fragment'],
+                            'Memo':         taggingRow['Memo'],
+                            'CreatedBy':    userId,
+                            'CreatedDate':  datetimeNow,
+                            'ModifiedBy':   userId,
+                            'ModifiedDate': datetimeNow
+                        })
+            elif taggingRow['Memo']:
                 taggings.append({
                         'Id':           uuid.uuid4(),
                         'Source':       sourceRecord['Id'],
-                        'Node':         nodeRecord['Id'],
+                        'Node':         None,
                         'Fragment':     taggingRow['Fragment'],
                         'Memo':         taggingRow['Memo'],
                         'CreatedBy':    userId,
