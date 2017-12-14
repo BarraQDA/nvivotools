@@ -80,17 +80,6 @@ def queryTagging(infile, outfile,
                  comments, **dummy):
 
     try:
-        if not no_comments:
-            if outfile:
-                logfilename = outfile.rsplit('.',1)[0] + '.log'
-                if os.path.exists(logfilename):
-                    shutil.move(logfilename, logfilename + '.bak')
-                logfile = open(logfilename, 'w')
-                logfile.write(comments)
-                logfile.close()
-            else:
-                print(comments)
-
         norm = NVivoNorm(infile)
         norm.begin()
 
