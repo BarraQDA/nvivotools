@@ -35,8 +35,8 @@ def add_arguments(parser):
                                                  help='Output file')
     generalgroup.add_argument('-s',  '--source',          type=lambda s: unicode(s, 'utf8'))
     generalgroup.add_argument('-sc', '--source-category', type=lambda s: unicode(s, 'utf8'))
-    generalgroup.add_argument('-n',  '--node',            type=lambda s: unicode(s, 'utf8'))
-    generalgroup.add_argument('-nc', '--node-category',   type=lambda s: unicode(s, 'utf8'))
+    generalgroup.add_argument('-n',  '--node', nargs='*', type=lambda s: unicode(s, 'utf8'))
+    #generalgroup.add_argument('-nc', '--node-category',   type=lambda s: unicode(s, 'utf8'))
 
     advancedgroup = parser.add_argument_group('Advanced')
     advancedgroup.add_argument('-v', '--verbosity',  type=int, default=1)
@@ -75,7 +75,7 @@ def build_comments(kwargs):
     return comments
 
 def queryTagging(infile, outfile,
-                 source, source_category, node, node_category,
+                 source, source_category, node, # node_category,
                  verbosity, no_comments,
                  comments, **dummy):
 
@@ -86,7 +86,6 @@ def queryTagging(infile, outfile,
         sourcesel = select([
                 norm.Source.c.Name.label('Source'),
                 norm.Source.c.Content,
-                norm.Node.c.Name.label('Node'),
                 norm.Tagging.c.Fragment
             ]).where(and_(
                 norm.Source.c.Id == norm.Tagging.c.Source,
@@ -102,24 +101,67 @@ def queryTagging(infile, outfile,
                 norm.Source.c.Category == norm.SourceCategory.c.Id,
                 norm.SourceCategory.c.Name == bindparam('SourceCategory')
             ))
-        if node:
-            sourcesel = sourcesel.where(and_(
-                norm.Tagging.c.Node == norm.Node.c.Id,
-                norm.Node.c.Name == bindparam('Node')
-            ))
-        if node_category:
-            sourcesel = sourcesel.where(and_(
-                norm.Tagging.c.Node == norm.Node.c.Id,
-                norm.Node.c.Category == norm.NodeCategory.c.Id,
-                norm.NodeCategory.c.Name == bindparam('NodeCategory')
-            ))
+        #if node_category:
+            #sourcesel = sourcesel.where(and_(
+                #norm.Tagging.c.Node == norm.Node.c.Id,
+                #norm.Node.c.Category == norm.NodeCategory.c.Id,
+                #norm.NodeCategory.c.Name == bindparam('NodeCategory')
+            #))
 
-        taggings = norm.con.execute(sourcesel, {
-                'Source':         source,
-                'SourceCategory': source_category,
-                'Node':           node,
-                'NodeCategory':   node_category
-            })
+        params = {'Source':         source,
+                  'SourceCategory': source_category}
+
+
+        if node:
+            tagginglist = []
+            for nodeiter in node:
+                sourcesel = sourcesel.where(and_(
+                    norm.Tagging.c.Node == norm.Node.c.Id,
+                    norm.Node.c.Name == bindparam('Node')
+                ))
+                params.update({'Node': nodeiter})
+
+                tagginglist.append([dict(row) for row in norm.con.execute(sourcesel, params)])
+        else:
+            tagginglist = [dict(row) for row in norm.con.execute(sourcesel, params)]
+
+        fragmentregex = re.compile(r'(?P<start>[0-9]+):(?P<end>[0-9]+)')
+        for taggings in tagginglist:
+            for tagging in taggings:
+                matchfragment = fragmentregex.match(tagging['Fragment'])
+                tagging['Start'] = int(matchfragment.group('start'))
+                tagging['End']   = int(matchfragment.group('end'))
+
+        intersection = []
+        intersection = tagginglist[0]
+
+        def sorttagginglist(tagginglist):
+            tagginglist.sort(key = lambda tagging: (tagging['Source'], tagging['Start'], tagging['End']))
+            idx = 0
+            while idx < len(tagginglist) - 1:
+                if tagginglist[idx]['Source'] == tagginglist[idx+1]['Source'] and tagginglist[idx]['End'] >= tagginglist[idx+1]['Start']:
+                    tagginglist[idx]['End'] = max(tagginglist[idx]['End'], tagginglist[idx+1]['End'])
+                    del tagginglist[idx+1]
+                else:
+                    idx += 1
+
+        sorttagginglist(intersection)
+        for taggings in tagginglist[1:]:
+            idx = 0
+            newintersection = []
+            for intagging in intersection:
+                for tagging in taggings:
+                    if tagging['Source'] == intagging['Source']:
+                        newstart = max(tagging['Start'], intagging['Start'])
+                        newend   = min(tagging['End'],   intagging['End'])
+                        if newend >= newstart:
+                            newintersection.append({'Source': tagging['Source'],
+                                                    'Content': tagging['Content'],
+                                                    'Start': newstart,
+                                                    'End':   newend})
+
+            intersection = newintersection
+            sorttagginglist(intersection)
 
         if outfile:
             if os.path.exists(outfile):
@@ -133,26 +175,18 @@ def queryTagging(infile, outfile,
             csvfile.write(comments)
 
         csvwriter = unicodecsv.DictWriter(csvfile,
-                                          fieldnames=['Source', 'Node', 'Text', 'Fragment'],
+                                          fieldnames=['Source', 'Text', 'Fragment'],
                                           extrasaction='ignore',
                                           lineterminator=os.linesep,
                                           quoting=unicodecsv.QUOTE_NONNUMERIC)
 
         csvwriter.writeheader()
 
-        taggings = [dict(tagging) for tagging in taggings]
-        for tagging in taggings:
-            matchfragment = re.match("(?P<startX>[0-9]+):(?P<endX>[0-9]+)(?:,(?P<startY>[0-9]+)(?::(?P<endY>[0-9]+))?)?",
-                                     tagging['Fragment'])
-            startX = int(matchfragment.group('startX'))
-            endX   = int(matchfragment.group('endX'))
-            tagging['startX'] = startX
-            tagging['endX']   = endX
-            tagging['Text']   = tagging['Content'][startX:endX+1]
+        for tagging in intersection:
+            tagging['Fragment'] = str(tagging['Start']) + ':' + str(tagging['End'])
+            tagging['Text']   = tagging['Content'][tagging['Start']:tagging['End']+1]
 
-        taggings = sorted(taggings, key=lambda tagging: (tagging['Source'], tagging['startX']))
-
-        csvwriter.writerows(taggings)
+        csvwriter.writerows(intersection)
         csvfile.close()
 
     except:
