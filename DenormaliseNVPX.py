@@ -95,32 +95,6 @@ hiddenargs = ['cmdline', 'verbosity', 'mac', 'windows']
 args.mac       = True
 args.windows   = False
 
-if not args.no_comments:
-    logfilename = args.outfile.rsplit('.',1)[0] + '.log'
-
-    comments = (' ' + args.outfile + ' ').center(80, '#') + '\n'
-    comments += '# ' + os.path.basename(sys.argv[0]) + '\n'
-    arglist = args.__dict__.keys()
-    for arg in arglist:
-        if arg not in hiddenargs:
-            val = getattr(args, arg)
-            if type(val) == str or type(val) == unicode:
-                comments += '#     --' + arg + '="' + val + '"\n'
-            elif type(val) == bool:
-                if val:
-                    comments += '#     --' + arg + '\n'
-            elif type(val) == list:
-                for valitem in val:
-                    if type(valitem) == str:
-                        comments += '#     --' + arg + '="' + valitem + '"\n'
-                    else:
-                        comments += '#     --' + arg + '=' + str(valitem) + '\n'
-            elif val is not None:
-                comments += '#     --' + arg + '=' + str(val) + '\n'
-
-    with open(logfilename, 'w') as logfile:
-        logfile.write(comments)
-
 tmpinfilename = tempfile.mktemp()
 tmpinfileptr  = file(tmpinfilename, 'wb')
 tmpinfileptr.write(args.infile.read())
@@ -141,6 +115,36 @@ tmpoutfileptr  = file(tmpoutfilename, 'wb')
 tmpoutfileptr.write(args.basefile.read())
 args.basefile.close()
 tmpoutfileptr.close()
+
+if not args.no_comments:
+    comments = (' ' + args.outfile + ' ').center(80, '#') + '\n'
+    comments += '# ' + os.path.basename(sys.argv[0]) + '\n'
+    arglist = args.__dict__.keys()
+    for arg in arglist:
+        if arg not in hiddenargs:
+            val = getattr(args, arg)
+            if type(val) == str or type(val) == unicode:
+                comments += '#     --' + arg + '="' + val + '"\n'
+            elif type(val) == bool:
+                if val:
+                    comments += '#     --' + arg + '\n'
+            elif type(val) == list:
+                for valitem in val:
+                    if type(valitem) == str:
+                        comments += '#     --' + arg + '="' + valitem + '"\n'
+                    else:
+                        comments += '#     --' + arg + '=' + str(valitem) + '\n'
+            elif val is not None:
+                comments += '#     --' + arg + '=' + str(val) + '\n'
+
+    logfilename = args.outfile.rsplit('.',1)[0] + '.log'
+    if os.path.isfile(logfilename):
+        incomments = open(logfilename, 'r').read()
+    else:
+        incomments = ''
+    with open(logfilename, 'w') as logfile:
+        logfile.write(comments)
+        logfile.write(incomments)
 
 # Find a free sock for SQL Anywhere server to bind to
 import socket
