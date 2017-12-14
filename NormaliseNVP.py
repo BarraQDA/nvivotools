@@ -69,19 +69,21 @@ def NormaliseNVP(arglist):
 
     args = parser.parse_args(arglist)
 
+    # Function to execute a command either locally or remotely
+    def executecommand(command):
+        print(command)
+        if not args.server:     # ie server is on same machine as this script
+            return subprocess.check_output(command).strip()
+        else:
+            # This quoting of arguments is a bit of a hack but seems to work
+            return subprocess.check_output(['ssh', args.server] + [('"' + word + '"') if ' ' in word else word for word in command]).strip()
+
     # Fill in extra arguments that NVivo module expects
     args.mac       = False
     args.windows   = True
 
-    if args.server is None:
-        if os.name != 'nt':
-            raise RuntimeError("This does not appear to be a Windows machine so --server must be specified.")
-
-        infilename = args.infile
-    else:
-        tmpdir = subprocess.check_output(['ssh', args.server, r'echo %tmp%']).strip()
-        infilename = subprocess.check_output(['ssh', args.server, r'echo %tmp%\nvivotools%random%.nvp']).strip()
-        subprocess.call(['scp', '-q', args.infile, args.server + ':' + infilename])
+    if args.server is None and os.name != 'nt':
+        raise RuntimeError("This does not appear to be a Windows machine so --server must be specified.")
 
     tmpoutfilename = tempfile.mktemp()
 
@@ -122,7 +124,7 @@ def NormaliseNVP(arglist):
     # Get reasonably distinct yet recognisable DB name
     dbname = 'nvivo' + str(os.getpid())
 
-    mssqlapi.attach(infilename, dbname)
+    mssqlapi.attach(args.infile, dbname)
     try:
         args.indb = 'mssql+pymssql://nvivotools:nvivotools@' + (args.server or 'localhost') + ((':' + str(args.port)) if args.port else '') + '/' + dbname
         args.outdb = 'sqlite:///' + tmpoutfilename
