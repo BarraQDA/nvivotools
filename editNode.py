@@ -34,7 +34,7 @@ def add_arguments(parser):
     generalgroup = parser.add_argument_group('General')
     generalgroup.add_argument('-o', '--outfile', type=str, required=True,
                                                  help='Output normalised NVivo (.norm) file')
-    generalgroup.add_argument(        'infile',  type=str, nargs = '*',
+    generalgroup.add_argument(        'infile',  type=str, nargs = '?',
                                                  help='Input CSV file containing node info')
     generalgroup.add_argument('-u', '--user',    type=lambda s: unicode(s, 'utf8'),
                                                  help='User name, default is project "modified by".')
