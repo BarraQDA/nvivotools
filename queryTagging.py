@@ -85,6 +85,7 @@ def queryTagging(infile, outfile,
 
         sourcesel = select([
                 norm.Source.c.Name.label('Source'),
+                norm.Node.c.Name.label('Node'),
                 norm.Source.c.Content,
                 norm.Tagging.c.Fragment
             ]).where(and_(
@@ -111,7 +112,6 @@ def queryTagging(infile, outfile,
         params = {'Source':         source,
                   'SourceCategory': source_category}
 
-
         if node:
             tagginglist = []
             for nodeiter in node:
@@ -123,7 +123,7 @@ def queryTagging(infile, outfile,
 
                 tagginglist.append([dict(row) for row in norm.con.execute(sourcesel, params)])
         else:
-            tagginglist = [dict(row) for row in norm.con.execute(sourcesel, params)]
+            tagginglist = [[dict(row) for row in norm.con.execute(sourcesel, params)]]
 
         fragmentregex = re.compile(r'(?P<start>[0-9]+):(?P<end>[0-9]+)')
         for taggings in tagginglist:
@@ -156,6 +156,7 @@ def queryTagging(infile, outfile,
                         newend   = min(tagging['End'],   intagging['End'])
                         if newend >= newstart:
                             newintersection.append({'Source': tagging['Source'],
+                                                    'Node': tagging['Node'] + os.linesep + intagging['Node'],
                                                     'Content': tagging['Content'],
                                                     'Start': newstart,
                                                     'End':   newend})
@@ -175,7 +176,7 @@ def queryTagging(infile, outfile,
             csvfile.write(comments)
 
         csvwriter = unicodecsv.DictWriter(csvfile,
-                                          fieldnames=['Source', 'Text', 'Fragment'],
+                                          fieldnames=['Source', 'Node', 'Text', 'Fragment'],
                                           extrasaction='ignore',
                                           lineterminator=os.linesep,
                                           quoting=unicodecsv.QUOTE_NONNUMERIC)
