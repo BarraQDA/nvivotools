@@ -65,12 +65,15 @@ def DenormaliseNVP(arglist):
     parser.add_argument('-b', '--base', dest='basefile', type=argparse.FileType('rb'), nargs='?',
                         help="Base NVP file to insert into")
 
+    parser.add_argument('--no-comments', action='store_true', help='Do not produce a comments logfile')
+
     parser.add_argument('infile', type=str,
                         help="Input normalised SQLite (.norm) file")
-    parser.add_argument('outfilename', metavar='outfile', type=str, nargs='?',
+    parser.add_argument('outfile', type=str, nargs='?',
                         help="Output NVivo (.nvp) file")
 
     args = parser.parse_args(arglist)
+    hiddenargs = ['cmdline', 'verbosity', 'mac', 'windows']
 
     # Function to execute a command either locally or remotely
     def executecommand(command):
@@ -84,8 +87,8 @@ def DenormaliseNVP(arglist):
     args.mac       = False
     args.windows   = True
 
-    if args.outfilename is None:
-        args.outfilename = args.infile.rsplit('.',1)[0] + '.nvp'
+    if args.outfile is None:
+        args.outfile = args.infile.rsplit('.',1)[0] + '.nvp'
 
     if args.basefile is None:
         args.basefile = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + ('emptyNVivo10Win.nvp' if args.nvivoversion == '10' else 'emptyNVivo11Win.nvp')
@@ -118,6 +121,36 @@ def DenormaliseNVP(arglist):
     if args.verbosity > 0:
         print("Using port: " + str(args.port), file=sys.stderr)
 
+    if not args.no_comments:
+        comments = (' ' + args.outfile + ' ').center(80, '#') + '\n'
+        comments += '# ' + os.path.basename(sys.argv[0]) + '\n'
+        arglist = args.__dict__.keys()
+        for arg in arglist:
+            if arg not in hiddenargs:
+                val = getattr(args, arg)
+                if type(val) == str or type(val) == unicode:
+                    comments += '#     --' + arg + '="' + val + '"\n'
+                elif type(val) == bool:
+                    if val:
+                        comments += '#     --' + arg + '\n'
+                elif type(val) == list:
+                    for valitem in val:
+                        if type(valitem) == str:
+                            comments += '#     --' + arg + '="' + valitem + '"\n'
+                        else:
+                            comments += '#     --' + arg + '=' + str(valitem) + '\n'
+                elif val is not None:
+                    comments += '#     --' + arg + '=' + str(val) + '\n'
+
+        logfilename = args.outfile.rsplit('.',1)[0] + '.log'
+        if os.path.isfile(logfilename):
+            incomments = open(logfilename, 'r').read()
+        else:
+            incomments = ''
+        with open(logfilename, 'w') as logfile:
+            logfile.write(comments)
+            logfile.write(incomments)
+
     mssqlapi = mssqlAPI(args.server,
                         args.port,
                         args.instance,
@@ -134,7 +167,7 @@ def DenormaliseNVP(arglist):
 
         NVivo.Denormalise(args)
 
-        mssqlapi.save(args.outfilename, dbname)
+        mssqlapi.save(args.outfile, dbname)
 
     except:
         raise
