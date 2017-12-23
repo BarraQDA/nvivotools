@@ -175,33 +175,47 @@ def editTagging(outfile, infile, user,
 
         taggings = []
         for taggingRow in taggingRows:
-            sourceRecord = norm.con.execute(select([
-                        norm.Source.c.Id
-                    ]).where(
-                        norm.Source.c.Name == bindparam('Source')
-                    ), {
-                        'Source': taggingRow['Source']
-                    }).first()
-            if sourceRecord is None:
-                raise RuntimeError("Source: " + taggingRow['Source'] + " not found.")
+            source = taggingRow['Source']
+            if source:
+                sourceRecord = norm.con.execute(select([
+                            norm.Source.c.Id
+                        ]).where(
+                            norm.Source.c.Name == bindparam('Source')
+                        ), {
+                            'Source': source
+                        }).first()
+                if sourceRecord is None:
+                    raise RuntimeError("Source: " + source + " not found.")
 
-            nodeRecord = None
-            if taggingRow['Node']:
-                for node in taggingRow['Node'].splitlines():
-                    nodeRecord = norm.con.execute(select([
-                                norm.Node.c.Id
-                            ]).where(
-                                norm.Node.c.Name == bindparam('Node')
-                            ), {
-                                'Node': node
-                            }).first()
-                    if nodeRecord is None:
-                        raise RuntimeError("Node: " + node + " not found.")
+                nodeRecord = None
+                if taggingRow['Node']:
+                    for node in taggingRow['Node'].splitlines():
+                        nodeRecord = norm.con.execute(select([
+                                    norm.Node.c.Id
+                                ]).where(
+                                    norm.Node.c.Name == bindparam('Node')
+                                ), {
+                                    'Node': node
+                                }).first()
+                        if nodeRecord is None:
+                            raise RuntimeError("Node: " + node + " not found.")
 
+                        taggings.append({
+                                'Id':           uuid.uuid4(),
+                                'Source':       sourceRecord['Id'],
+                                'Node':         nodeRecord['Id'],
+                                'Fragment':     taggingRow['Fragment'],
+                                'Memo':         taggingRow['Memo'],
+                                'CreatedBy':    userId,
+                                'CreatedDate':  datetimeNow,
+                                'ModifiedBy':   userId,
+                                'ModifiedDate': datetimeNow
+                            })
+                elif taggingRow['Memo']:
                     taggings.append({
                             'Id':           uuid.uuid4(),
                             'Source':       sourceRecord['Id'],
-                            'Node':         nodeRecord['Id'],
+                            'Node':         None,
                             'Fragment':     taggingRow['Fragment'],
                             'Memo':         taggingRow['Memo'],
                             'CreatedBy':    userId,
@@ -209,18 +223,6 @@ def editTagging(outfile, infile, user,
                             'ModifiedBy':   userId,
                             'ModifiedDate': datetimeNow
                         })
-            elif taggingRow['Memo']:
-                taggings.append({
-                        'Id':           uuid.uuid4(),
-                        'Source':       sourceRecord['Id'],
-                        'Node':         None,
-                        'Fragment':     taggingRow['Fragment'],
-                        'Memo':         taggingRow['Memo'],
-                        'CreatedBy':    userId,
-                        'CreatedDate':  datetimeNow,
-                        'ModifiedBy':   userId,
-                        'ModifiedDate': datetimeNow
-                    })
 
         if taggings:
             norm.con.execute(norm.Tagging.insert(), taggings)
