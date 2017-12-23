@@ -36,7 +36,7 @@ def add_arguments(parser):
     generalgroup.add_argument('-s',  '--source',          type=lambda s: unicode(s, 'utf8'))
     generalgroup.add_argument('-sc', '--source-category', type=lambda s: unicode(s, 'utf8'))
     generalgroup.add_argument('-n',  '--node', nargs='*', type=lambda s: unicode(s, 'utf8'))
-    #generalgroup.add_argument('-nc', '--node-category',   type=lambda s: unicode(s, 'utf8'))
+    generalgroup.add_argument('-nc', '--node-category',   type=lambda s: unicode(s, 'utf8'))
 
     advancedgroup = parser.add_argument_group('Advanced')
     advancedgroup.add_argument('-v', '--verbosity',  type=int, default=1)
@@ -75,7 +75,7 @@ def build_comments(kwargs):
     return comments
 
 def queryTagging(infile, outfile,
-                 source, source_category, node, # node_category,
+                 source, source_category, node, node_category,
                  verbosity, no_comments,
                  comments, **dummy):
 
@@ -92,25 +92,28 @@ def queryTagging(infile, outfile,
                 norm.Source.c.Id == norm.Tagging.c.Source,
                 norm.Tagging.c.Node == norm.Node.c.Id
             ))
+        params = {}
 
         if source:
             sourcesel = sourcesel.where(
                 norm.Source.c.Name == bindparam('Source')
             )
+            params.update({'Source': source})
+
         if source_category:
             sourcesel = sourcesel.where(and_(
                 norm.Source.c.Category == norm.SourceCategory.c.Id,
                 norm.SourceCategory.c.Name == bindparam('SourceCategory')
             ))
-        #if node_category:
-            #sourcesel = sourcesel.where(and_(
-                #norm.Tagging.c.Node == norm.Node.c.Id,
-                #norm.Node.c.Category == norm.NodeCategory.c.Id,
-                #norm.NodeCategory.c.Name == bindparam('NodeCategory')
-            #))
+            params.update({'SourceCategory': source_category})
 
-        params = {'Source':         source,
-                  'SourceCategory': source_category}
+        if node_category:
+            sourcesel = sourcesel.where(and_(
+                norm.Tagging.c.Node == norm.Node.c.Id,
+                norm.Node.c.Category == norm.NodeCategory.c.Id,
+                norm.NodeCategory.c.Name == bindparam('NodeCategory')
+            ))
+            params.update({'NodeCategory': node_category})
 
         if node:
             tagginglist = []
