@@ -163,10 +163,10 @@ def editNode(outfile, infile, user,
             nodeRows = []
             for row in csvreader:
                 nodeRow = dict(row)
-                nodeRow['Name']        = nodeRow.get('Name',        name).strip()
+                nodeRow['Name']        = nodeRow.get('Name',        name)
                 nodeRow['Description'] = nodeRow.get('Description', description)
                 nodeRow['Category']    = nodeRow.get('Category',    category)
-                nodeRow['Parent']      = nodeRow.get('Parent',      parent).strip()
+                nodeRow['Parent']      = nodeRow.get('Parent',      parent)
                 nodeRow['Aggregate']   = nodeRow.get('Aggregate',   aggregate)
                 nodeRow['Category']    = nodeRow.get('Category',    category)
                 nodeRow['Color']       = nodeRow.get('Color',       color)
@@ -175,7 +175,7 @@ def editNode(outfile, infile, user,
             colNames = csvfieldnames
         else:
             nodeRows = [{
-                'Name':        name.strip(),
+                'Name':        name,
                 'Description': description,
                 'Category':    category,
                 'Color':       color
