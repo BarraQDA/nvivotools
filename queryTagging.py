@@ -107,25 +107,25 @@ def queryTagging(infile, outfile,
             ))
             params.update({'SourceCategory': source_category})
 
+        tagginglist = []
         if node_category:
-            sourcesel = sourcesel.where(and_(
-                norm.Tagging.c.Node == norm.Node.c.Id,
+            sourceselnodecat = sourcesel.where(and_(
                 norm.Node.c.Category == norm.NodeCategory.c.Id,
                 norm.NodeCategory.c.Name == bindparam('NodeCategory')
             ))
             params.update({'NodeCategory': node_category})
+            tagginglist.append([dict(row) for row in norm.con.execute(sourceselnodecat, params)])
 
         if node:
-            tagginglist = []
+            sourceselnode = sourcesel.where(and_(
+                norm.Tagging.c.Node == norm.Node.c.Id,
+                norm.Node.c.Name == bindparam('Node')
+            ))
             for nodeiter in node:
-                sourcesel = sourcesel.where(and_(
-                    norm.Tagging.c.Node == norm.Node.c.Id,
-                    norm.Node.c.Name == bindparam('Node')
-                ))
                 params.update({'Node': nodeiter})
 
-                tagginglist.append([dict(row) for row in norm.con.execute(sourcesel, params)])
-        else:
+                tagginglist.append([dict(row) for row in norm.con.execute(sourceselnode, params)])
+        elif not node_category:
             tagginglist = [[dict(row) for row in norm.con.execute(sourcesel, params)]]
 
         fragmentregex = re.compile(r'(?P<start>[0-9]+):(?P<end>[0-9]+)')
