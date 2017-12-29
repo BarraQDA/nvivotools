@@ -177,6 +177,7 @@ def queryTagging(infile, outfile,
 
         if not no_comments:
             csvfile.write(comments)
+            csvfile.write('#' * 80 + '\n')
 
         csvwriter = unicodecsv.DictWriter(csvfile,
                                           fieldnames=['Source', 'Node', 'Text', 'Fragment'],
@@ -188,7 +189,7 @@ def queryTagging(infile, outfile,
 
         for tagging in intersection:
             tagging['Fragment'] = str(tagging['Start']) + ':' + str(tagging['End'])
-            tagging['Text']   = tagging['Content'][tagging['Start']:tagging['End']+1]
+            tagging['Text']   = tagging['Content'][tagging['Start']-1:tagging['End']]
 
         csvwriter.writerows(intersection)
         csvfile.close()

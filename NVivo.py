@@ -780,11 +780,11 @@ def Normalise(args):
 
 # Tagging
         def build_tagging_or_annotation(item):
+            # TODO: Deal with case where we have skipped sources
+            source = next(source for source in sources if source['Id'] == item['Source'])
             # On Mac, text sections refer to indexes on non-space characters, but non-breaking
             # spaces are counted.
             if args.mac:
-                # TODO: Deal with case where we have skipped sources
-                source = next(source for source in sources if source['Id'] == item['Source'])
                 sourcetext = source['PlainText']
 
                 startx = item['StartText']
@@ -808,16 +808,19 @@ def Normalise(args):
             # Otherwise correct for adjusted line terminators: PlainText is original, Content
             # is adjusted.
             else:
-                item['StartX']  -= source['Content'][0:startx].count('\r\n')
-                item['LengthX'] -= source['Content'][startx-1:startx+lengthx-1].count('\r\n')
+                startx  = item['StartX']
+                lengthx = item['LengthX']
+                item['StartX']  -= source['PlainText'][0:startx].count('\r\n')
+                item['LengthX'] -= source['PlainText'][startx-1:startx+lengthx-1].count('\r\n')
 
             item['Fragment'] = ''
+            # Normalised file startX is 1-based, Nvivo is 0-based
             if item['StartX'] is not None and item['LengthX'] is not None:
-                item['Fragment'] += str(item['StartX']) + ':' + str(item['StartX'] + item['LengthX'] - 1);
+                item['Fragment'] += str(item['StartX']+1) + ':' + str(item['StartX'] + item['LengthX']);
             if item['StartY'] is not None:
-                item['Fragment'] += ',' + str(item['StartY'])
+                item['Fragment'] += ',' + str(item['StartY']+1)
                 if item['LengthY'] > 0:
-                    item['Fragment'] += ':' + str(item['StartY'] + item['LengthY'] - 1)
+                    item['Fragment'] += ':' + str(item['StartY'] + item['LengthY'])
 
             if not isinstance(item['CreatedDate'], datetime):
                 item['CreatedDate'] = dateparser.parse(item['CreatedDate'])
