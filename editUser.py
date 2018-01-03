@@ -22,9 +22,7 @@ import argparse
 from sqlalchemy import *
 from sqlalchemy import exc
 import re
-from dateutil import parser as dateparser
-from datetime import date, time, datetime
-from distutils import util
+from datetime import datetime
 import uuid
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
