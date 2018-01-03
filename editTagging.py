@@ -16,20 +16,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
 import os
 import sys
 import argparse
 from NVivoNorm import NVivoNorm
 import unicodecsv
 from sqlalchemy import *
-import re
-from dateutil import parser as dateparser
-from datetime import date, time, datetime
-from distutils import util
+from datetime import datetime
 import uuid
+import re
 
 def add_arguments(parser):
-    parser.description = "Insert or update tagging in normalised file.'"
+    parser.description = "Insert or update taggings in normalised file.'"
 
     generalgroup = parser.add_argument_group('General')
     generalgroup.add_argument('-o', '--outfile', type=str, required=True,
@@ -39,11 +38,16 @@ def add_arguments(parser):
     generalgroup.add_argument('-u', '--user',    type=lambda s: unicode(s, 'utf8'),
                                                  help='User name, default is project "modified by".')
 
-    singlegroup = parser.add_argument_group('Single tagging')
-    singlegroup.add_argument('-s', '--source',      type=lambda s: unicode(s, 'utf8'))
-    singlegroup.add_argument('-n', '--node',        type=lambda s: unicode(s, 'utf8'))
-    singlegroup.add_argument('-f', '--fragment',    type=str)
-    singlegroup.add_argument('-m', '--memo',        type=lambda s: unicode(s, 'utf8'))
+    tagginggroup = parser.add_argument_group('Tagging')
+    tagginggroup.add_argument('-s', '--source',      type=lambda s: unicode(s, 'utf8'))
+    tagginggroup.add_argument('-sc', '--source-category', type=lambda s: unicode(s, 'utf8'))
+    tagginggroup.add_argument('-n', '--node',        type=lambda s: unicode(s, 'utf8'))
+    tagginggroup.add_argument('-f', '--fragment',    type=str)
+    tagginggroup.add_argument('-m', '--memo',        type=lambda s: unicode(s, 'utf8'))
+
+    tagginggroup.add_argument('-p', '--prelude',    type=str, nargs="*", help='Python code to execute before processing')
+    tagginggroup.add_argument('-t', '--tagging',     type=lambda s: unicode(s, 'utf8'),
+                               help="Tagging to define. Can be either a string representing a string slice, or Python code that returns list of taggings as dictionary with keys 'Node', 'Memo' and/or 'Fragment'")
 
     advancedgroup = parser.add_argument_group('Advanced')
     advancedgroup.add_argument('-v', '--verbosity', type=int, default=1)
@@ -83,10 +87,22 @@ def build_comments(kwargs):
 
 def editTagging(outfile, infile, user,
                 source, node, fragment, memo,
+                source_category, prelude, tagging,
                 verbosity, no_comments,
                 comments, **dummy):
 
     try:
+
+        if prelude:
+            if verbosity >= 1:
+                print("Executing prelude code.", file=sys.stderr)
+
+            exec(os.linesep.join(prelude), globals())
+
+        if tagging:
+            exec("\
+def evaltagging(sourceRow, csvRow):\n\
+    return " + tagging, globals())
 
         # Read and skip comments at start of CSV file.
         csvcomments = ''
@@ -156,76 +172,97 @@ def editTagging(outfile, infile, user,
                 })
 
         if infile:
-            csvreader=unicodecsv.DictReader(csvFile, fieldnames=csvfieldnames)
-            taggingRows = []
-            for row in csvreader:
-                taggingRow = dict(row)
-                taggingRow['Source']   = taggingRow.get('Source',   source)
-                taggingRow['Node']     = taggingRow.get('Node',     node)
-                taggingRow['Fragment'] = taggingRow.get('Fragment', fragment)
-                taggingRow['Memo']     = taggingRow.get('Memo',     memo)
-                taggingRows.append(taggingRow)
+            csvRows = unicodecsv.DictReader(csvFile, fieldnames=csvfieldnames)
         else:
-            taggingRows = [{
-                'Source':   source,
-                'Node':     node,
-                'Fragment': fragment,
-                'Memo':     memo
-            }]
+            csvRows = [{}]
 
-        taggings = []
-        for taggingRow in taggingRows:
-            source = taggingRow['Source']
+        fragmentregex = re.compile(r'(?P<start>[0-9]+):(?P<end>[0-9]+)')
+
+        inrowcount = 0
+        taggingRows = []
+        for csvRow in csvRows:
+            csvRow = dict(csvRow)
+            sourceSel = select([
+                            norm.Source.c.Id,
+                            norm.Source.c.Name,
+                            norm.SourceCategory.c.Name.label('Category'),
+                            norm.Source.c.Content
+                        ]).select_from(
+                            norm.Source.outerjoin(norm.SourceCategory,
+                            norm.SourceCategory.c.Id == norm.Source.c.Category)
+                        )
+            sourceParams = {}
+            source = csvRow.get('source') or source
+            source_category = csvRow.get('source category') or source_category
+            node = csvRow.get('node') or node
+            fragment = csvRow.get('Fragment') or fragment
+
             if source:
-                sourceRecord = norm.con.execute(select([
-                            norm.Source.c.Id
-                        ]).where(
-                            norm.Source.c.Name == bindparam('Source')
-                        ), {
-                            'Source': source
-                        }).first()
-                if sourceRecord is None:
-                    raise RuntimeError("Source: " + source + " not found.")
+                sourceSel = sourceSel.where(norm.Source.c.Name == bindparam('Source'))
+                sourceParams.update({'Source': source})
+            if source_category:
+                sourceSel = sourceSel.where(and_(
+                    norm.Source.c.Category == norm.SourceCategory.c.Id,
+                    norm.SourceCategory.c.Name == bindparam('SourceCategory')
+                ))
+                sourceParams.update({'SourceCategory': source_category})
 
-                nodeRecord = None
-                if taggingRow['Node']:
-                    for node in taggingRow['Node'].splitlines():
-                        nodeRecord = norm.con.execute(select([
-                                    norm.Node.c.Id
+            sourceRows = norm.con.execute(sourceSel, {'Source': source})
+            for sourceRow in sourceRows:
+                if tagging:
+                    taggings = evaltagging(sourceRow, csvRow)
+                else:
+                    taggings = [{'Node': node, 'Fragment': fragment}]
+
+                for tagging in taggings:
+                    fragmentmatch = fragmentregex.match(tagging['Fragment'])
+                    if fragmentmatch:
+                        fragmentstart = int(fragmentmatch.group('start'))
+                        fragmentend   = int(fragmentmatch.group('end'))
+
+                    if not fragmentmatch or fragmentstart > len(sourceRow['Content']) or fragmentend < fragmentstart or fragmentend > len(sourceRow['Content']):
+                        raise RuntimeError("Illegal fragment specification: " + tagging['Fragment'])
+
+                    if tagging.get('Node'):
+                        nodeRec = norm.con.execute(select([
+                                    norm.Node.c.Id,
                                 ]).where(
                                     norm.Node.c.Name == bindparam('Node')
                                 ), {
-                                    'Node': node
+                                    'Node': tagging['Node']
                                 }).first()
-                        if nodeRecord is None:
-                            raise RuntimeError("Node: " + node + " not found.")
+                        if nodeRec is None:
+                            raise RuntimeError("Node: " + tagging['Node'] + " not found.")
 
-                        taggings.append({
+                        taggingRows.append({
                                 'Id':           uuid.uuid4(),
-                                'Source':       sourceRecord['Id'],
-                                'Node':         nodeRecord['Id'],
-                                'Fragment':     taggingRow['Fragment'],
-                                'Memo':         taggingRow['Memo'],
+                                'Source':       sourceRow['Id'],
+                                'Node':         nodeRec['Id'],
+                                'Fragment':     tagging['Fragment'],
+                                'Memo':         tagging.get('Memo'),
                                 'CreatedBy':    userId,
                                 'CreatedDate':  datetimeNow,
                                 'ModifiedBy':   userId,
                                 'ModifiedDate': datetimeNow
                             })
-                elif taggingRow['Memo']:
-                    taggings.append({
-                            'Id':           uuid.uuid4(),
-                            'Source':       sourceRecord['Id'],
-                            'Node':         None,
-                            'Fragment':     taggingRow['Fragment'],
-                            'Memo':         taggingRow['Memo'],
-                            'CreatedBy':    userId,
-                            'CreatedDate':  datetimeNow,
-                            'ModifiedBy':   userId,
-                            'ModifiedDate': datetimeNow
-                        })
+                    elif tagging.get('Memo'):
+                        taggingRows.append({
+                                'Id':           uuid.uuid4(),
+                                'Source':       sourceRow['Id'],
+                                'Node':         None,
+                                'Fragment':     tagging['Fragment'],
+                                'Memo':         tagging['Memo'],
+                                'CreatedBy':    userId,
+                                'CreatedDate':  datetimeNow,
+                                'ModifiedBy':   userId,
+                                'ModifiedDate': datetimeNow
+                            })
 
-        if taggings:
-            norm.con.execute(norm.Tagging.insert(), taggings)
+        if taggingRows:
+            norm.con.execute(norm.Tagging.insert(), taggingRows)
+
+        if verbosity >= 1:
+            print("Inserted", len(taggingRows), "taggings.", file=sys.stderr)
 
         norm.commit()
 
