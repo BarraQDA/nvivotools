@@ -46,7 +46,7 @@ def add_arguments(parser):
     tagginggroup.add_argument('-f', '--fragment',    type=str)
     tagginggroup.add_argument('-m', '--memo',        type=lambda s: unicode(s, 'utf8'))
 
-    tagginggroup.add_argument('-p', '--prelude',    type=str, nargs="*", help='Python code to execute before processing')
+    tagginggroup.add_argument('-p', '--prelude',     type=lambda s: unicode(s, 'utf8'), nargs="*", help='Python code to execute before processing')
     tagginggroup.add_argument('-t', '--tagging',     type=lambda s: unicode(s, 'utf8'),
                                help="Tagging to define. Can be either a string representing a string slice, or Python code that returns list of taggings as dictionary with keys 'Node', 'Memo' and/or 'Fragment'")
 
@@ -77,7 +77,7 @@ def build_comments(kwargs):
                     comments += '#     --' + argname + '\n'
             elif type(argval) == list:
                 for valitem in argval:
-                    if type(valitem) == str:
+                    if type(valitem) == str or type(valitem) == unicode:
                         comments += '#     --' + argname + '="' + valitem + '"\n'
                     else:
                         comments += '#     --' + argname + '=' + str(valitem) + '\n'
