@@ -41,7 +41,8 @@ def add_arguments(parser):
     tagginggroup = parser.add_argument_group('Tagging')
     tagginggroup.add_argument('-s', '--source',      type=lambda s: unicode(s, 'utf8'))
     tagginggroup.add_argument('-sc', '--source-category', type=lambda s: unicode(s, 'utf8'))
-    tagginggroup.add_argument('-n', '--node',        type=lambda s: unicode(s, 'utf8'))
+    tagginggroup.add_argument('-n', '--node',        type=lambda s: unicode(s, 'utf8'),
+                              help="Multiple nodes may be specified, separated by line terminator")
     tagginggroup.add_argument('-f', '--fragment',    type=str)
     tagginggroup.add_argument('-m', '--memo',        type=lambda s: unicode(s, 'utf8'))
 
@@ -192,9 +193,9 @@ def evaltagging(sourceRow, csvRow):\n\
                             norm.SourceCategory.c.Id == norm.Source.c.Category)
                         )
             sourceParams = {}
-            source = csvRow.get('source') or source
-            source_category = csvRow.get('source category') or source_category
-            node            = csvRow.get('node')            or node
+            source          = csvRow.get('Source') or source
+            source_category = csvRow.get('Source Category') or source_category
+            node            = csvRow.get('Node')            or node
             fragment        = csvRow.get('Fragment')        or fragment
             memo            = csvRow.get('Memo')            or memo
 
@@ -211,48 +212,50 @@ def evaltagging(sourceRow, csvRow):\n\
             sourceRows = norm.con.execute(sourceSel, {'Source': source})
             for sourceRow in sourceRows:
                 if tagging:
-                    taggings = evaltagging(sourceRow, csvRow)
+                    taggingList = evaltagging(sourceRow, csvRow)
                 else:
-                    taggings = [{'Node': node, 'Fragment': fragment, 'Memo': memo}]
+                    taggingList = [{'Node': node, 'Fragment': fragment, 'Memo': memo}]
 
-                for tagging in taggings:
-                    fragmentmatch = fragmentregex.match(tagging['Fragment'])
+                for taggingItem in taggingList:
+                    fragmentmatch = fragmentregex.match(taggingItem['Fragment'])
                     if fragmentmatch:
                         fragmentstart = int(fragmentmatch.group('start'))
                         fragmentend   = int(fragmentmatch.group('end'))
 
                     if not fragmentmatch or fragmentstart > len(sourceRow['Content']) or fragmentend < fragmentstart or fragmentend > len(sourceRow['Content']):
-                        raise RuntimeError("Illegal fragment specification: " + tagging['Fragment'])
+                        print(sourceRow['Content'], len(sourceRow['Content']))
+                        raise RuntimeError("Illegal fragment specification: " + taggingItem['Fragment'] + " Content length is " + str(len(sourceRow['Content'])))
 
-                    if tagging.get('Node'):
-                        nodeRec = norm.con.execute(select([
-                                    norm.Node.c.Id,
-                                ]).where(
-                                    norm.Node.c.Name == bindparam('Node')
-                                ), {
-                                    'Node': tagging['Node']
-                                }).first()
-                        if nodeRec is None:
-                            raise RuntimeError("Node: " + tagging['Node'] + " not found.")
+                    if taggingItem.get('Node'):
+                        for nodeItem in taggingItem['Node'].splitlines():
+                            nodeRec = norm.con.execute(select([
+                                        norm.Node.c.Id,
+                                    ]).where(
+                                        norm.Node.c.Name == bindparam('Node')
+                                    ), {
+                                        'Node': nodeItem
+                                    }).first()
+                            if nodeRec is None:
+                                raise RuntimeError("Node: " + nodeItem + " not found.")
 
-                        taggingRows.append({
-                                'Id':           uuid.uuid4(),
-                                'Source':       sourceRow['Id'],
-                                'Node':         nodeRec['Id'],
-                                'Fragment':     tagging['Fragment'],
-                                'Memo':         tagging.get('Memo'),
-                                'CreatedBy':    userId,
-                                'CreatedDate':  datetimeNow,
-                                'ModifiedBy':   userId,
-                                'ModifiedDate': datetimeNow
-                            })
-                    elif tagging.get('Memo'):
+                            taggingRows.append({
+                                    'Id':           uuid.uuid4(),
+                                    'Source':       sourceRow['Id'],
+                                    'Node':         nodeRec['Id'],
+                                    'Fragment':     taggingItem['Fragment'],
+                                    'Memo':         taggingItem.get('Memo'),
+                                    'CreatedBy':    userId,
+                                    'CreatedDate':  datetimeNow,
+                                    'ModifiedBy':   userId,
+                                    'ModifiedDate': datetimeNow
+                                })
+                    elif taggingItem.get('Memo'):
                         taggingRows.append({
                                 'Id':           uuid.uuid4(),
                                 'Source':       sourceRow['Id'],
                                 'Node':         None,
-                                'Fragment':     tagging['Fragment'],
-                                'Memo':         tagging['Memo'],
+                                'Fragment':     taggingItem['Fragment'],
+                                'Memo':         taggingItem['Memo'],
                                 'CreatedBy':    userId,
                                 'CreatedDate':  datetimeNow,
                                 'ModifiedBy':   userId,
