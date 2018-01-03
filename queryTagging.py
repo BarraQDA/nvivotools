@@ -87,11 +87,15 @@ def queryTagging(infile, outfile,
                 norm.Source.c.Name.label('Source'),
                 norm.Node.c.Name.label('Node'),
                 norm.Source.c.Content,
-                norm.Tagging.c.Fragment
-            ]).where(and_(
+                norm.Tagging.c.Fragment,
+                norm.Tagging.c.Memo
+            ]).where(
                 norm.Source.c.Id == norm.Tagging.c.Source,
-                norm.Tagging.c.Node == norm.Node.c.Id
-            ))
+            ).select_from(
+                norm.Tagging.outerjoin(
+                    norm.Node,
+                    norm.Tagging.c.Node == norm.Node.c.Id)
+            )
         params = {}
 
         if source:
@@ -139,10 +143,13 @@ def queryTagging(infile, outfile,
         intersection = tagginglist[0]
 
         def sorttagginglist(tagginglist):
-            tagginglist.sort(key = lambda tagging: (tagging['Source'], tagging['Start'], tagging['End']))
+            tagginglist.sort(key = lambda tagging: (tagging['Source'], tagging['Node'], tagging['Start'], tagging['End']))
             idx = 0
             while idx < len(tagginglist) - 1:
-                if tagginglist[idx]['Source'] == tagginglist[idx+1]['Source'] and tagginglist[idx]['End'] >= tagginglist[idx+1]['Start']:
+                if  tagginglist[idx]['Source'] == tagginglist[idx+1]['Source']  \
+                and tagginglist[idx]['Node']                                    \
+                and tagginglist[idx]['Node'] == tagginglist[idx+1]['Node']      \
+                and tagginglist[idx]['End'] >= tagginglist[idx+1]['Start']:
                     tagginglist[idx]['End'] = max(tagginglist[idx]['End'], tagginglist[idx+1]['End'])
                     del tagginglist[idx+1]
                 else:
@@ -180,7 +187,7 @@ def queryTagging(infile, outfile,
             csvfile.write('#' * 80 + '\n')
 
         csvwriter = unicodecsv.DictWriter(csvfile,
-                                          fieldnames=['Source', 'Node', 'Text', 'Fragment'],
+                                          fieldnames=['Source', 'Node', 'Memo', 'Text', 'Fragment'],
                                           extrasaction='ignore',
                                           lineterminator=os.linesep,
                                           quoting=unicodecsv.QUOTE_NONNUMERIC)

@@ -194,8 +194,9 @@ def evaltagging(sourceRow, csvRow):\n\
             sourceParams = {}
             source = csvRow.get('source') or source
             source_category = csvRow.get('source category') or source_category
-            node = csvRow.get('node') or node
-            fragment = csvRow.get('Fragment') or fragment
+            node            = csvRow.get('node')            or node
+            fragment        = csvRow.get('Fragment')        or fragment
+            memo            = csvRow.get('Memo')            or memo
 
             if source:
                 sourceSel = sourceSel.where(norm.Source.c.Name == bindparam('Source'))
@@ -212,7 +213,7 @@ def evaltagging(sourceRow, csvRow):\n\
                 if tagging:
                     taggings = evaltagging(sourceRow, csvRow)
                 else:
-                    taggings = [{'Node': node, 'Fragment': fragment}]
+                    taggings = [{'Node': node, 'Fragment': fragment, 'Memo': memo}]
 
                 for tagging in taggings:
                     fragmentmatch = fragmentregex.match(tagging['Fragment'])
