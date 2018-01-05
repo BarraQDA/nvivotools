@@ -139,23 +139,26 @@ def queryTagging(infile, outfile,
                 tagging['Start'] = int(matchfragment.group('start'))
                 tagging['End']   = int(matchfragment.group('end'))
 
-        intersection = []
-        intersection = tagginglist[0]
-
-        def sorttagginglist(tagginglist):
-            tagginglist.sort(key = lambda tagging: (tagging['Source'], tagging['Node'], tagging['Start'], tagging['End']))
+        def sortandmergetagginglist(tagginglist):
+            tagginglist.sort(key = lambda tagging: (tagging['Source'], tagging['NodeTuple'], tagging['Start'], tagging['End']))
             idx = 0
             while idx < len(tagginglist) - 1:
-                if  tagginglist[idx]['Source'] == tagginglist[idx+1]['Source']  \
-                and tagginglist[idx]['Node']                                    \
-                and tagginglist[idx]['Node'] == tagginglist[idx+1]['Node']      \
+                if  tagginglist[idx]['Source']    == tagginglist[idx+1]['Source']    \
+                and tagginglist[idx]['NodeTuple'] == tagginglist[idx+1]['NodeTuple'] \
                 and tagginglist[idx]['End'] >= tagginglist[idx+1]['Start']:
                     tagginglist[idx]['End'] = max(tagginglist[idx]['End'], tagginglist[idx+1]['End'])
                     del tagginglist[idx+1]
                 else:
                     idx += 1
 
-        sorttagginglist(intersection)
+        intersection = tagginglist[0]
+        for tagging in intersection:
+            if tagging.get('Node'):
+                tagging['NodeTuple'] = (tagging['Node'],)
+            else:
+                tagging['NodeTuple'] = ()
+
+        sortandmergetagginglist(intersection)
         for taggings in tagginglist[1:]:
             idx = 0
             newintersection = []
@@ -166,13 +169,13 @@ def queryTagging(infile, outfile,
                         newend   = min(tagging['End'],   intagging['End'])
                         if newend >= newstart:
                             newintersection.append({'Source': tagging['Source'],
-                                                    'Node': tagging['Node'] + os.linesep + intagging['Node'],
+                                                    'NodeTuple': (tagging['Node'],) +  intagging['NodeTuple'],
                                                     'Content': tagging['Content'],
                                                     'Start': newstart,
                                                     'End':   newend})
 
             intersection = newintersection
-            sorttagginglist(intersection)
+            sortandmergetagginglist(intersection)
 
         if outfile:
             if os.path.exists(outfile):
@@ -196,7 +199,8 @@ def queryTagging(infile, outfile,
 
         for tagging in intersection:
             tagging['Fragment'] = str(tagging['Start']) + ':' + str(tagging['End'])
-            tagging['Text']   = tagging['Content'][tagging['Start']-1:tagging['End']]
+            tagging['Text'] = tagging['Content'][tagging['Start']-1:tagging['End']]
+            tagging['Node'] = os.linesep.join(nodeiter for nodeiter in tagging['NodeTuple'] if nodeiter not in node)
 
         csvwriter.writerows(intersection)
         csvfile.close()
