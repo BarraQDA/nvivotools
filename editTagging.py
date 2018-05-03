@@ -94,6 +94,7 @@ def editTagging(outfile, infile, user,
 
     try:
 
+        norm = None
         if prelude:
             if verbosity >= 1:
                 print("Executing prelude code.", file=sys.stderr)
@@ -125,7 +126,7 @@ def evaltagging(sourceRow, csvRow):\n\
             else:
                 incomments = ''
             logfile = open(logfilename, 'w')
-            logfile.write(comments)
+            logfile.write(comments.encode('utf8'))
             logfile.write(csvcomments)
             logfile.write(incomments)
             logfile.close()
