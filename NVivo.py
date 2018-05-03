@@ -211,6 +211,10 @@ def Normalise(args):
             nvivoRole          = Table('Role',          nvivomd, autoload=True)
             nvivoSource        = Table('Source',        nvivomd, autoload=True)
             nvivoUserProfile   = Table('UserProfile',   nvivomd, autoload=True)
+            try:
+                nvivoBlobStorage = Table('BlobStorage',   nvivomd, autoload=True)
+            except exc.NoSuchTableError:
+                nvivoBlobStorage = None
         else:
             nvivodb = None
 
@@ -634,14 +638,14 @@ def Normalise(args):
             nvivoCategoryRole = nvivoRole.alias(name='CategoryRole')
             nvivoParentRole   = nvivoRole.alias(name='ParentRole')
 
-            sources = [dict(row) for row in nvivodb.execute(select([
+            sourcesel = select([
                     nvivoItem.c.Id,
                     nvivoCategoryRole.c.Item2_Id.label('Category'),
                     nvivoItem.c.Name,
                     nvivoItem.c.Description,
                     nvivoItem.c.ColorArgb.label('Color'),
                     nvivoSource.c.TypeId.label('ObjectTypeId'),
-                    nvivoSource.c.Object,
+                    nvivoBlobStorage.c.Object if nvivoBlobStorage is not None else nvivoSource.c.Object,
                     nvivoSource.c.PlainText,
                     nvivoSource.c.MetaData,
                     nvivoSource.c.Thumbnail,
@@ -650,15 +654,22 @@ def Normalise(args):
                     nvivoItem.c.CreatedBy,
                     nvivoItem.c.CreatedDate,
                     nvivoItem.c.ModifiedBy,
-                    nvivoItem.c.ModifiedDate]
-                ).where(
+                    nvivoItem.c.ModifiedDate
+                ]).where(
                     nvivoItem.c.Id == nvivoSource.c.Item_Id
                 ).select_from(nvivoItem.outerjoin(
                     nvivoCategoryRole,
                 and_(
                     nvivoCategoryRole.c.TypeId == literal_column(NVivo.RoleType.ItemCategory),
-                    nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id)
-                )))]
+                    nvivoCategoryRole.c.Item1_Id == nvivoItem.c.Id
+                )))
+            if nvivoBlobStorage is not None:
+                sourcesel = sourcesel.select_from(nvivoSource.outerjoin(
+                    nvivoBlobStorage,
+                    nvivoBlobStorage.c.Content_Id == nvivoSource.c.ContentLocation,
+                ))
+
+            sources = [dict(row) for row in nvivodb.execute(sourcesel)]
             for source in sources:
                 if args.windows:
                     source['Name']        = u''.join(map(lambda ch: chr(ord(ch) - 0x377), source['Name']))
