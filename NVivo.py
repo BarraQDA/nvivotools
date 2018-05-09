@@ -796,29 +796,31 @@ def Normalise(args):
             # On Mac, text sections refer to indexes on non-space characters, but non-breaking
             # spaces are counted.
             if args.mac:
-                sourcetext = source['PlainText']
-
-                startx = item['StartText']
-                laststartx = 0
-                nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
-                while nextstartx > startx:
-                    laststartx = startx+1
-                    startx = nextstartx
+                # Some Mac versions don't calculate StartX & LengthX in database
+                if item['StartX'] is None:
+                    sourcetext = source['PlainText']
+                    startx = item['StartText']
+                    laststartx = 0
+                    # For some reason non-breaking spaces don't count
                     nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
+                    while nextstartx > startx:
+                        laststartx = startx+1
+                        startx = nextstartx
+                        nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
 
-                lengthx = item['LengthText']
-                lastlengthx = 0
-                nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
-                while nextlengthx > lengthx:
-                    lastlengthx = lengthx
-                    lengthx = nextlengthx
+                    lengthx = item['LengthText']
+                    lastlengthx = 0
                     nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
+                    while nextlengthx > lengthx:
+                        lastlengthx = lengthx
+                        lengthx = nextlengthx
+                        nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
 
-                item['StartX']  = startx
-                item['LengthX'] = lengthx
-            # Otherwise correct for adjusted line terminators: PlainText is original, Content
-            # is adjusted.
+                    item['StartX']  = startx
+                    item['LengthX'] = lengthx
             else:
+                # Correct for adjusted line terminators. NB PlainText is original, Content
+                # is adjusted.
                 startx  = item['StartX']
                 lengthx = item['LengthX']
                 item['StartX']  -= source['PlainText'][0:startx].count('\r\n')
@@ -846,8 +848,8 @@ def Normalise(args):
                     nvivoNodeReference.c.Id,
                     nvivoNodeReference.c.Source_Item_Id.label('Source'),
                     nvivoNodeReference.c.Node_Item_Id.label('Node'),
-                    nvivoNodeReference.c.StartText  if args.mac else nvivoNodeReference.c.StartX,
-                    nvivoNodeReference.c.LengthText if args.mac else nvivoNodeReference.c.LengthX,
+                    nvivoNodeReference.c.StartX,
+                    nvivoNodeReference.c.LengthX,
                     nvivoNodeReference.c.StartY,
                     nvivoNodeReference.c.LengthY,
                     nvivoNodeReference.c.StartZ,
@@ -855,6 +857,10 @@ def Normalise(args):
                     nvivoNodeReference.c.CreatedDate,
                     nvivoNodeReference.c.ModifiedBy,
                     nvivoNodeReference.c.ModifiedDate
+                ] + [
+                    nvivoNodeReference.c.StartText,
+                    nvivoNodeReference.c.LengthText
+                ] if args.mac else [
                 ]).where(and_(
                     #nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
                     nvivoItem.c.Id == nvivoNodeReference.c.Node_Item_Id,
@@ -875,14 +881,18 @@ def Normalise(args):
                     nvivoAnnotation.c.Id,
                     nvivoAnnotation.c.Item_Id.label('Source'),
                     nvivoAnnotation.c.Text.label('Memo'),
-                    nvivoAnnotation.c.StartText  if args.mac else nvivoAnnotation.c.StartX,
-                    nvivoAnnotation.c.LengthText if args.mac else nvivoAnnotation.c.LengthX,
+                    nvivoAnnotation.c.StartX,
+                    nvivoAnnotation.c.LengthX,
                     nvivoAnnotation.c.StartY,
                     nvivoAnnotation.c.LengthY,
                     nvivoAnnotation.c.CreatedBy,
                     nvivoAnnotation.c.CreatedDate,
                     nvivoAnnotation.c.ModifiedBy,
                     nvivoAnnotation.c.ModifiedDate
+                ] + [
+                    nvivoAnnotation.c.StartText,
+                    nvivoAnnotation.c.LengthText
+                ] if args.mac else [
                 ]))]
 
             for annotation in annotations:
