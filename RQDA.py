@@ -294,7 +294,7 @@ def Norm2RQDA(args):
                         normProject.c.CreatedDate,
                         normProject.c.ModifiedDate
                     ]).where(
-                        normUser.c.Id == normSourceCategory.c.CreatedBy
+                        normUser.c.Id == normProject.c.CreatedBy
                     )).first())
                 project['About'] = project['Title'] +' Imported by NVivotools ' + datetime.now().strftime('%c')
 
