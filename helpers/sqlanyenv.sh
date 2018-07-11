@@ -28,10 +28,10 @@ if [ "$(uname)" = "Linux" ]; then
 elif [ "$(uname)" = "Darwin" ]; then
     SQLANYWHERE=/Applications/NVivo.app/Contents/SQLAnywhere
     if test -d "$SQLANYWHERE"; then
-        if test -d $SQLANYWHERE/bin64 && test -f $SQLANYWHERE/bin64/dbeng??; then
-            DYLD_LIBRARY_PATH=$SQLANYWHERE/lib64/ $SQLANYWHERE/bin64/dbeng?? "$@"
-        elif test -d $SQLANYWHERE/bin32 && test -f $SQLANYWHERE/bin32/dbeng??; then
-            DYLD_LIBRARY_PATH=$SQLANYWHERE/lib32/ $SQLANYWHERE/bin32/dbeng?? "$@"
+        if test -f $SQLANYWHERE/bin64/sa_config.sh; then
+            . $SQLANYWHERE/bin64/sa_config.sh
+        elif test -f $SQLANYWHERE/bin32/sa_config.sh; then
+            . $SQLANYWHERE/bin32/sa_config.sh
         fi
     else
         for SQLANYWHERE in `ls -d /Applications/SQLAnywhere??/System 2>/dev/null`; do
