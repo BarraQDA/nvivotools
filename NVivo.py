@@ -793,38 +793,39 @@ def Normalise(args):
         def build_tagging_or_annotation(item):
             # TODO: Deal with case where we have skipped sources
             source = next(source for source in sources if source['Id'] == item['Source'])
-            # On Mac, text sections refer to indexes on non-space characters, but non-breaking
-            # spaces are counted.
-            if args.mac:
-                # Some Mac versions don't calculate StartX & LengthX in database
-                if item['StartX'] is None:
-                    sourcetext = source['PlainText']
-                    startx = item['StartText']
-                    laststartx = 0
-                    # For some reason non-breaking spaces don't count
-                    nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
-                    while nextstartx > startx:
-                        laststartx = startx+1
-                        startx = nextstartx
+            sourcetext = source['PlainText']
+            if sourcetext:
+                # On Mac, text sections refer to indexes on non-space characters, but non-breaking
+                # spaces are counted.
+                if args.mac:
+                    # Some Mac versions don't calculate StartX & LengthX in database
+                    if item['StartX'] is None:
+                        startx = item['StartText']
+                        laststartx = 0
+                        # For some reason non-breaking spaces don't count
                         nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
+                        while nextstartx > startx:
+                            laststartx = startx+1
+                            startx = nextstartx
+                            nextstartx = startx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[laststartx:startx+1])
 
-                    lengthx = item['LengthText']
-                    lastlengthx = 0
-                    nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
-                    while nextlengthx > lengthx:
-                        lastlengthx = lengthx
-                        lengthx = nextlengthx
+                        lengthx = item['LengthText']
+                        lastlengthx = 0
                         nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
+                        while nextlengthx > lengthx:
+                            lastlengthx = lengthx
+                            lengthx = nextlengthx
+                            nextlengthx = lengthx + sum(c.isspace() and c != u'\xa0' for c in sourcetext[startx+lastlengthx:startx+lengthx])
 
-                    item['StartX']  = startx
-                    item['LengthX'] = lengthx
-            else:
-                # Correct for adjusted line terminators. NB PlainText is original, Content
-                # is adjusted.
-                startx  = item['StartX']
-                lengthx = item['LengthX']
-                item['StartX']  -= source['PlainText'][0:startx].count('\r\n')
-                item['LengthX'] -= source['PlainText'][startx-1:startx+lengthx-1].count('\r\n')
+                        item['StartX']  = startx
+                        item['LengthX'] = lengthx
+                else:
+                    # Correct for adjusted line terminators. NB PlainText is original, Content
+                    # is adjusted.
+                    startx  = item['StartX']
+                    lengthx = item['LengthX']
+                    item['StartX']  -= sourcetext[0:startx].count('\r\n')
+                    item['LengthX'] -= sourcetext[startx-1:startx+lengthx-1].count('\r\n')
 
             item['Fragment'] = ''
             # Normalised file startX is 1-based, Nvivo is 0-based
@@ -881,8 +882,6 @@ def Normalise(args):
                     nvivoAnnotation.c.Id,
                     nvivoAnnotation.c.Item_Id.label('Source'),
                     nvivoAnnotation.c.Text.label('Memo'),
-                    nvivoAnnotation.c.StartX,
-                    nvivoAnnotation.c.LengthX,
                     nvivoAnnotation.c.StartY,
                     nvivoAnnotation.c.LengthY,
                     nvivoAnnotation.c.CreatedBy,
@@ -893,10 +892,15 @@ def Normalise(args):
                     nvivoAnnotation.c.StartText,
                     nvivoAnnotation.c.LengthText
                 ] if args.mac else [
+                    nvivoAnnotation.c.StartX,
+                    nvivoAnnotation.c.LengthX
                 ]))]
 
             for annotation in annotations:
                 annotation['Node'] = None
+                if args.mac:
+                    annotation['StartX']  = None
+                    annotation['LengthX'] = None
                 build_tagging_or_annotation(annotation)
 
             merge_overwrite_or_replace(normcon, normTagging, ['Id'], annotations, args.annotations, args.verbosity)
