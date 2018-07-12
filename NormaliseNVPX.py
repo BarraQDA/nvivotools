@@ -31,7 +31,7 @@ if os.name != 'nt':
     if not os.environ.get('_sqlanywhere'):
         envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
         for envline in envlines:
-            env = re.match(r"(?P<name>\w+)='(?P<value>\S+)'", envline).groupdict()
+            env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.+)(?P=quote)", envline).groupdict()
             os.environ[env['name']] = env['value']
 
         os.environ['_sqlanywhere'] = 'TRUE'
