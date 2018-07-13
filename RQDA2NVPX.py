@@ -142,7 +142,15 @@ args.outdb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' 
 # Small hack
 args.node_attributes = args.case_attributes
 
+chdir = os.environ.get('CHDIR')
+if chdir:
+    cwd = os.getcwd()
+    os.chdir(chdir)
+
 NVivo.Denormalise(args)
+
+if chdir:
+    os.chdir(cwd)
 
 if not args.cmdline:
     args.outfilename = os.path.basename(args.outfilename)

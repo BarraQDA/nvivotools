@@ -27,11 +27,26 @@ if [ "$(uname)" = "Linux" ]; then
     done
 elif [ "$(uname)" = "Darwin" ]; then
     SQLANYWHERE=/Applications/NVivo.app/Contents/SQLAnywhere
+    # The version of SQLAnywhere bundled with NVivo is very difficult to work with
+    # as its libraries contain references to @rpath. In addition, dlopen() doesn't
+    # seem to respect DYLD_LIBRARY_PATH and friends. But it will find a library
+    # in the current working directory. So this hack makes a copy of
+    # libdbcapi_r.dylib, modifies its embedded rpath, tells sqlanydb to use
+    # the modified library, and flags that the current working directory much
+    # be changed prior to loading sqlanydb. Whew!
     if test -d "$SQLANYWHERE"; then
-        if test -f $SQLANYWHERE/bin64/sa_config.sh; then
-            . $SQLANYWHERE/bin64/sa_config.sh
-        elif test -f $SQLANYWHERE/bin32/sa_config.sh; then
-            . $SQLANYWHERE/bin32/sa_config.sh
+        if test -f $SQLANYWHERE/lib64/libdbcapi_r.dylib; then
+            cp -p $SQLANYWHERE/lib64/libdbcapi_r.dylib $SQLANYWHERE/lib64/libdbcapi_r.rpath.dylib
+            chmod +w $SQLANYWHERE/lib64/libdbcapi_r.rpath.dylib
+            install_name_tool -add_rpath $SQLANYWHERE/lib64/ $SQLANYWHERE/lib64/libdbcapi_r.rpath.dylib
+            export SQLANY_API_DLL=libdbcapi_r.rpath.dylib
+            export CHDIR=$SQLANYWHERE/lib64/
+        elif test -f $SQLANYWHERE/lib32/libdbcapi_r.dylib; then
+            cp -p $SQLANYWHERE/lib32/libdbcapi_r.dylib $SQLANYWHERE/lib32/libdbcapi_r.rpath.dylib
+            chmod +w $SQLANYWHERE/lib32/libdbcapi_r.rpath.dylib
+            install_name_tool -add_rpath $SQLANYWHERE/lib32/ $SQLANYWHERE/lib32/libdbcapi_r.rpath.dylib
+            export SQLANY_API_DLL=libdbcapi_r.rpath.dylib
+            export CHDIR=$SQLANYWHERE/lib32/
         fi
     else
         for SQLANYWHERE in `ls -d /Applications/SQLAnywhere??/System 2>/dev/null`; do

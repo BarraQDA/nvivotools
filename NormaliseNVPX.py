@@ -140,7 +140,15 @@ if args.verbosity > 0:
 args.indb = 'sqlalchemy_sqlany://wiwalisataob2aaf:iatvmoammgiivaam@localhost:' + freeport + '/NVivo' + freeport
 args.outdb = 'sqlite:///' + tmpoutfile
 
+chdir = os.environ.get('CHDIR')
+if chdir:
+    cwd = os.getcwd()
+    os.chdir(chdir)
+
 NVivo.Normalise(args)
+
+if chdir:
+    os.chdir(cwd)
 
 if not args.cmdline:
     args.outfile = os.path.basename(args.outfile)

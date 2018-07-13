@@ -30,12 +30,10 @@ if [ "$(uname)" = "Linux" ]; then
 elif [ "$(uname)" = "Darwin" ]; then
     SQLANYWHERE=/Applications/NVivo.app/Contents/SQLAnywhere
     if test -d "$SQLANYWHERE"; then
-        if test -f $SQLANYWHERE/bin64/sa_config.sh; then
-            . $SQLANYWHERE/bin64/sa_config.sh
+        if test -d $SQLANYWHERE/bin64/; then
             $SQLANYWHERE/bin64/dbeng?? "$@"
             exit
-        elif test -f $SQLANYWHERE/bin32/sa_config.sh; then
-            . $SQLANYWHERE/bin32/sa_config.sh
+        elif test -d $SQLANYWHERE/bin32/; then
             $SQLANYWHERE/bin32/dbeng?? "$@"
             exit
         fi
