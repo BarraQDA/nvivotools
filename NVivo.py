@@ -69,6 +69,7 @@ class NVivo:
         AttributeValue = '21'
         SourceClassification = '51'
         NodeClassification = '52'
+        Case = '62'
 
     class SourceType:
         Doc = '2'
@@ -153,7 +154,7 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
         api = mssqlAPI(server,
                        port,
                        instance,
-                       version = ('MSSQL12' if nvivoversion == '11' else 'MSSQL10_50'),
+                       version = ('MSSQL10_50' if nvivoversion == '10' else 'MSSQL12'),
                        verbosity = verbosity)
         api.attach(filename, dbname)
 
@@ -486,7 +487,10 @@ def Normalise(args):
                     nvivoItem.c.ModifiedDate,
                     nvivoParentRole.c.Item1_Id.label('Parent')]
                 ).where(
-                    nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node),
+                    nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node) 
+                        if args.nvivoversion == '10' 
+                        else or_(nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node), 
+                                 nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Case))
                 ).select_from(nvivoItem.outerjoin(
                     nvivoCategoryRole,
                 and_(
@@ -537,7 +541,7 @@ def Normalise(args):
                     nvivoValueItem.c.ModifiedDate,
                     nvivoExtendedItem.c.Properties]
                 ).where(and_(
-                    nvivoNodeItem.c.TypeId==literal_column(NVivo.ItemType.Node),
+                    nvivoNodeItem.c.TypeId == literal_column(NVivo.ItemType.Node if args.nvivoversion == '10' else NVivo.ItemType.Case),
                     nvivoNodeItem.c.Id == nvivoValueRole.c.Item1_Id,
                     nvivoValueRole.c.TypeId == literal_column(NVivo.RoleType.ItemValue),
                     nvivoValueItem.c.Id == nvivoValueRole.c.Item2_Id,
@@ -648,8 +652,8 @@ def Normalise(args):
                     nvivoBlobStorage.c.Object if nvivoBlobStorage is not None else nvivoSource.c.Object,
                     nvivoSource.c.PlainText,
                     nvivoSource.c.MetaData,
-                    nvivoSource.c.Thumbnail,
-                    nvivoSource.c.Waveform,
+                    nvivoSource.c.ThumbnailLocation if args.nvivoversion == '12' else nvivoSource.c.Thumbnail,
+                    nvivoSource.c.WaveformLocation if args.nvivoversion == '12' else nvivoSource.c.Waveform,
                     nvivoItem.c.TypeId.label('SourceType'),
                     nvivoItem.c.CreatedBy,
                     nvivoItem.c.CreatedDate,
@@ -1172,7 +1176,7 @@ def Denormalise(args):
                         }), rowstoinsert)
 
 # Node Categories
-        skip_merge_or_overwrite_categories(normNodeCategory, NVivo.ItemType.NodeClassification, 'case' if args.nvivoversion == '11' else 'node', args.node_categories)
+        skip_merge_or_overwrite_categories(normNodeCategory, NVivo.ItemType.NodeClassification, 'node' if args.nvivoversion == '10' else 'case', args.node_categories)
 
 # Nodes
         if args.nodes != 'skip':

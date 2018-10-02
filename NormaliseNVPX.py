@@ -52,8 +52,9 @@ parser.add_argument('--cmdline', action='store_true',
 
 parser.add_argument('-v', '--verbosity', type=int, default=1)
 
-parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
-                    help='NVivo version (10 or 11)')
+parser.add_argument('-nv', '--nvivoversion', 
+                    choices=["10", "11", "12"], default="10",
+                    help='NVivo version (10, 11 or 12)')
 
 parser.add_argument('-u', '--users', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='User action.')
