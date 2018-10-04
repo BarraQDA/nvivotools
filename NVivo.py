@@ -488,9 +488,9 @@ def Normalise(args):
                     nvivoParentRole.c.Item1_Id.label('Parent')]
                 ).where(
                     nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node) 
-                        if args.nvivoversion == '10' 
-                        else or_(nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node), 
-                                 nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Case))
+                                              if args.nvivoversion == '10' 
+                                          else or_(nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node), 
+                                                   nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Case))
                 ).select_from(nvivoItem.outerjoin(
                     nvivoCategoryRole,
                 and_(
@@ -1178,12 +1178,12 @@ def Denormalise(args):
 # Node Categories
         skip_merge_or_overwrite_categories(normNodeCategory, NVivo.ItemType.NodeClassification, 'node' if args.nvivoversion == '10' else 'case', args.node_categories)
 
-# Nodes
+# Nodes/Cases
         if args.nodes != 'skip':
             if args.verbosity > 0:
                 print("Denormalising nodes", file=sys.stderr)
 
-            # Look up head node
+            # Look up head node and case
             headnodename = u'Nodes'
             if args.windows:
                 headnodename = u''.join(map(lambda ch: chr(ord(ch) + 0x377), headnodename))
@@ -1203,19 +1203,39 @@ def Denormalise(args):
                 if args.verbosity > 1:
                     print("Found head node Id: " + str(headnode['Id']), file=sys.stderr)
 
+            if args.nvivoversion > '10':
+                headcasename = u'Cases'
+                if args.windows:
+                    headcasename = u''.join(map(lambda ch: chr(ord(ch) + 0x377), headcasename))
+
+                headcase = nvivocon.execute(select([
+                        nvivoItem.c.Id
+                    ]).where(and_(
+                        nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Folder),
+                        nvivoItem.c.Name == bindparam('Name'),
+                        nvivoItem.c.System == True
+                    )),
+                        {'Name':headcasename}
+                    ).first()
+                if headcase is None:
+                    raise RuntimeError("NVivo file contains no head case.")
+                else:
+                    if args.verbosity > 1:
+                        print("Found head case Id: " + str(headcase['Id']), file=sys.stderr)
+
             nodes = [dict(row) for row in normdb.execute(select([
-                    normNode.c.Id,
-                    normNode.c.Parent,
-                    normNode.c.Category,
-                    normNode.c.Name,
-                    normNode.c.Description,
-                    normNode.c.Color,
-                    normNode.c.Aggregate,
-                    normNode.c.CreatedBy,
-                    normNode.c.CreatedDate,
-                    normNode.c.ModifiedBy,
-                    normNode.c.ModifiedDate
-                ]))]
+                        normNode.c.Id,
+                        normNode.c.Parent,
+                        normNode.c.Category,
+                        normNode.c.Name,
+                        normNode.c.Description,
+                        normNode.c.Color,
+                        normNode.c.Aggregate,
+                        normNode.c.CreatedBy,
+                        normNode.c.CreatedDate,
+                        normNode.c.ModifiedBy,
+                        normNode.c.ModifiedDate
+                    ]))]
 
             tag = 0
             for node in nodes:
@@ -1271,7 +1291,10 @@ def Denormalise(args):
             curids = [{'_Id':row['Id']} for row in nvivocon.execute(select([
                     nvivoItem.c.Id
                 ]).where(
-                    nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node)
+                    nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node) 
+                                              if args.nvivoversion == '10' else
+                                          or_(nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node), 
+                                              nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Case))
                 ))]
 
             nodestoinsert = [node for node in nodes if not {'_Id':node['Id']} in curids]
@@ -1282,26 +1305,33 @@ def Denormalise(args):
             tagchildnodes(None, None, [], 0)
             aggregatepairs = []
             for node in nodestoinsert:
+                if args.nvivoversion == '10' or node['Category'] is None:
+                    node['ItemType'] = NVivo.ItemType.Node
+                    node['HeadId']   = headnode['Id']
+                else:
+                    node['ItemType'] = NVivo.ItemType.Case
+                    node['HeadId']   = headcase['Id']
+
                 for dest in node['AggregateList']:
                     aggregatepairs += [{ 'Id': node['Id'], 'Ancestor': dest }]
                 node['TruncatedDescription'] = node['Description'][0:nvivoItem.c.Description.type.length]
 
             if len(nodestoinsert) > 0:
                 itemvalues = {
-                        'TypeId':   literal_column(NVivo.ItemType.Node),
-                        'ColorArgb': bindparam('Color'),
-                        'System':   literal_column('0'),
-                        'ReadOnly': literal_column('0'),
+                        'TypeId':             bindparam('ItemType'),
+                        'ColorArgb':          bindparam('Color'),
+                        'System':             literal_column('0'),
+                        'ReadOnly':           literal_column('0'),
                         'InheritPermissions': literal_column(NVivo.RoleType.ParentItem),
-                        'Description': bindparam('TruncatedDescription')
+                        'Description':        bindparam('TruncatedDescription')
                     }
                 if args.mac:
                     itemvalues.update({
-                        'HierarchicalName': bindparam('HierarchicalName')
+                        'HierarchicalName':   bindparam('HierarchicalName')
                     })
                 nvivocon.execute(nvivoItem.insert().values(itemvalues), nodestoinsert)
                 nvivocon.execute(nvivoRole.insert().values({
-                        'Item1_Id': literal_column("'" + str(headnode['Id']) + "'"),
+                        'Item1_Id': bindparam('HeadId'),
                         'Item2_Id': bindparam('Id'),
                         'TypeId':   literal_column(NVivo.RoleType.NodeMember)
                     }), nodestoinsert)
