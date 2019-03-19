@@ -862,11 +862,11 @@ def Normalise(args):
                     nvivoNodeReference.c.CreatedDate,
                     nvivoNodeReference.c.ModifiedBy,
                     nvivoNodeReference.c.ModifiedDate
-                ] + [
+                ] + ([
                     nvivoNodeReference.c.StartText,
                     nvivoNodeReference.c.LengthText
                 ] if args.mac else [
-                ]).where(and_(
+                ])).where(and_(
                     #nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
                     nvivoItem.c.Id == nvivoNodeReference.c.Node_Item_Id,
                     nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node),
