@@ -49,11 +49,16 @@ elif [ "$(uname)" = "Darwin" ]; then
             export CHDIR=$SQLANYWHERE/lib32/
         fi
     else
+    # As of High Sierra we have another problem - changes to DYLD_LIBRARY_PATH are dumped by the
+    # System Integrity Protection system. We hack our way around this problem by changing the current
+    # working directory to the one containing the dynamic libraries.
         for SQLANYWHERE in `ls -d /Applications/SQLAnywhere??/System 2>/dev/null`; do
             if test -f $SQLANYWHERE/bin64/sa_config.sh; then
                 . $SQLANYWHERE/bin64/sa_config.sh
+                export CHDIR=$SQLANYWHERE/lib64/
             elif test -f $SQLANYWHERE/bin32/sa_config.sh; then
                 . $SQLANYWHERE/bin32/sa_config.sh
+                export CHDIR=$SQLANYWHERE/lib32/
             fi
         done
     fi
