@@ -24,9 +24,9 @@ If you want to access NVivo for Mac files (and this may be sufficient for you ev
 
 If you have NVivo installed, then NVivotools will automatically use the instance of SQL Anywhere that is bundled with it.  Otherwise, read the following section for instructions on installing SQL Anywhere.
 
-### NVivo for Mac on other operating systems
+### NVivo for Mac or other operating systems
 
-Since NVivo for Mac (`.nvpx`) files are actually SQL Anywhere databases, they can be accessed on any computer on which SQL Anywhere can be installed. This includes Linux (for x86, x64 and ARM), Mac and Windows, plus Solaris SPARC and x64, HP-UX Itanium and IBM AIX.  The [Developer Edition](https://www.sap.com/cmp/syb/crm-xm15-dwn-dt015/index.html) is available free of charge (subject to licence conditions, which it is your responsibility to comply with). Simply download and install it, and you are ready for the next step.
+Since NVivo for Mac (`.nvpx`) files are actually SQL Anywhere databases, they can be accessed on any computer on which SQL Anywhere can be installed. This includes Linux (for x86, x64 and ARM), Mac and Windows, plus Solaris SPARC and x64, HP-UX Itanium and IBM AIX.  The [Developer Edition](https://learn.sapdigital.com/SQLA-Trial-Registration-Page.html) is available free of charge (subject to licence conditions, which it is your responsibility to comply with). Simply download and install it, and you are ready for the next step.
 
 ### NVivo for Windows on Windows
 
@@ -104,32 +104,48 @@ Use your usual package manager to install Python 2.7.
 
 ### Mac
 
-install a recent version of Python 2 from [Python Releases for Mac OS X](https://www.python.org/downloads/mac-osx/). Since Mac releases of Python appear to lack the `dateutils` module included on other versions, you need to install it explicitly:
-
-    pip install --user dateutils
+Install a recent version of Python 2 from [Python Releases for Mac OS X](https://www.python.org/downloads/mac-osx/).
 
 Sidenote: Although OSX ships with a version of Python, this version seems to be unable to work correctly with the SQLAlchemy package on which NVivotools depends (more precisely - if anyone knows enough about this stuff to figure it out - it fails to load the `dbcapi`). There is some suspicion that this problem may be related to OSX's System Integrity Protection (SIP), which was only introduced with El Capitan. It is therefore possible that the following section may not be required on earlier versions of OSX (or if you disable SIP, which we do not recommend).
 
+Update: Since High Sierra, SIP makes life even more complciated by dumping changes to `DYLD_LIBRARY_PATH` required to find SQLAlchemy's libraries. It seems that this problem can be avoided/deferred by (temporarily) shifting the working directory to the one containing the libraries. I've introduced code to do this and as of May 2019 it was still working.
+
 ## Install Python libraries
 
-You should use `pip`, even under Linux, to be sure of having up-to-date versions of the libraries. The following commands install the libraries only for the current user, which is the recommended approach, at least during the testing phases. If you know what you are doing, and have superuser privileges, you may drop `--user` from the following.
+If you don't already have `pip`, you'll need to download and run it from [here](https://bootstrap.pypa.io/get-pip.py).
 
-Using a command window, first make sure you have an up-to-date version of pip:
+You may also need to upgrade your `pip`:
 
     pip install --user --upgrade pip
 
-then install the required modules:
+### The easy way
 
-    pip install --user future pdfminer Pillow sqlalchemy python-dateutil
+The quickest, and sometimes the easiest, way to install the required Python libraries is to use the [requirements.txt] file.
 
-If you plan to access NVivo for Windows files, you will also need
+    pip install --user -r requirements.txt
+
+or, if you only want to install the libraries system-wide and have the required user privileges:
+
+    pip install -r requirements.txt
+
+If these fail (a strong possibility) you will likely have to proceed to the following, which describes how to install only those libraries that you're particular installation will need.
+
+### The complicated way
+
+Install the required modules:
+
+    pip install --user dateutils future pdfminer Pillow sqlalchemy python-dateutil
+
+If you plan to access NVivo for Windows files (whether on a Windows or other machine), you will also need
 
     pip install --user pymssql
 
 while if you are going to access NVivo for Mac files, you will need
 
-    pip install --user sqlalchemy_sqlany
+    pip install --user git+git://github.com/BarraQDA/sqlalchemy-sqlany
 
+Note that the above command installs BarraQDA's own fork of sqlalchemy-sqlany, pending the merging of this [pull request](https://github.com/sqlanywhere/sqlalchemy-sqlany/pull/12).
+    
 User [abers](https://github.com/abers) [found](https:/sre/github.com/BarraQDA/nvivotools/issues/1#issue-181693962) a problem on Raspberry Pi (possibly other ARM systems) where the `pymssql` library requires other packages (`freetds-common`, `libsybdb5`) to be installed. This problem was resolved by installing those packages using the package manager (eg `apt-get` for Debian-based systems) before using pip to install pymssql.
 
 ## Optional extras
