@@ -158,7 +158,7 @@ If you are going to import textual data into NVivo, you will need either [`Libre
 
 ### Linux
 
-Use your usual package manater to install one of `LibreOffice` or `OpenOffice`, plus `unoconv`.  The distribution should take care of Python compatibility issues by installing Python 3 if required.
+Use your usual package manager to install one of `LibreOffice` or `OpenOffice`, plus `unoconv`.  The distribution should take care of Python compatibility issues by installing Python 3 if required.
 
 ### Windows
 
