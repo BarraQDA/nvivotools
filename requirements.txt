@@ -1,3 +1,4 @@
+dateutils
 future
 unicodecsv
 pdfminer
@@ -5,4 +6,4 @@ Pillow
 pymssql
 python-dateutil
 SQLAlchemy
-sqlalchemy_sqlany
+git+git://github.com/BarraQDA/sqlalchemy-sqlany
