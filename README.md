@@ -120,7 +120,7 @@ You may also need to upgrade your `pip`:
 
 ### The easy way
 
-The quickest, and sometimes the easiest, way to install the required Python libraries is to use the [requirements.txt] file.
+The quickest, and sometimes the easiest, way to install the required Python libraries is to use the [requirements.txt](requirements.txt) file.
 
     pip install --user -r requirements.txt
 
