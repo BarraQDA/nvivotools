@@ -125,13 +125,17 @@ freeport = str(s.getsockname()[1])
 s.close()
 
 DEVNULL = open(os.devnull, 'wb')
-dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga', '-xd',  tmpoutfilename, '-n', 'NVivo'+freeport], stdout=subprocess.PIPE, stdin=DEVNULL)
+dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga', '-xd',  tmpoutfilename, '-n', 'NVivo'+freeport],
+                          stdout=subprocess.PIPE, stdin=DEVNULL)
 
 # Wait until SQL Anywhere engine starts...
 while dbproc.poll() is None:
     line = dbproc.stdout.readline()
     if line == 'Now accepting requests\n':
         break
+
+if dbproc.poll() is not None:
+    raise RuntimeError("Failed to start database server")
 
 if args.verbosity > 0:
     print("Started database server on port " + freeport, file=sys.stderr)

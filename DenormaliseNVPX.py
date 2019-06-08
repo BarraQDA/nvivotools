@@ -179,6 +179,9 @@ else:
         if 'SQL Anywhere Start Server In Background Utility' in line:
             break
 
+if dbproc.poll() is not None:
+    raise RuntimeError("Failed to start database server")
+
 if args.verbosity > 0:
     print("Started database server on port " + freeport, file=sys.stderr)
 

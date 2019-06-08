@@ -112,7 +112,8 @@ s.close()
 DEVNULL = open(os.devnull, 'wb')
 
 if os.name != 'nt':
-    dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport], stdout=subprocess.PIPE, stdin=DEVNULL)
+    dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport],
+                              stdout=subprocess.PIPE, stdin=DEVNULL)
     # Wait until SQL Anywhere engine starts...
     while dbproc.poll() is None:
         line = dbproc.stdout.readline()
@@ -128,12 +129,16 @@ else:
     else:
         raise RuntimeError("Could not find SQL Anywere executable")
 
-    dbproc = subprocess.Popen(['dbspawn', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport], stdout=subprocess.PIPE, stdin=DEVNULL)
+    dbproc = subprocess.Popen(['dbspawn', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport],
+                              stdout=subprocess.PIPE, stdin=DEVNULL)
     # Wait until SQL Anywhere engine starts...
     while dbproc.poll() is None:
         line = dbproc.stdout.readline()
         if 'SQL Anywhere Start Server In Background Utility' in line:
             break
+
+if dbproc.poll() is not None:
+    raise RuntimeError("Failed to start database server")
 
 if args.verbosity > 0:
     print("Started database server on port " + freeport, file=sys.stderr)

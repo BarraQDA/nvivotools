@@ -120,7 +120,8 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
         DEVNULL = open(os.devnull, 'wb')
 
         if os.name != 'nt':
-            dbproc = subprocess.Popen(['sh', NVivo.helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], stdout=subprocess.PIPE, stdin=DEVNULL)
+            dbproc = subprocess.Popen(['sh', NVivo.helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname],
+                                      stdout=subprocess.PIPE, stdin=DEVNULL)
             # Wait until SQL Anywhere engine starts...
             while dbproc.poll() is None:
                 line = dbproc.stdout.readline()
@@ -136,12 +137,16 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
             else:
                 raise RuntimeError("Could not find SQL Anywere executable")
 
-            dbproc = subprocess.Popen(['dbspawn', '-f', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], stdout=subprocess.PIPE, stdin=DEVNULL)
+            dbproc = subprocess.Popen(['dbspawn', '-f', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname],
+                                      stdout=subprocess.PIPE, stdin=DEVNULL)
             # Wait until SQL Anywhere engine starts...
             while dbproc.poll() is None:
                 line = dbproc.stdout.readline()
                 if 'SQL Anywhere Start Server In Background Utility' in line:
                     break
+
+        if dbproc.poll() is not None:
+            raise RuntimeError("Failed to start database server")
 
         if verbosity > 0:
             print("Started database server on port " + freeport, file=sys.stderr)
