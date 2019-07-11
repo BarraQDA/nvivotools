@@ -413,6 +413,7 @@ def Normalise(args):
                 print("Normalising project", file=sys.stderr)
 
             project = dict(nvivodb.execute(select([
+                    nvivoProject.c.Version,
                     nvivoProject.c.Title,
                     nvivoProject.c.Description,
                     nvivoProject.c.UnassignedLabel,
@@ -422,6 +423,9 @@ def Normalise(args):
                     nvivoProject.c.ModifiedBy,
                     nvivoProject.c.ModifiedDate
                 ])).first())
+
+            version = project['Version']
+            args.nvivoversion = version.split('.')[0]
 
             unassignedlabel    = project['UnassignedLabel']
             notapplicablelabel = project['NotApplicableLabel']
