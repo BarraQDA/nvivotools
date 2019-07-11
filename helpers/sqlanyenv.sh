@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Copyright 2017 Jonathan Schultz
 #
@@ -18,51 +18,61 @@
 set > /tmp/sqlanyenv.1
 
 if [ "$(uname)" = "Linux" ]; then
-    for SQLANYWHERE in `ls -d /opt/sqlanywhere?? 2>/dev/null`; do
-        if test -f $SQLANYWHERE/bin64/sa_config.sh; then
-            . $SQLANYWHERE/bin64/sa_config.sh
-        elif test -f $SQLANYWHERE/bin32/sa_config.sh; then
-            . $SQLANYWHERE/bin32/sa_config.sh
-        fi
-    done
+    sqlanywhere=${sqlanywhere:-/opt}
 elif [ "$(uname)" = "Darwin" ]; then
-    SQLANYWHERE=/Applications/NVivo.app/Contents/SQLAnywhere
-    # The version of SQLAnywhere bundled with NVivo is very difficult to work with
-    # as its libraries contain references to @rpath. In addition, dlopen() doesn't
-    # seem to respect DYLD_LIBRARY_PATH and friends. But it will find a library
-    # in the current working directory. So this hack makes a copy of
-    # libdbcapi_r.dylib, modifies its embedded rpath, tells sqlanydb to use
-    # the modified library, and flags that the current working directory much
-    # be changed prior to loading sqlanydb. Whew!
-    if test -d "$SQLANYWHERE"; then
-        if test -f $SQLANYWHERE/lib64/libdbcapi_r.dylib; then
-            cp -p $SQLANYWHERE/lib64/libdbcapi_r.dylib $SQLANYWHERE/lib64/libdbcapi_r.rpath.dylib
-            chmod +w $SQLANYWHERE/lib64/libdbcapi_r.rpath.dylib
-            install_name_tool -add_rpath $SQLANYWHERE/lib64/ $SQLANYWHERE/lib64/libdbcapi_r.rpath.dylib
-            export SQLANY_API_DLL=libdbcapi_r.rpath.dylib
-            export CHDIR=$SQLANYWHERE/lib64/
-        elif test -f $SQLANYWHERE/lib32/libdbcapi_r.dylib; then
-            cp -p $SQLANYWHERE/lib32/libdbcapi_r.dylib $SQLANYWHERE/lib32/libdbcapi_r.rpath.dylib
-            chmod +w $SQLANYWHERE/lib32/libdbcapi_r.rpath.dylib
-            install_name_tool -add_rpath $SQLANYWHERE/lib32/ $SQLANYWHERE/lib32/libdbcapi_r.rpath.dylib
-            export SQLANY_API_DLL=libdbcapi_r.rpath.dylib
-            export CHDIR=$SQLANYWHERE/lib32/
-        fi
-    else
-    # As of High Sierra we have another problem - changes to DYLD_LIBRARY_PATH are dumped by the
-    # System Integrity Protection system. We hack our way around this problem by changing the current
-    # working directory to the one containing the dynamic libraries.
-        for SQLANYWHERE in `ls -d /Applications/SQLAnywhere??/System 2>/dev/null`; do
-            if test -f $SQLANYWHERE/bin64/sa_config.sh; then
-                . $SQLANYWHERE/bin64/sa_config.sh
-                export CHDIR=$SQLANYWHERE/lib64/
-            elif test -f $SQLANYWHERE/bin32/sa_config.sh; then
-                . $SQLANYWHERE/bin32/sa_config.sh
-                export CHDIR=$SQLANYWHERE/lib32/
-            fi
-        done
+    sqlanywhere=${sqlanywhere:-/Applications}
+fi
+
+# Hacky way of choosing which SQLAnywhere installation to use: sort in
+# reverse order so SQLAnywhere installations take precedence over NVivo
+# installations and 64 bit over 32 bit. But only stop when we find a
+# dynamic executable.
+IFS=$'\n'
+for dbeng in `find $sqlanywhere -name dbeng[0-9][0-9] | sort -r`; do
+    source=$(echo $dbeng | awk -F/ '{print $3}')
+    version=$(echo $dbeng | awk -F/ '{print $NF}' | sed 's/dbeng\(..\)/\1/')
+    arch=$(echo $dbeng | awk -F/ '{print $(NF-1)}')
+    bits=$(echo $arch | sed 's/bin\([0-9]*\).*/\1/')
+    binpath=`dirname $dbeng`
+    libpath=`dirname $binpath`/lib$bits
+    [[ "${arch: -1}" == "s" ]] && static=1 || static=0
+    [[ $source =~ NVivo ]] && nvivo=1 || nvivo=0
+    [[ $nvivo ]] && nvivoversion=$(echo $source | sed 's/NVivo\(.*\)\.app/\1/' | xargs)
+    [[ $static == 0 ]] && break
+done
+unset IFS
+if [[ "$source" != "" ]]; then
+    echo "Found SQLAnywhere installation at `dirname "$dbeng"`" > /dev/stderr
+else
+    echo "Could not find SQLAnywhere installation" > /dev/stderr
+    exit 1
+fi
+
+# The version of SQLAnywhere bundled with NVivo is very difficult to work with
+# as its libraries contain references to @rpath. In addition, dlopen() doesn't
+# seem to respect DYLD_LIBRARY_PATH and friends. But it will find a library
+# in the current working directory. So this hack makes a copy of
+# libdbcapi_r.dylib, modifies its embedded rpath, tells sqlanydb to use
+# the modified library, and flags that the current working directory much
+# be changed prior to loading sqlanydb. Whew!
+if [[ $nvivo == 1 && $static == 0 ]]; then
+    if test -f "$libpath"/libdbcapi_r.dylib; then
+        cp -p "$libpath"/libdbcapi_r.dylib "$libpath"/libdbcapi_r.rpath.dylib
+        chmod +w "$libpath"/libdbcapi_r.rpath.dylib
+        install_name_tool -add_rpath "$libpath"/ "$libpath"/libdbcapi_r.rpath.dylib
+        SQLANY_API_DLL=libdbcapi_r.rpath.dylib
+        CHDIR="$libpath"
     fi
+else
+# As of High Sierra we have another problem - changes to DYLD_LIBRARY_PATH are dumped by the
+# System Integrity Protection system. We hack our way around this problem by changing the current
+# working directory to the one containing the dynamic libraries.
+    CHDIR=$libpath
+fi
+
+if test -f "$binpath"/sa_config.sh; then
+    . "$binpath"/sa_config.sh
 fi
 
 set > /tmp/sqlanyenv.2
-diff /tmp/sqlanyenv.1 /tmp/sqlanyenv.2 | grep "^>" | awk '{print $2}'
+comm -13 <(sort /tmp/sqlanyenv.1) <(sort /tmp/sqlanyenv.2)

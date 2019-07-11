@@ -22,22 +22,6 @@ import subprocess
 import re
 import sys
 import glob
-
-helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep
-
-# On non-Windows OS, need to set up environment for SQL Anywhere server and restart process.
-if os.name != 'nt':
-    # Check if already done
-    if not os.environ.get('_sqlanywhere'):
-        envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
-        for envline in envlines:
-            env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.+)(?P=quote)", envline).groupdict()
-            os.environ[env['name']] = env['value']
-
-        os.environ['_sqlanywhere'] = 'TRUE'
-        os.execv(sys.argv[0], sys.argv)
-
-# Environment is now ready
 import argparse
 import NVivo
 import shutil
@@ -77,12 +61,30 @@ parser.add_argument('-t', '--taggings', choices=["skip", "merge", "overwrite", "
 parser.add_argument('-a', '--annotations', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                     help='Annotation action.')
 
+parser.add_argument('--sqlanywhere', type=str,
+                    help="Path the help find SQL Anywhere installation")
+
 parser.add_argument('infile', type=argparse.FileType('rb'),
                     help="Input NVivo for Mac file (extension .nvpx)")
 parser.add_argument('outfile', type=str, nargs='?',
                     help="Output normalised SQLite file")
 
 args = parser.parse_args()
+
+helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep
+
+# On non-Windows OS, need to set up environment for SQL Anywhere server and restart process.
+if os.name != 'nt':
+    # Check if already done
+    if not os.environ.get('_restart'):
+        os.environ['sqlanywhere'] = args.sqlanywhere or ""
+        envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
+        for envline in envlines:
+            env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.*)(?P=quote)", envline, re.MULTILINE | re.DOTALL).groupdict()
+            os.environ[env['name']] = env['value']
+
+        os.environ['_restart'] = 'TRUE'
+        os.execve(sys.argv[0], sys.argv, os.environ)
 
 # Fill in extra arguments that NVivo module expects
 args.mac     = True
@@ -120,15 +122,6 @@ if os.name != 'nt':
         if line == 'Now accepting requests\n':
             break
 else:
-    pathlist=os.environ['PATH'].split(';')
-    for path in pathlist:
-        dbengpaths = glob.glob(path + '\\dbeng*.exe')
-        if dbengpaths:
-            dbengfile = os.path.basename(dbengpaths[0])
-            break
-    else:
-        raise RuntimeError("Could not find SQL Anywere executable")
-
     dbproc = subprocess.Popen(['dbspawn', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport],
                               stdout=subprocess.PIPE, stdin=DEVNULL)
     # Wait until SQL Anywhere engine starts...
