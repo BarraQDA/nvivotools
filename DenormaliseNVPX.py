@@ -22,23 +22,6 @@ import subprocess
 import re
 import sys
 import glob
-
-# First set up environment for SQL Anywhere server and restart process if necessary
-helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep
-
-# On non-Windows OS, need to set up environment for SQL Anywhere server and restart process.
-if os.name != 'nt':
-    # Check if already done
-    if not os.environ.get('_sqlanywhere'):
-        envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
-        for envline in envlines:
-            env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.+)(?P=quote)", envline).groupdict()
-            os.environ[env['name']] = env['value']
-
-        os.environ['_sqlanywhere'] = 'TRUE'
-        os.execv(sys.argv[0], sys.argv)
-
-# Environment is now ready
 import argparse
 import NVivo
 import shutil
@@ -82,14 +65,48 @@ parser.add_argument('-b', '--base', dest='basefile', type=argparse.FileType('rb'
 
 parser.add_argument('--no-comments', action='store_true', help='Do not produce a comments logfile')
 
+parser.add_argument('--sqlanywhere', type=str,
+                    help="Path to SQL Anywhere installation")
+
 parser.add_argument('infile', type=argparse.FileType('rb'),
                     help="Input normalised SQLite file (extension .norm)")
 parser.add_argument('outfile', type=str, nargs='?',
                     help="Output NVPX file")
 
-
 args = parser.parse_args()
 hiddenargs = ['cmdline', 'verbosity', 'mac', 'windows']
+
+helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helpers' + os.path.sep
+
+# On non-Windows OS, need to set up environment for SQL Anywhere server and restart process.
+if os.name != 'nt':
+    # Check if already done
+    if not os.environ.get('_restart'):
+        if args.sqlanywhere:
+            os.environ['sqlanywhere'] = args.sqlanywhere
+        envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
+        for envline in envlines:
+            env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.*)(?P=quote)", envline, re.MULTILINE | re.DOTALL).groupdict()
+            os.environ[env['name']] = env['value']
+
+        os.environ['_restart'] = 'TRUE'
+        os.execve(sys.argv[0], sys.argv, os.environ)
+else:
+    dbengfile = None
+    if args.sqlanywhere:
+        dbengpaths = glob.glob(args.sqlanywhere + '\\dbeng*.exe')
+        if dbengpaths:
+            dbengfile = os.path.basename(dbengpaths[0])
+    else:
+        pathlist=os.environ['PATH'].split(';')
+        for path in pathlist:
+            dbengpaths = glob.glob(path + '\\dbeng*.exe')
+            if dbengpaths:
+                dbengfile = os.path.basename(dbengpaths[0])
+                break
+
+    if not dbengfile:
+        raise RuntimeError("Could not find SQL Anywere executable")
 
 # Fill in extra arguments that NVivo module expects
 args.mac       = True

@@ -62,7 +62,7 @@ parser.add_argument('-a', '--annotations', choices=["skip", "merge", "overwrite"
                     help='Annotation action.')
 
 parser.add_argument('--sqlanywhere', type=str,
-                    help="Path the help find SQL Anywhere installation")
+                    help="Path to SQL Anywhere installation")
 
 parser.add_argument('infile', type=argparse.FileType('rb'),
                     help="Input NVivo for Mac file (extension .nvpx)")
@@ -77,7 +77,8 @@ helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helper
 if os.name != 'nt':
     # Check if already done
     if not os.environ.get('_restart'):
-        os.environ['sqlanywhere'] = args.sqlanywhere or ""
+        if args.sqlanywhere:
+            os.environ['sqlanywhere'] = args.sqlanywhere
         envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
         for envline in envlines:
             env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.*)(?P=quote)", envline, re.MULTILINE | re.DOTALL).groupdict()
@@ -85,6 +86,22 @@ if os.name != 'nt':
 
         os.environ['_restart'] = 'TRUE'
         os.execve(sys.argv[0], sys.argv, os.environ)
+else:
+    dbengfile = None
+    if args.sqlanywhere:
+        dbengpaths = glob.glob(args.sqlanywhere + '\\dbeng*.exe')
+        if dbengpaths:
+            dbengfile = os.path.basename(dbengpaths[0])
+    else:
+        pathlist=os.environ['PATH'].split(';')
+        for path in pathlist:
+            dbengpaths = glob.glob(path + '\\dbeng*.exe')
+            if dbengpaths:
+                dbengfile = os.path.basename(dbengpaths[0])
+                break
+
+    if not dbengfile:
+        raise RuntimeError("Could not find SQL Anywere executable")
 
 # Fill in extra arguments that NVivo module expects
 args.mac     = True
