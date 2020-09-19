@@ -56,7 +56,7 @@ parser.add_argument('outfilename', type=str, nargs='?',
 args = parser.parse_args()
 
 tmpinfilename = tempfile.mktemp()
-tmpinfileptr  = file(tmpinfilename, 'wb')
+tmpinfileptr  = open(tmpinfilename, 'wb')
 tmpinfileptr.write(args.infile.read())
 args.infile.close()
 tmpinfileptr.close()

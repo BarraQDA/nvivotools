@@ -22,7 +22,7 @@ import argparse
 from NVivoNorm import NVivoNorm
 from sqlalchemy import *
 import re
-import unicodecsv
+import csv
 import shutil
 
 def add_arguments(parser):
@@ -33,10 +33,10 @@ def add_arguments(parser):
                                                 help='Input normalised NVivo (.norm) file')
     generalgroup.add_argument('-o', '--outfile', type=str,
                                                  help='Output file')
-    generalgroup.add_argument('-s',  '--source',          type=lambda s: unicode(s, 'utf8'))
-    generalgroup.add_argument('-sc', '--source-category', type=lambda s: unicode(s, 'utf8'))
-    generalgroup.add_argument('-n',  '--node', nargs='*', type=lambda s: unicode(s, 'utf8'))
-    generalgroup.add_argument('-nc', '--node-category',   type=lambda s: unicode(s, 'utf8'))
+    generalgroup.add_argument('-s',  '--source',          type=str)
+    generalgroup.add_argument('-sc', '--source-category', type=str)
+    generalgroup.add_argument('-n',  '--node', nargs='*', type=str)
+    generalgroup.add_argument('-nc', '--node-category',   type=str)
 
     advancedgroup = parser.add_argument_group('Advanced')
     advancedgroup.add_argument('-v', '--verbosity',  type=int, default=1)
@@ -56,9 +56,9 @@ def build_comments(kwargs):
     comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
     comments += '# ' + os.path.basename(__file__) + '\n'
     hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
-    for argname, argval in kwargs.iteritems():
+    for argname, argval in kwargs.items():
         if argname not in hiddenargs:
-            if type(argval) == str or type(argval) == unicode:
+            if type(argval) == str:
                 comments += '#     --' + argname + '="' + argval + '"\n'
             elif type(argval) == bool:
                 if argval:
@@ -181,7 +181,7 @@ def queryTagging(infile, outfile,
             if os.path.exists(outfile):
                 shutil.move(outfile, outfile + '.bak')
 
-            csvfile = file(outfile, 'w')
+            csvfile = open(outfile, 'w')
         else:
             csvfile = sys.stdout
 
@@ -189,11 +189,11 @@ def queryTagging(infile, outfile,
             csvfile.write(comments)
             csvfile.write('#' * 80 + '\n')
 
-        csvwriter = unicodecsv.DictWriter(csvfile,
+        csvwriter = csv.DictWriter(csvfile,
                                           fieldnames=['Source', 'Node', 'Memo', 'Text', 'Fragment'],
                                           extrasaction='ignore',
                                           lineterminator=os.linesep,
-                                          quoting=unicodecsv.QUOTE_NONNUMERIC)
+                                          quoting=csv.QUOTE_NONNUMERIC)
 
         csvwriter.writeheader()
 

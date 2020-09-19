@@ -22,7 +22,7 @@ import argparse
 from NVivoNorm import NVivoNorm
 from sqlalchemy import *
 import re
-import unicodecsv
+import csv
 import shutil
 
 def add_arguments(parser):
@@ -33,8 +33,8 @@ def add_arguments(parser):
                                                 help='Input normalised NVivo (.norm) file')
     generalgroup.add_argument('-o', '--outfile', type=str,
                                                  help='Output file')
-    generalgroup.add_argument('-s',  '--source', type=lambda s: unicode(s, 'utf8'))
-    generalgroup.add_argument('-c', '--category', type=lambda s: unicode(s, 'utf8'))
+    generalgroup.add_argument('-s',  '--source', type=str)
+    generalgroup.add_argument('-c', '--category', type=str)
 
     advancedgroup = parser.add_argument_group('Advanced')
     advancedgroup.add_argument('-v', '--verbosity',  type=int, default=1)
@@ -53,9 +53,9 @@ def build_comments(kwargs):
     comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
     comments += '# ' + os.path.basename(__file__) + '\n'
     hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
-    for argname, argval in kwargs.iteritems():
+    for argname, argval in kwargs.items():
         if argname not in hiddenargs:
-            if type(argval) == str or type(argval) == unicode:
+            if type(argval) == str:
                 comments += '#     --' + argname + '="' + argval + '"\n'
             elif type(argval) == bool:
                 if argval:
@@ -109,7 +109,7 @@ def querySource(infile, outfile,
             if os.path.exists(outfile):
                 shutil.move(outfile, outfile + '.bak')
 
-            csvfile = file(outfile, 'w')
+            csvfile = open(outfile, 'w')
         else:
             csvfile = sys.stdout
 
@@ -117,11 +117,11 @@ def querySource(infile, outfile,
             csvfile.write(comments)
             csvfile.write('#' * 80 + '\n')
 
-        csvwriter = unicodecsv.DictWriter(csvfile,
+        csvwriter = csv.DictWriter(csvfile,
                                           fieldnames=['Name', 'Description', 'Content', 'Category', 'Color'],
                                           extrasaction='ignore',
                                           lineterminator=os.linesep,
-                                          quoting=unicodecsv.QUOTE_NONNUMERIC)
+                                          quoting=csv.QUOTE_NONNUMERIC)
 
         csvwriter.writeheader()
 

@@ -128,7 +128,7 @@ def DenormaliseNVP(arglist):
         for arg in arglist:
             if arg not in hiddenargs:
                 val = getattr(args, arg)
-                if type(val) == str or type(val) == unicode:
+                if type(val) == str:
                     comments += '#     --' + arg + '="' + val + '"\n'
                 elif type(val) == bool:
                     if val:

@@ -86,7 +86,7 @@ if os.name != 'nt':
             os.environ['sqlanywhere'] = args.sqlanywhere
         envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
         for envline in envlines:
-            env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.*)(?P=quote)", envline, re.MULTILINE | re.DOTALL).groupdict()
+            env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.*)(?P=quote)", envline.decode('utf-8'), re.MULTILINE | re.DOTALL).groupdict()
             os.environ[env['name']] = env['value']
 
         os.environ['_restart'] = 'TRUE'
@@ -113,7 +113,7 @@ args.mac       = True
 args.windows   = False
 
 tmpinfilename = tempfile.mktemp()
-tmpinfileptr  = file(tmpinfilename, 'wb')
+tmpinfileptr  = open(tmpinfilename, 'wb')
 tmpinfileptr.write(args.infile.read())
 args.infile.close()
 tmpinfileptr.close()
@@ -125,10 +125,10 @@ elif os.path.isdir(args.outfile):
                                 os.path.basename(args.infile.name.rsplit('.',1)[0] + '.nvpx'))
 
 if args.basefile is None:
-    args.basefile = file(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + ('emptyNVivo10Mac.nvpx' if args.nvivoversion == '10' else 'emptyNVivo11Mac.nvpx'), 'rb')
+    args.basefile = open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + ('emptyNVivo10Mac.nvpx' if args.nvivoversion == '10' else 'emptyNVivo11Mac.nvpx'), 'rb')
 
 tmpoutfilename = tempfile.mktemp()
-tmpoutfileptr  = file(tmpoutfilename, 'wb')
+tmpoutfileptr  = open(tmpoutfilename, 'wb')
 tmpoutfileptr.write(args.basefile.read())
 args.basefile.close()
 tmpoutfileptr.close()
@@ -140,7 +140,7 @@ if not args.no_comments:
     for arg in arglist:
         if arg not in hiddenargs:
             val = getattr(args, arg)
-            if type(val) == str or type(val) == unicode:
+            if type(val) == str:
                 comments += '#     --' + arg + '="' + val + '"\n'
             elif type(val) == bool:
                 if val:
@@ -176,7 +176,7 @@ if os.name != 'nt':
     dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpoutfilename, '-n', 'NVivo'+freeport], stdout=subprocess.PIPE, stdin=DEVNULL)
     # Wait until SQL Anywhere engine starts...
     while dbproc.poll() is None:
-        line = dbproc.stdout.readline()
+        line = dbproc.stdout.readline().decode('utf-8')
         if line == 'Now accepting requests\n':
             break
 else:

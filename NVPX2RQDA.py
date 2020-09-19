@@ -89,7 +89,7 @@ args.mac       = True
 args.windows   = False
 
 tmpinfilename = tempfile.mktemp()
-tmpinfileptr  = file(tmpinfilename, 'wb')
+tmpinfileptr  = open(tmpinfilename, 'wb')
 tmpinfileptr.write(args.infile.read())
 args.infile.close()
 tmpinfileptr.close()

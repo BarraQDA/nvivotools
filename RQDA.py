@@ -399,13 +399,13 @@ def Norm2RQDA(args):
                 attrclass = 'numeric'
             elif value['Type'] == 'DateTime':
                 attrclass = 'numeric'
-                value['value'] = unicode(date.strftime(dateparser.parse(value['value']), '%Y%m%d%H%M%S'))
+                value['value'] = date.strftime(dateparser.parse(value['value']), '%Y%m%d%H%M%S')
             elif value['Type'] == 'Date':
                 attrclass = 'numeric'
-                value['value'] = unicode(date.strftime(dateparser.parse(value['value']), '%Y%m%d'))
+                value['value'] = date.strftime(dateparser.parse(value['value']), '%Y%m%d')
             elif value['Type'] == 'Time':
                 attrclass = 'numeric'
-                value['value'] = unicode(time.strftime(dateparser.parse(value['value']).time(), '%H%M%S'))
+                value['value'] = time.strftime(dateparser.parse(value['value']).time(), '%H%M%S')
             elif value['Type'] == 'Boolean':
                 attrclass = 'numeric'
                 value['value'] = util.strtobool(value['value'])

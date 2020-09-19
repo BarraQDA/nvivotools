@@ -42,7 +42,7 @@ from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.converter import TextConverter
 from pdfminer.layout import LAParams
 from pdfminer.pdfpage import PDFPage
-from cStringIO import StringIO
+from io import StringIO
 from distutils import util
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
@@ -1499,18 +1499,18 @@ def Denormalise(args):
                         value['Value'] = u'0' if args.mac else u'False'
                 elif attribute['Type'] == 'Datetime':
                     if args.mac:
-                        value['Value'] = unicode(date.strftime(dateparser.parse(value['Value']), '%Y-%m-%dT%H:%M:%S'))
+                        value['Value'] = date.strftime(dateparser.parse(value['Value']), '%Y-%m-%dT%H:%M:%S')
                     else:
-                        value['Value'] = unicode(date.strftime(dateparser.parse(value['Value']), '%Y-%m-%d %H:%M:%SZ'))
+                        value['Value'] = date.strftime(dateparser.parse(value['Value']), '%Y-%m-%d %H:%M:%SZ')
                 elif attribute['Type'] == 'Date':
                     if args.mac:
-                        value['Value'] = unicode(date.strftime(dateparser.parse(value['Value']), '%Y-%m-%d'))
+                        value['Value'] = date.strftime(dateparser.parse(value['Value']), '%Y-%m-%d')
                     else:
-                        value['Value'] = unicode(date.strftime(dateparser.parse(value['Value']), '%Y-%m-%d 00:00:00Z'))
+                        value['Value'] = date.strftime(dateparser.parse(value['Value']), '%Y-%m-%d 00:00:00Z')
                 elif attribute['Type'] == 'Time':
-                    value['Value'] = unicode(time.strftime(dateparser.parse(value['Value']).time(), '%H:%M:%S'))
+                    value['Value'] = time.strftime(dateparser.parse(value['Value']).time(), '%H:%M:%S')
                 else:
-                    value['Value'] = unicode(value['Value'])
+                    value['Value'] = str(value['Value'])
 
                 if value['Value']:
                     value['PlainTextValue'] = value['Value']
@@ -1908,6 +1908,7 @@ def Denormalise(args):
             source['Description']   = source['Description'] or u''
             source['PlainTextName'] = source['Name']
             source['Name'] = re.sub(NVivo.ILLEGALNAMECHARS, '_', source['Name']).strip()
+            source['MetaData'] = ''
             if args.windows:
                 source['Name']        = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Name']))
                 source['Description'] = u''.join(map(lambda ch: chr(ord(ch) + 0x377), source['Description'].replace('\n', '\r\n')))
@@ -1916,7 +1917,7 @@ def Denormalise(args):
 
             content = source['Content']
             if content is not None:
-                source['PlainText'] = content if type(content) == unicode else unicode(content, 'utf-8')
+                source['PlainText'] = content if type(content) == str else str(content)
 
             # Initialise all columns to prevent missing values later
             for key in ['Item_Id', 'TypeId', 'Object', 'PlainText', 'LengthX', 'LengthY', 'MetaData', 'Thumbnail', 'Properties']:
@@ -1936,14 +1937,14 @@ def Denormalise(args):
 
                 # Write out PDF object into a temporary file, then read it using pdfminer
                 tmpfilename = tempfile.mktemp()
-                tmpfileptr  = file(tmpfilename, 'wb')
+                tmpfileptr  = open(tmpfilename, 'wb')
                 tmpfileptr.write(source['Object'])
                 tmpfileptr.close()
                 rsrcmgr = PDFResourceManager()
                 retstr = StringIO()
                 laparams = LAParams()
                 device = TextConverter(rsrcmgr, retstr, codec='utf-8', laparams=laparams)
-                tmpfileptr = file(tmpfilename, 'rb')
+                tmpfileptr = open(tmpfilename, 'rb')
                 interpreter = PDFPageInterpreter(rsrcmgr, device)
                 pagenos = set()
                 pdfpages = PDFPage.get_pages(tmpfileptr, password='', check_extractable=True)
@@ -1959,7 +1960,7 @@ def Denormalise(args):
                     pageelement.setAttribute("PageWidth",  str(int(mediabox[2] - mediabox[0])))
                     pageelement.setAttribute("PageHeight", str(int(mediabox[3] - mediabox[1])))
 
-                    pagestr = unicode(retstr.getvalue(), 'utf-8')
+                    pagestr = str(retstr.getvalue())
                     pagestr = re.sub('(?<!\n)\n(?!\n)', ' ', pagestr).replace('\n\n', '\n')
                     retstr.truncate(0)
                     pdfstr += pagestr
@@ -1998,9 +1999,9 @@ def Denormalise(args):
                 tmpfilename = tempfile.mktemp()
                 if source['ObjectTypeName'] == 'TXT':
                     tmpfile = codecs.open(tmpfilename + '.TXT', 'w', 'utf-8')
-                    tmpfile.write(unicode(source['Object'], 'utf-8') if source['Object'] else source['Content'])
+                    tmpfile.write(str(source['Object']) if source['Object'] else source['Content'])
                 elif source['Object'] is not None:
-                    tmpfile = file(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
+                    tmpfile = open(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
                     tmpfile.write(source['Object'])
 
                 elif source['PlainText'] is not None:
@@ -2061,12 +2062,12 @@ def Denormalise(args):
                 if source['ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
                     destformat = 'odt' if args.mac else 'doc'
                     p = subprocess.Popen(massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=subprocess.PIPE)
-                    err = p.stderr.read()
+                    err = p.stderr.read().decode('utf-8')
                     if err != '':
                         err = "unoconv invocation error: " + str(massagesource.unoconvcmd) + "\n" + err
                         raise RuntimeError(err)
 
-                    source['Object'] = file(tmpfilename + '.' + destformat, 'rb').read()
+                    source['Object'] = open(tmpfilename + '.' + destformat, 'rb').read()
                     os.remove(tmpfilename + '.' + destformat)
 
                 os.remove(tmpfilename + '.' + source['ObjectTypeName'])
@@ -2077,32 +2078,31 @@ def Denormalise(args):
                 if args.mac:
                     source['LengthX'] = len(source['PlainText'].replace(u' ', u''))
                 else:
+                    source['LengthX'] = 0
+
                     # Compress doc object without header using compression level 6
                     compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
                     source['Object'] = compressor.compress(source['Object']) + compressor.flush()
 
-                    source['LengthX'] = 0
+                doc = Document()
+                settings = doc.createElement("DisplaySettings")
+                settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                settings.setAttribute("InputPosition", "0")
 
-                    doc = Document()
-                    settings = doc.createElement("DisplaySettings")
-                    settings.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-                    settings.setAttribute("InputPosition", "0")
-                    source['MetaData'] = settings.toxml()
+                paragraphs = doc.createElement("Paragraphs")
+                paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
+                start = 0
+                while start < len(source['PlainText']):
+                    end = source['PlainText'].find('\n', start)
+                    if end == -1:
+                        end = len(source['PlainText']) - 1
+                    para = paragraphs.appendChild(doc.createElement("Para"))
+                    para.setAttribute("Pos", str(start))
+                    para.setAttribute("Len", str(end - start + 1))
+                    para.setAttribute("Style", "Text Body")
+                    start = end + 1
 
-                    paragraphs = doc.createElement("Paragraphs")
-                    paragraphs.setAttribute("xmlns", "http://qsr.com.au/XMLSchema.xsd")
-                    start = 0
-                    while start < len(source['PlainText']):
-                        end = source['PlainText'].find('\n', start)
-                        if end == -1:
-                            end = len(source['PlainText']) - 1
-                        para = paragraphs.appendChild(doc.createElement("Para"))
-                        para.setAttribute("Pos", str(start))
-                        para.setAttribute("Len", str(end - start + 1))
-                        para.setAttribute("Style", "Text Body")
-                        start = end + 1
-
-                    source['MetaData'] = paragraphs.toxml() + settings.toxml()
+                source['MetaData'] = paragraphs.toxml() + settings.toxml()
 
                 extendeditems.append({
                     'Item_Id':source['Item_Id'],
@@ -2134,7 +2134,7 @@ def Denormalise(args):
 
             # Lookup object type from name
             if source['ObjectTypeName'] in NVivo.ObjectTypeName.values():
-                source['ObjectType'] = NVivo.ObjectTypeName.keys()[NVivo.ObjectTypeName.values().index(source['ObjectTypeName'])]
+                source['ObjectType'] = next(key for key, value in NVivo.ObjectTypeName.items() if value == source['ObjectTypeName'])
             else:
                 source['ObjectType'] = int(source['ObjectTypeName'])
 

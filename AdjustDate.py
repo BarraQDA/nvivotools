@@ -52,7 +52,7 @@ try:
         ModifiedDate = table.c.get('ModifiedDate')
         if CreatedDate is not None and ModifiedDate is not None:
             # Prepend columns with '_' to avoid bindparam conflict error with reserved names
-            rows = [{'_'+key:value for key,value in dict(row).iteritems()} for row in con.execute(
+            rows = [{'_'+key:value for key,value in dict(row).items()} for row in con.execute(
                 select(
                     table.primary_key.columns + [CreatedDate, ModifiedDate]).where(or_(
                     table.c.CreatedDate <= bindparam('Before'),
@@ -64,7 +64,7 @@ try:
 
             print ("Table " + table.name + " Updating " + str(len(rows)) + " rows.")
             for row in rows:
-                if type(row['_CreatedDate']) == unicode:    # ???
+                if type(row['_CreatedDate']) == str:    # ???
                     createdDate  = dateparser.parse(row['_CreatedDate'])
                     modifiedDate = dateparser.parse(row['_ModifiedDate'])
                 else:

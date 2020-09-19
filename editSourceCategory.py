@@ -33,9 +33,9 @@ def add_arguments(parser):
     generalgroup = parser.add_argument_group('General')
     generalgroup.add_argument('-o', '--outfile',     type=str, required=True,
                                                      help='Output normalised NVivo (.norm) file')
-    generalgroup.add_argument('-n', '--name',        type=lambda s: unicode(s, 'utf8'))
-    generalgroup.add_argument('-d', '--description', type=lambda s: unicode(s, 'utf8'))
-    generalgroup.add_argument('-u', '--user',        type=lambda s: unicode(s, 'utf8'),
+    generalgroup.add_argument('-n', '--name',        type=str)
+    generalgroup.add_argument('-d', '--description', type=str)
+    generalgroup.add_argument('-u', '--user',        type=str,
                               help = 'User name, default is project "modified by".')
 
     advancedgroup = parser.add_argument_group('Advanced')
@@ -56,9 +56,9 @@ def build_comments(kwargs):
     comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
     comments += '# ' + os.path.basename(__file__) + '\n'
     hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
-    for argname, argval in kwargs.iteritems():
+    for argname, argval in kwargs.items():
         if argname not in hiddenargs:
-            if type(argval) == str or type(argval) == unicode:
+            if type(argval) == str:
                 comments += '#     --' + argname + '="' + argval + '"\n'
             elif type(argval) == bool:
                 if argval:
@@ -123,7 +123,7 @@ def editSourceCategory(outfile, name, description, user,
                     })
                 norm.con.execute(norm.Project.insert(), {
                     'Version': u'0.2',
-                    'Title': unicode(infile),
+                    'Title': '',
                     'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
                     'CreatedBy':    userId,
                     'CreatedDate':  datetimeNow,

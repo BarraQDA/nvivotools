@@ -1,6 +1,6 @@
 dateutils
 future
-unicodecsv
+csv
 pdfminer
 Pillow
 pymssql

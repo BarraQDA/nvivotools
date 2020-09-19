@@ -92,7 +92,7 @@ args.mac       = True
 args.windows   = False
 
 tmpinfilename = tempfile.mktemp()
-tmpinfileptr  = file(tmpinfilename, 'wb')
+tmpinfileptr  = open(tmpinfilename, 'wb')
 tmpinfileptr.write(args.infile.read())
 args.infile.close()
 tmpinfileptr.close()
@@ -101,7 +101,7 @@ if args.outfilename is None:
     args.outfilename = args.infile.name.rsplit('.',1)[0] + '.nvpx'
 
 if args.basefile is None:
-    args.basefile = file(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + ('emptyNVivo10Mac.nvpx' if args.nvivoversion == '10' else 'emptyNVivo11Mac.nvpx'), 'rb')
+    args.basefile = open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + ('emptyNVivo10Mac.nvpx' if args.nvivoversion == '10' else 'emptyNVivo11Mac.nvpx'), 'rb')
 
 tmpnormfilename = tempfile.mktemp()
 
@@ -112,7 +112,7 @@ RQDA.RQDA2Norm(args)
 os.remove(tmpinfilename)
 
 tmpoutfilename = tempfile.mktemp()
-tmpoutfileptr  = file(tmpoutfilename, 'wb')
+tmpoutfileptr  = open(tmpoutfilename, 'wb')
 tmpoutfileptr.write(args.basefile.read())
 args.basefile.close()
 tmpoutfileptr.close()

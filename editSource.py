@@ -21,7 +21,7 @@ import os
 import sys
 import argparse
 from NVivoNorm import NVivoNorm
-import unicodecsv
+import csv
 import glob
 from sqlalchemy import *
 import re
@@ -43,13 +43,13 @@ def add_arguments(parser):
                                                  help='Output normalised NVivo (.norm) file')
     generalgroup.add_argument(        'infile',  type = str, nargs = '*',
                                                  help = 'Input CSV or source content filename pattern')
-    generalgroup.add_argument('-u', '--user',    type = lambda s: unicode(s, 'utf8'),
+    generalgroup.add_argument('-u', '--user',    type = str,
                                                  help = 'User name, default is project "modified by".')
 
     singlegroup = parser.add_argument_group('Single source')
-    singlegroup.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
-    singlegroup.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
-    singlegroup.add_argument('-c', '--category',    type = lambda s: unicode(s, 'utf8'))
+    singlegroup.add_argument('-n', '--name',        type = str)
+    singlegroup.add_argument('-d', '--description', type = str)
+    singlegroup.add_argument('-c', '--category',    type = str)
     singlegroup.add_argument('-a', '--attributes',  type = str, action='append', help='Attributes in format name:value')
     singlegroup.add_argument(      '--color',       type = str)
     singlegroup.add_argument('-t', '--text',        type = str, help = 'Source text')
@@ -84,9 +84,9 @@ def build_comments(kwargs):
     comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
     comments += '# ' + os.path.basename(__file__) + '\n'
     hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
-    for argname, argval in kwargs.iteritems():
+    for argname, argval in kwargs.items():
         if argname not in hiddenargs:
-            if type(argval) == str or type(argval) == unicode:
+            if type(argval) == str:
                 comments += '#     --' + argname + '="' + argval + '"\n'
             elif type(argval) == bool:
                 if argval:
@@ -118,7 +118,6 @@ def editSource(outfile, infile, user,
             logfile = open(logfilename, 'w')
             logfile.write(comments)
             logfile.write(incomments)
-            logfile.close()
 
         norm = NVivoNorm(outfile)
         norm.begin()
@@ -173,7 +172,7 @@ def editSource(outfile, infile, user,
 
                 if infiletype == 'CSV':
                     incomments = ''
-                    csvFile = file(infilename, 'rU')
+                    csvFile = open(infilename, 'r')
 
                     # Skip comments at start of CSV file.
                     while True:
@@ -181,13 +180,13 @@ def editSource(outfile, infile, user,
                         if line[:1] == '#':
                             incomments += line
                         else:
-                            csvfieldnames = next(unicodecsv.reader([line]))
+                            csvfieldnames = next(csv.reader([line]))
                             break
 
                     if not no_comments:
                         logfile.write(incomments)
 
-                    csvreader=unicodecsv.DictReader(csvFile, fieldnames=csvfieldnames)
+                    csvreader=csv.DictReader(csvFile, fieldnames=csvfieldnames)
                     for row in csvreader:
                         sourceRow = dict(row)
                         sourceRow['Name']        = sourceRow.get('Name',        name)
@@ -283,7 +282,7 @@ def editSource(outfile, infile, user,
                             # Assume date being min means taken from default, ie not specified in datetime
                             if datetimeval.date() != datetime.min.date():
                                 typeTime = False
-                        except ValueError:
+                        except:
                             typeDateTime = False
                             typeDate = False
                             typeTime = False
@@ -308,7 +307,7 @@ def editSource(outfile, infile, user,
                         'Id':           attributeId,
                         'Name':         colName,
                         'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
-                        'Type':         unicode(attributeType),
+                        'Type':         attributeType,
                         'Length':       attributeLength,
                         'CreatedBy':    userId,
                         'CreatedDate':  datetimeNow,
@@ -323,7 +322,6 @@ def editSource(outfile, infile, user,
 
             # Does column define a node?
             elif colName in textcolumns and len(textcolumns) > 1:
-
                 node = norm.con.execute(select([
                         norm.Node.c.Id
                     ]).where(
@@ -337,7 +335,7 @@ def editSource(outfile, infile, user,
                     nodeId = uuid.uuid4()
                     norm.con.execute(norm.Node.insert(), {
                         'Id':           nodeId,
-                        'Name':         unicode(colName),
+                        'Name':         colName,
                         'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
                         'CreatedBy':    userId,
                         'CreatedDate':  datetimeNow,
@@ -379,7 +377,7 @@ def editSource(outfile, infile, user,
                         'ModifiedDate': datetimeNow
                         })
 
-            sourceName        = sourceRow.get('Name') or unicode(rowNum).zfill(digits)
+            sourceName        = sourceRow.get('Name') or str(rowNum).zfill(digits)
             sourceDescription = sourceRow.get('Description') or u"Created by NVivotools http://barraqda.org/nvivotools/"
 
             source = norm.con.execute(select([
@@ -392,7 +390,7 @@ def editSource(outfile, infile, user,
             sourceId = source['Id'] if source else uuid.uuid4()
 
             sourceValues = []
-            for attributeName, attributeSource in sourceAttributes.iteritems():
+            for attributeName, attributeSource in sourceAttributes.items():
                 attributeId     = attributeSource['Id']
                 attributeType   = attributeSource['Type']
                 attributeLength = attributeSource['Length']
@@ -421,7 +419,7 @@ def editSource(outfile, infile, user,
                         '_Source':      sourceId,
                         'Attribute':    attributeId,
                         '_Attribute':   attributeId,
-                        'Value':        unicode(attributeValue),
+                        'Value':        attributeValue,
                         'CreatedBy':    userId,
                         'CreatedDate':  datetimeNow,
                         'ModifiedBy':   userId,
@@ -443,11 +441,11 @@ def editSource(outfile, infile, user,
             if ObjectFile:
                 dummy, ObjectFileExt = os.path.splitext(ObjectFile)
                 ObjectFileExt = ObjectFileExt[1:].upper()
-                normSourceRow['ObjectType'] = unicode(ObjectFileExt)
+                normSourceRow['ObjectType'] = ObjectFileExt
                 if ObjectFileExt == 'TXT':
                     # Detect file encoding if not specified
                     if not encoding:
-                        raw = file(ObjectFile, 'rb').read(32) # at most 32 bytes are returned
+                        raw = open(ObjectFile, 'rb').read(32) # at most 32 bytes are returned
                         encoding = chardet.detect(raw)['encoding']
 
                     normSourceRow['Content'] = codecs.open(ObjectFile, 'r', encoding=encoding).read()
@@ -481,7 +479,7 @@ def editSource(outfile, infile, user,
                                     'Id':           taggingId,
                                     'Source':       sourceId,
                                     'Node':         nodeId,
-                                    'Fragment':     unicode(start) + u':' + unicode(end),
+                                    'Fragment':     str(start) + u':' + str(end),
                                     'Memo':         None,
                                     'CreatedBy':    userId,
                                     'CreatedDate':  datetimeNow,
@@ -525,6 +523,8 @@ def editSource(outfile, infile, user,
 
     finally:
         del norm
+        if not no_comments:
+            logfile.close()
 
 def main():
     kwargs = parse_arguments()

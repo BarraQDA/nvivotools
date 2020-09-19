@@ -20,7 +20,7 @@ import os
 import sys
 import argparse
 from NVivoNorm import NVivoNorm
-import unicodecsv
+import csv
 from sqlalchemy import *
 import re
 from dateutil import parser as dateparser
@@ -36,14 +36,14 @@ def add_arguments(parser):
                                                  help='Output normalised NVivo (.norm) file')
     generalgroup.add_argument(        'infile',  type=str, nargs = '?',
                                                  help='Input CSV file containing node info')
-    generalgroup.add_argument('-u', '--user',    type=lambda s: unicode(s, 'utf8'),
+    generalgroup.add_argument('-u', '--user',    type=str,
                                                  help='User name, default is project "modified by".')
 
     singlegroup = parser.add_argument_group('Single node')
-    singlegroup.add_argument('-n', '--name',        type = lambda s: unicode(s, 'utf8'))
-    singlegroup.add_argument('-d', '--description', type = lambda s: unicode(s, 'utf8'))
-    singlegroup.add_argument('-c', '--category',    type = lambda s: unicode(s, 'utf8'))
-    singlegroup.add_argument('-p', '--parent',      type = lambda s: unicode(s, 'utf8'))
+    singlegroup.add_argument('-n', '--name',        type = str)
+    singlegroup.add_argument('-d', '--description', type = str)
+    singlegroup.add_argument('-c', '--category',    type = str)
+    singlegroup.add_argument('-p', '--parent',      type = str)
     singlegroup.add_argument('-a', '--attributes',  type = str, action='append', help='Attributes in format name:value')
     singlegroup.add_argument(      '--color',       type = str)
     singlegroup.add_argument(      '--aggregate',   action = 'store_true')
@@ -66,9 +66,9 @@ def build_comments(kwargs):
     comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
     comments += '# ' + os.path.basename(__file__) + '\n'
     hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
-    for argname, argval in kwargs.iteritems():
+    for argname, argval in kwargs.items():
         if argname not in hiddenargs:
-            if type(argval) == str or type(argval) == unicode:
+            if type(argval) == str:
                 comments += '#     --' + argname + '="' + argval + '"\n'
             elif type(argval) == bool:
                 if argval:
@@ -94,14 +94,14 @@ def editNode(outfile, infile, user,
         # Read and skip comments at start of CSV file.
         csvcomments = ''
         if infile:
-            csvFile = file(infile, 'r')
+            csvFile = open(infile, 'r')
 
             while True:
                 line = csvFile.readline()
                 if line[:1] == '#':
                     csvcomments += line
                 else:
-                    csvfieldnames = next(unicodecsv.reader([line]))
+                    csvfieldnames = next(csv.reader([line]))
                     break
 
         if not no_comments:
@@ -159,7 +159,7 @@ def editNode(outfile, infile, user,
                 })
 
         if infile:
-            csvreader=unicodecsv.DictReader(csvFile, fieldnames=csvfieldnames)
+            csvreader=csv.DictReader(csvFile, fieldnames=csvfieldnames)
             nodeRows = []
             for row in csvreader:
                 nodeRow = dict(row)
@@ -245,7 +245,7 @@ def editNode(outfile, infile, user,
                         # Assume date being min means taken from default, ie not specified in datetime
                         if datetimeval.date() != datetime.min.date():
                             typeTime = False
-                    except ValueError:
+                    except:
                         typeDateTime = False
                         typeDate = False
                         typeTime = False
@@ -357,7 +357,7 @@ def editNode(outfile, infile, user,
             nodeId = node['Id'] if node else uuid.uuid4()
 
             nodeValues = []
-            for attributeName, attributeNode in nodeAttributes.iteritems():
+            for attributeName, attributeNode in nodeAttributes.items():
                 attributeId     = attributeNode['Id']
                 attributeType   = attributeNode['Type']
                 attributeLength = attributeNode['Length']

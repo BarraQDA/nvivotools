@@ -21,7 +21,7 @@ import os
 import sys
 import argparse
 from NVivoNorm import NVivoNorm
-import unicodecsv
+import csv
 from sqlalchemy import *
 from datetime import datetime
 import uuid
@@ -35,19 +35,19 @@ def add_arguments(parser):
                                                  help='Output normalised NVivo (.norm) file')
     generalgroup.add_argument(        'infile',  type=str, nargs='?',
                                                  help='Input CSV file containing tagging info')
-    generalgroup.add_argument('-u', '--user',    type=lambda s: unicode(s, 'utf8'),
+    generalgroup.add_argument('-u', '--user',    type=str,
                                                  help='User name, default is project "modified by".')
 
     tagginggroup = parser.add_argument_group('Tagging')
-    tagginggroup.add_argument('-s', '--source',      type=lambda s: unicode(s, 'utf8'))
-    tagginggroup.add_argument('-sc', '--source-category', type=lambda s: unicode(s, 'utf8'))
-    tagginggroup.add_argument('-n', '--node',        type=lambda s: unicode(s, 'utf8'),
+    tagginggroup.add_argument('-s', '--source',      type=str)
+    tagginggroup.add_argument('-sc', '--source-category', type=str)
+    tagginggroup.add_argument('-n', '--node',        type=str,
                               help="Multiple nodes may be specified, separated by line terminator")
     tagginggroup.add_argument('-f', '--fragment',    type=str)
-    tagginggroup.add_argument('-m', '--memo',        type=lambda s: unicode(s, 'utf8'))
+    tagginggroup.add_argument('-m', '--memo',        type=str)
 
-    tagginggroup.add_argument('-p', '--prelude',     type=lambda s: unicode(s, 'utf8'), nargs="*", help='Python code to execute before processing')
-    tagginggroup.add_argument('-t', '--tagging',     type=lambda s: unicode(s, 'utf8'),
+    tagginggroup.add_argument('-p', '--prelude',     type=str, nargs="*", help='Python code to execute before processing')
+    tagginggroup.add_argument('-t', '--tagging',     type=str,
                                help="Tagging to define. Can be either a string representing a string slice, or Python code that returns list of taggings as dictionary with keys 'Node', 'Memo' and/or 'Fragment'")
 
     advancedgroup = parser.add_argument_group('Advanced')
@@ -68,16 +68,16 @@ def build_comments(kwargs):
     comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
     comments += '# ' + os.path.basename(__file__) + '\n'
     hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
-    for argname, argval in kwargs.iteritems():
+    for argname, argval in kwargs.items():
         if argname not in hiddenargs:
-            if type(argval) == str or type(argval) == unicode:
+            if type(argval) == str:
                 comments += '#     --' + argname + '="' + argval + '"\n'
             elif type(argval) == bool:
                 if argval:
                     comments += '#     --' + argname + '\n'
             elif type(argval) == list:
                 for valitem in argval:
-                    if type(valitem) == str or type(valitem) == unicode:
+                    if type(valitem) == str:
                         comments += '#     --' + argname + '="' + valitem + '"\n'
                     else:
                         comments += '#     --' + argname + '=' + str(valitem) + '\n'
@@ -109,14 +109,14 @@ def evaltagging(sourceRow, csvRow):\n\
         # Read and skip comments at start of CSV file.
         csvcomments = ''
         if infile:
-            csvFile = file(infile, 'r')
+            csvFile = open(infile, 'r')
 
             while True:
                 line = csvFile.readline()
                 if line[:1] == '#':
                     csvcomments += line
                 else:
-                    csvfieldnames = next(unicodecsv.reader([line]))
+                    csvfieldnames = next(csv.reader([line]))
                     break
 
         if not no_comments:
@@ -174,7 +174,7 @@ def evaltagging(sourceRow, csvRow):\n\
                 })
 
         if infile:
-            csvRows = unicodecsv.DictReader(csvFile, fieldnames=csvfieldnames)
+            csvRows = csv.DictReader(csvFile, fieldnames=csvfieldnames)
         else:
             csvRows = [{}]
 
