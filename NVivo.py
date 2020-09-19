@@ -1999,7 +1999,7 @@ def Denormalise(args):
                 tmpfilename = tempfile.mktemp()
                 if source['ObjectTypeName'] == 'TXT':
                     tmpfile = codecs.open(tmpfilename + '.TXT', 'w', 'utf-8')
-                    tmpfile.write(str(source['Object']) if source['Object'] else source['Content'])
+                    tmpfile.write(source['Object'].decode('utf-8') if source['Object'] else source['Content'])
                 elif source['Object'] is not None:
                     tmpfile = open(tmpfilename + '.' + source['ObjectTypeName'], 'wb')
                     tmpfile.write(source['Object'])
