@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright 2016 Jonathan Schultz
+# Copyright 2016, 2020 Jonathan Schultz
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -67,7 +67,7 @@ try:
     lemmafrequency = {}
     for source in sources:
         if args.verbosity > 1:
-            print "Reading source: " + source['Name']
+            print("Reading source: " + source['Name'])
         content = TextBlob(source['Content'])
         noun_phrases = content.lower().noun_phrases
         lemmas = noun_phrases.lemmatize()
@@ -93,7 +93,7 @@ try:
         }).first()
     if nounPhraseNode is not None:
         if args.verbosity > 1:
-            print "Found Noun Phrases node"
+            print("Found Noun Phrases node")
         nounPhrasesNodeId = nounPhraseNode['Id']
         for node in normcon.execute(select([
                 normNode.c.Id
@@ -115,7 +115,7 @@ try:
 
     else:
         if args.verbosity > 1:
-            print "Creating Noun Phrases node"
+            print("Creating Noun Phrases node")
         nounPhrasesNodeId = uuid.uuid4()
         normcon.execute(normNode.insert().values({
                 'Id': nounPhrasesNodeId,
@@ -131,7 +131,7 @@ try:
     for lemma in lemmafrequency.keys():
         if args.threshold == 0 or lemmafrequency[lemma] >= args.threshold:
             if args.verbosity > 1:
-                print "Creating node: " + lemma
+                print("Creating node: " + lemma)
             lemmanode[lemma] = uuid.uuid4()
             normcon.execute(normNode.insert().values({
                     'Id': lemmanode[lemma],
@@ -146,14 +146,14 @@ try:
 
     for source in sources:
         if args.verbosity > 1:
-            print "Processing source: " + source['Name']
+            print("Processing source: " + source['Name'])
         content = TextBlob(source['Content'])
         for sentence in content.lower().sentences:
             lemmas = sentence.noun_phrases.lemmatize()
             for lemma in lemmas:
                 if lemma in lemmafrequency.keys() and (args.threshold == 0 or lemmafrequency[lemma] >= args.threshold):
                     if args.verbosity > 2:
-                        print "    Inserting tagging: " + str(sentence.start) + ':' + str(sentence.end - 1)
+                        print("    Inserting tagging: " + str(sentence.start) + ':' + str(sentence.end - 1))
                     normcon.execute(normTagging.insert().values({
                             'Id':           uuid.uuid4(),
                             'Source':       source['Id'],
