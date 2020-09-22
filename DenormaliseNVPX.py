@@ -26,8 +26,9 @@ import argparse
 import NVivo
 import shutil
 import tempfile
+import io  # Remove when converted to ArgumentRecord
 
-parser = argparse.ArgumentParser(description='Create an NVivo for Mac file from a normalised SQLite file.')
+parser = argparse.ArgumentParser(description='Create an NVivo for Mac file from a normalised NVivo (.nvpn) file.')
 
 # --cmdline argument means retain full output file path name, otherwise strip directory,
 # so that things work under Wooey.
@@ -69,7 +70,7 @@ parser.add_argument('--sqlanywhere', type=str,
                     help="Path to SQL Anywhere installation")
 
 parser.add_argument('infile', type=argparse.FileType('rb'),
-                    help="Input normalised SQLite file (extension .norm)")
+                    help="Input normalised SQLite (.nvpn) file")
 parser.add_argument('outfile', type=str, nargs='?',
                     help="Output NVPX file")
 
@@ -106,7 +107,7 @@ else:
                 break
 
     if not dbengfile:
-        raise RuntimeError("Could not find SQL Anywere executable")
+        raise RuntimeError("Could not find SQL Anywhere executable")
 
 # Fill in extra arguments that NVivo module expects
 args.mac       = True
@@ -151,6 +152,8 @@ if not args.no_comments:
                         comments += '#     --' + arg + '="' + valitem + '"\n'
                     else:
                         comments += '#     --' + arg + '=' + str(valitem) + '\n'
+            elif isinstance(val, io.IOBase):
+                comments += '#     --' + arg + '="' + val.name + '"\n'
             elif val is not None:
                 comments += '#     --' + arg + '=' + str(val) + '\n'
 
@@ -187,7 +190,7 @@ else:
             dbengfile = os.path.basename(dbengpaths[0])
             break
     else:
-        raise RuntimeError("Could not find SQL Anywere executable")
+        raise RuntimeError("Could not find SQL Anywhere executable")
 
     dbproc = subprocess.Popen(['dbspawn', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  tmpoutfilename, '-n', 'NVivo'+freeport], stdout=subprocess.PIPE, stdin=DEVNULL)
     # Wait until SQL Anywhere engine starts...

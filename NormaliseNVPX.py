@@ -101,7 +101,7 @@ else:
                 break
 
     if not dbengfile:
-        raise RuntimeError("Could not find SQL Anywere executable")
+        raise RuntimeError("Could not find SQL Anywhere executable")
 
 # Fill in extra arguments that NVivo module expects
 args.mac     = True

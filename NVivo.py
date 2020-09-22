@@ -135,7 +135,7 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
                     dbengfile = os.path.basename(dbengpaths[0])
                     break
             else:
-                raise RuntimeError("Could not find SQL Anywere executable")
+                raise RuntimeError("Could not find SQL Anywhere executable")
 
             dbproc = subprocess.Popen(['dbspawn', '-f', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname],
                                       stdout=subprocess.PIPE, stdin=DEVNULL)
