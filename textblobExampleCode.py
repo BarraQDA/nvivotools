@@ -19,8 +19,8 @@
 import os
 import sys
 import argparse
+from NVivoNorm import NVivoNorm
 from sqlalchemy import *
-from sqlalchemy import exc
 from textblob import TextBlob
 import uuid
 import datetime
@@ -37,36 +37,28 @@ parser.add_argument('-l', '--limit', type=int, default=0,
 parser.add_argument('-t', '--threshold', type=int, default=0,
                     help="Miniumum number of occurrences for inclusion")
 
-parser.add_argument('indb', type=str,
+parser.add_argument('nvpn', type=str,
                     help="Normalised project file to analyse")
 
 args = parser.parse_args()
 
-from textblob import TextBlob
-
 try:
-    normdb = create_engine(args.indb)
-    normmd = MetaData(bind=normdb)
-    normmd.reflect(normdb)
+    norm = NVivoNorm(args.nvpn)
+    norm.begin()
 
-    normcon = normdb.connect()
-    normtr = normcon.begin()
-
-    normProject = normmd.tables.get('Project')
-    user = normcon.execute(select([normProject.c.ModifiedBy.label('User')])).first()['User']
+    user = norm.con.execute(select([norm.Project.c.ModifiedBy.label('User')])).first()['User']
     now = datetime.datetime.now()
 
-    normSource = normmd.tables.get('Source')
-    sources = [dict(row) for row in normcon.execute(select([
-            normSource.c.Id,
-            normSource.c.Name,
-            normSource.c.Content
+    sources = [dict(row) for row in norm.con.execute(select([
+            norm.Source.c.Id,
+            norm.Source.c.Name,
+            norm.Source.c.Content
         ]).where(
-            normSource.c.Content.isnot(None)
+            norm.Source.c.Content.isnot(None)
         ))]
     lemmafrequency = {}
     for source in sources:
-        if args.verbosity > 1:
+        if args.verbosity > 2:
             print("Reading source: " + source['Name'])
         content = TextBlob(source['Content'])
         noun_phrases = content.lower().noun_phrases
@@ -82,60 +74,42 @@ try:
             if args.limit == 0:
                 break
 
-    normNode = normmd.tables.get('Node')
-    normTagging = normmd.tables.get('Tagging')
-    nounPhraseNode = normcon.execute(select([
-            normNode.c.Id
+    lemmanode = {}
+    
+    nounPhraseNodeCategory = norm.con.execute(select([
+            norm.NodeCategory.c.Id
         ]).where(
-            normNode.c.Name == bindparam('Name')
-        ), {
-            'Name': 'Noun Phrases'
-        }).first()
-    if nounPhraseNode is not None:
+            norm.NodeCategory.c.Name == 'Noun Phrases'
+        )).first()
+    if nounPhraseNodeCategory is not None:
+        nounPhraseNodeCategoryId = nounPhraseNodeCategory['Id']
         if args.verbosity > 1:
-            print("Found Noun Phrases node")
-        nounPhrasesNodeId = nounPhraseNode['Id']
-        for node in normcon.execute(select([
-                normNode.c.Id
-            ]).where(
-                normNode.c.Parent == bindparam('Parent')
-            ), {
-                'Parent': nounPhrasesNodeId
-            }):
-            normcon.execute(normTagging.delete(
-                normTagging.c.Node == bindparam('Node')
-            ), {
-                'Node': node['Id']
-            })
-        normcon.execute(normNode.delete(
-                normNode.c.Parent == bindparam('Id')
-            ), {
-                'Id': nounPhrasesNodeId
-            })
+            print("Found Noun Phrases node category ID ", nounPhraseNodeCategoryId)
 
+        for node in norm.con.execute(select([norm.Node.c.Id, norm.Node.c.Name]).
+                                    where(norm.Node.c.Category == nounPhraseNodeCategoryId)):
+            lemmanode[node['Name']] = node['Id']
     else:
         if args.verbosity > 1:
-            print("Creating Noun Phrases node")
-        nounPhrasesNodeId = uuid.uuid4()
-        normcon.execute(normNode.insert().values({
-                'Id': nounPhrasesNodeId,
+            print("Creating Noun Phrases node category")
+        nounPhraseNodeCategoryId = uuid.uuid4()
+        norm.con.execute(norm.NodeCategory.insert().values({
+                'Id': nounPhraseNodeCategoryId,
                 'Name': 'Noun Phrases',
-                'Aggregate': True,
                 'CreatedBy': user,
                 'CreatedDate': now,
                 'ModifiedBy': user,
                 'ModifiedDate': now
             }))
 
-    lemmanode = {}
     for lemma in lemmafrequency.keys():
-        if args.threshold == 0 or lemmafrequency[lemma] >= args.threshold:
+        if (args.threshold == 0 or lemmafrequency[lemma] >= args.threshold) and not lemmanode.get(lemma):
             if args.verbosity > 1:
                 print("Creating node: " + lemma)
             lemmanode[lemma] = uuid.uuid4()
-            normcon.execute(normNode.insert().values({
+            norm.con.execute(norm.Node.insert().values({
                     'Id': lemmanode[lemma],
-                    'Parent': nounPhrasesNodeId,
+                    'Category': nounPhraseNodeCategoryId,
                     'Name': lemma,
                     'Aggregate': False,
                     'CreatedBy': user,
@@ -145,7 +119,7 @@ try:
                 }))
 
     for source in sources:
-        if args.verbosity > 1:
+        if args.verbosity > 2:
             print("Processing source: " + source['Name'])
         content = TextBlob(source['Content'])
         for sentence in content.lower().sentences:
@@ -154,7 +128,7 @@ try:
                 if lemma in lemmafrequency.keys() and (args.threshold == 0 or lemmafrequency[lemma] >= args.threshold):
                     if args.verbosity > 2:
                         print("    Inserting tagging: " + str(sentence.start) + ':' + str(sentence.end - 1))
-                    normcon.execute(normTagging.insert().values({
+                    norm.con.execute(norm.Tagging.insert().values({
                             'Id':           uuid.uuid4(),
                             'Source':       source['Id'],
                             'Node':         lemmanode[lemma],
@@ -165,11 +139,11 @@ try:
                             'ModifiedDate': now
                         }))
 
-    normtr.commit()
-    normtr = None
-    normcon.close()
-    normdb.dispose()
-
+    norm.commit()
 
 except:
     raise
+    norm.rollback()
+
+finally:
+    del norm

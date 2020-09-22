@@ -40,7 +40,7 @@ def add_arguments(parser):
 
     generalgroup = parser.add_argument_group('General')
     generalgroup.add_argument('-o', '--outfile', type=str, required=True,
-                                                 help='Output normalised NVivo (.norm) file')
+                                                 help='Output normalised NVivo (.nvpn) file')
     generalgroup.add_argument(        'infile',  type = str, nargs = '*',
                                                  help = 'Input CSV or source content filename pattern')
     generalgroup.add_argument('-u', '--user',    type = str,
@@ -217,6 +217,31 @@ def editSource(outfile, infile, user,
                 'Text':        text
             }]
 
+        # Define text column node category
+        if len(textcolumns) > 1:
+            textColNodeCategory = norm.con.execute(select([
+                    norm.NodeCategory.c.Id
+                ]).where(
+                    norm.NodeCategory.c.Name == 'Text Columns'
+                )).first()
+            if textColNodeCategory is not None:
+                textColNodeCategoryId = textColNodeCategory['Id']
+                if verbosity > 1:
+                    print("Found Text Columns node category ID ", textColNodeCategoryId)
+            else:
+                if verbosity > 1:
+                    print("Creating Noun Phrases node category")
+                textColNodeCategoryId = uuid.uuid4()
+                norm.con.execute(norm.NodeCategory.insert().values({
+                        'Id': textColNodeCategoryId,
+                        'Name': 'Text Columns',
+                        'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
+                        'CreatedBy':    userId,
+                        'CreatedDate':  datetimeNow,
+                        'ModifiedBy':   userId,
+                        'ModifiedDate': datetimeNow
+                    }))
+
         # Fill in attributes
         if attributes:
             for attribute in attributes:
@@ -324,9 +349,10 @@ def editSource(outfile, infile, user,
             elif colName in textcolumns and len(textcolumns) > 1:
                 node = norm.con.execute(select([
                         norm.Node.c.Id
-                    ]).where(
-                        norm.Node.c.Name == bindparam('Name')
-                    ), {
+                    ]).where(and_(
+                        norm.Node.c.Name == bindparam('Name'),
+                        norm.Node.c.Category == textColNodeCategoryId
+                    )), {
                         'Name': colName
                     }).first()
                 if node:
@@ -337,6 +363,7 @@ def editSource(outfile, infile, user,
                         'Id':           nodeId,
                         'Name':         colName,
                         'Description':  u"Created by NVivotools http://barraqda.org/nvivotools/",
+                        'Category':     textColNodeCategoryId,
                         'CreatedBy':    userId,
                         'CreatedDate':  datetimeNow,
                         'ModifiedBy':   userId,

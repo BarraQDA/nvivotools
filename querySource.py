@@ -30,7 +30,7 @@ def add_arguments(parser):
 
     generalgroup = parser.add_argument_group('General')
     generalgroup.add_argument(      'infile',   type=str,
-                                                help='Input normalised NVivo (.norm) file')
+                                                help='Input normalised NVivo (.nvpn) file')
     generalgroup.add_argument('-o', '--outfile', type=str,
                                                  help='Output file')
     generalgroup.add_argument('-s',  '--source', type=str)

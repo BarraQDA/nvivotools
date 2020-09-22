@@ -30,7 +30,7 @@ def add_arguments(parser):
 
     generalgroup = parser.add_argument_group('General')
     generalgroup.add_argument(      'infile',   type=str,
-                                                help='Input normalised NVivo (.norm) file')
+                                                help='Input normalised NVivo (.nvpn) file')
     generalgroup.add_argument('-o', '--outfile', type=str,
                                                  help='Output file')
     generalgroup.add_argument('-s',  '--source',          type=str)
@@ -200,7 +200,7 @@ def queryTagging(infile, outfile,
         for tagging in intersection:
             tagging['Fragment'] = str(tagging['Start']) + ':' + str(tagging['End'])
             tagging['Text'] = tagging['Content'][tagging['Start']-1:tagging['End']]
-            tagging['Node'] = os.linesep.join(nodeiter for nodeiter in tagging['NodeTuple'] if nodeiter not in node)
+            tagging['Node'] = os.linesep.join(nodeiter for nodeiter in tagging['NodeTuple'])
 
         csvwriter.writerows(intersection)
         csvfile.close()
