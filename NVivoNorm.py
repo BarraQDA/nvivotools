@@ -196,7 +196,7 @@ class NVivoNorm(object):
     def __del__(self):
         if self.tr:
             self.tr.rollback()
-        self.con.close()
+        #self.con.close()
         self.db.dispose()
 
     def begin(self):

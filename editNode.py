@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright 2016 Jonathan Schultz
+# Copyright 2020 Jonathan Schultz
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,9 +16,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from argrecord import ArgumentHelper, ArgumentRecorder
 import os
 import sys
-import argparse
 from NVivoNorm import NVivoNorm
 import csv
 from sqlalchemy import *
@@ -28,13 +28,14 @@ from datetime import date, time, datetime
 from distutils import util
 import uuid
 
-def add_arguments(parser):
-    parser.description = "Insert or update node in normalised file."
+def editNode(arglist=None):
+    
+    parser = ArgumentRecorder(description='Insert or update node in normalised file.')
 
     generalgroup = parser.add_argument_group('General')
-    generalgroup.add_argument('-o', '--outfile', type=str, required=True,
+    generalgroup.add_argument('-o', '--outfile', type=str, required=True, output=True,
                                                  help='Output normalised NVivo (.norm) file')
-    generalgroup.add_argument(        'infile',  type=str, nargs = '?',
+    generalgroup.add_argument(        'infile',  type=str, nargs = '?', input=True,
                                                  help='Input CSV file containing node info')
     generalgroup.add_argument('-u', '--user',    type=str,
                                                  help='User name, default is project "modified by".')
@@ -48,101 +49,57 @@ def add_arguments(parser):
     singlegroup.add_argument(      '--color',       type = str)
     singlegroup.add_argument(      '--aggregate',   action = 'store_true')
 
+    tablegroup = parser.add_argument_group('Table of nodes')
+    tablegroup.add_argument('-t', '--table',        type=str, input=True,
+                                                    help='CSV file containing table of nodes with their attributes')
+    tablegroup.add_argument('-N', '--namecol',      type=str, default='Name',
+                                                    help='Column to use for node name.')
+    
     advancedgroup = parser.add_argument_group('Advanced')
-    advancedgroup.add_argument('-v', '--verbosity', type=int, default=1)
-    advancedgroup.add_argument('--no-comments',     action='store_true',
-                                                    help='Do not produce a comments logfile')
+    advancedgroup.add_argument('-v', '--verbosity', type=int, default=1,
+                                                    private=True)
+    advancedgroup.add_argument('--logfile',          type=str, help="Logfile, default is <outfile>.log",
+                                                     private=True)
+    advancedgroup.add_argument('--no-logfile',       action='store_true', help='Do not output a logfile')
 
-    parser.set_defaults(func=editNode)
-    parser.set_defaults(build_comments=build_comments)
-    parser.set_defaults(hiddenargs=['hiddenargs', 'verbosity', 'no_comments'])
+    args = parser.parse_args(arglist)
 
-def parse_arguments():
-    parser = argparse.ArgumentParser()
-    add_arguments(parser)
-    return vars(parser.parse_args())
-
-def build_comments(kwargs):
-    comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
-    comments += '# ' + os.path.basename(__file__) + '\n'
-    hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
-    for argname, argval in kwargs.items():
-        if argname not in hiddenargs:
-            if type(argval) == str:
-                comments += '#     --' + argname + '="' + argval + '"\n'
-            elif type(argval) == bool:
-                if argval:
-                    comments += '#     --' + argname + '\n'
-            elif type(argval) == list:
-                for valitem in argval:
-                    if type(valitem) == str:
-                        comments += '#     --' + argname + '="' + valitem + '"\n'
-                    else:
-                        comments += '#     --' + argname + '=' + str(valitem) + '\n'
-            elif argval is not None:
-                comments += '#     --' + argname + '=' + str(argval) + '\n'
-
-    return comments
-
-def editNode(outfile, infile, user,
-              name, description, category, parent, attributes, color, aggregate,
-              verbosity, no_comments,
-              comments, **dummy):
+    if not args.no_logfile:
+        logfilename = args.outfile.rsplit('.',1)[0] + '.log'
+        incomments = ArgumentHelper.read_comments(logfilename) or ArgumentHelper.separator()
+        logfile = open(logfilename, 'w')
+        parser.write_comments(args, logfile, incomments=incomments)
+        logfile.close()
 
     try:
 
-        # Read and skip comments at start of CSV file.
-        csvcomments = ''
-        if infile:
-            csvFile = open(infile, 'r')
-
-            while True:
-                line = csvFile.readline()
-                if line[:1] == '#':
-                    csvcomments += line
-                else:
-                    csvfieldnames = next(csv.reader([line]))
-                    break
-
-        if not no_comments:
-            logfilename = outfile.rsplit('.',1)[0] + '.log'
-            if os.path.isfile(logfilename):
-                incomments = open(logfilename, 'r').read()
-            else:
-                incomments = ''
-            logfile = open(logfilename, 'w')
-            logfile.write(comments)
-            logfile.write(csvcomments)
-            logfile.write(incomments)
-            logfile.close()
-
-        norm = NVivoNorm(outfile)
+        norm = NVivoNorm(args.outfile)
         norm.begin()
 
         datetimeNow = datetime.utcnow()
 
-        if user:
-            user = norm.con.execute(select([
+        if args.user:
+            userRecord = norm.con.execute(select([
                     norm.User.c.Id
                 ]).where(
                     norm.User.c.Name == bindparam('Name')
                 ), {
-                    'Name': user
+                    'Name': args.user
                 }).first()
-            if user:
-                userId = user['Id']
+            if userRecord:
+                userId = userRecord['Id']
             else:
                 userId = uuid.uuid4()
                 norm.con.execute(norm.User.insert(), {
                         'Id':   userId,
-                        'Name': user
+                        'Name': args.user
                     })
         else:
-            project = norm.con.execute(select([
+            projectRecord = norm.con.execute(select([
                     norm.Project.c.ModifiedBy
                 ])).first()
-            if project:
-                userId = project['ModifiedBy']
+            if projectRecord:
+                userId = projectRecord['ModifiedBy']
             else:
                 userId = uuid.uuid4()
                 norm.con.execute(norm.User.insert(), {
@@ -158,33 +115,50 @@ def editNode(outfile, infile, user,
                     'ModifiedDate': datetimeNow
                 })
 
-        if infile:
-            csvreader=csv.DictReader(csvFile, fieldnames=csvfieldnames)
+        if args.infile:
+            infile = open(args.infile, 'r')
+            infieldnames = next(csv.reader([next(infile)]))
+            csvreader=csv.DictReader(infile, fieldnames=infieldnames)
             nodeRows = []
             for row in csvreader:
                 nodeRow = dict(row)
-                nodeRow['Name']        = nodeRow.get('Name',        name)
-                nodeRow['Description'] = nodeRow.get('Description', description)
-                nodeRow['Category']    = nodeRow.get('Category',    category)
-                nodeRow['Parent']      = nodeRow.get('Parent',      parent)
-                nodeRow['Aggregate']   = nodeRow.get('Aggregate',   aggregate)
-                nodeRow['Category']    = nodeRow.get('Category',    category)
-                nodeRow['Color']       = nodeRow.get('Color',       color)
+                nodeRow['Name']        = nodeRow.get('Name',        args.name)
+                nodeRow['Description'] = nodeRow.get('Description', args.description)
+                nodeRow['Category']    = nodeRow.get('Category',    args.category)
+                nodeRow['Parent']      = nodeRow.get('Parent',      args.parent)
+                nodeRow['Aggregate']   = nodeRow.get('Aggregate',   args.aggregate)
+                nodeRow['Color']       = nodeRow.get('Color',       args.color)
                 nodeRows.append(nodeRow)
 
             colNames = csvfieldnames
+        elif args.table:
+            tablefile = open(args.table, 'r')
+            tablefieldnames = next(csv.reader([next(tablefile)]))
+            tablefieldnames = [fieldname if fieldname != args.namecol else 'Name' for fieldname in tablefieldnames]
+            tablereader=csv.DictReader(tablefile, fieldnames=tablefieldnames)
+            nodeRows = []
+            for row in tablereader:
+                nodeRow = dict(row)
+                nodeRow['Description'] = nodeRow.get('Description', args.description)
+                nodeRow['Category']    = nodeRow.get('Category',    args.category)
+                nodeRow['Parent']      = nodeRow.get('Parent',      args.parent)
+                nodeRow['Aggregate']   = nodeRow.get('Aggregate',   args.aggregate)
+                nodeRow['Color']       = nodeRow.get('Color',       args.color)
+                nodeRows.append(nodeRow)
+
+            colNames = tablefieldnames
         else:
             nodeRows = [{
-                'Name':        name,
-                'Description': description,
-                'Category':    category,
-                'Color':       color
+                'Name':        args.name,
+                'Description': args.description,
+                'Category':    args.category,
+                'Color':       args.color
             }]
             colNames = ['Name', 'Description', 'Category', 'Color']
 
         # Fill in attributes from command-line
-        if attributes:
-            for attribute in attributes:
+        if args.attributes:
+            for attribute in args.attributes:
                 attMatch = re.match("(?P<attname>[^:]+):(?P<attvalue>.+)?", attribute)
                 if not parseattribute:
                     raise RuntimeError("Incorrect attribute format " + attribute)
@@ -292,7 +266,7 @@ def editNode(outfile, infile, user,
             categoryName = nodeRow.get('Category')
             categoryId = None
             if categoryName is not None:
-                category = norm.con.execute(select([
+                categoryRecord = norm.con.execute(select([
                         norm.NodeCategory.c.Id
                     ]).where(
                         norm.NodeCategory.c.Name == bindparam('NodeCategory')
@@ -300,8 +274,8 @@ def editNode(outfile, infile, user,
                         'NodeCategory': categoryName
                     }).first()
 
-                if category is not None:
-                    categoryId = category['Id']
+                if categoryRecord is not None:
+                    categoryId = categoryRecord['Id']
                 else:
                     categoryId = uuid.uuid4()
                     norm.con.execute(norm.NodeCategory.insert(), {
@@ -321,7 +295,7 @@ def editNode(outfile, infile, user,
                 if parentIdList:
                     parentId = parentIdList[0]
                 else:
-                    parent = norm.con.execute(select([
+                    parentRecord = norm.con.execute(select([
                             norm.Node.c.Id
                         ]).where(
                             norm.Node.c.Name == bindparam('Name')
@@ -329,8 +303,8 @@ def editNode(outfile, infile, user,
                             'Name': parentName
                         }).first()
 
-                    if parent is not None:
-                        parentId = parent['Id']
+                    if parentRecord is not None:
+                        parentId = parentRecord['Id']
                     else:
                         parentId = uuid.uuid4()
                         norm.con.execute(norm.Node.insert(), {
@@ -442,10 +416,5 @@ def editNode(outfile, infile, user,
     finally:
         del norm
 
-def main():
-    kwargs = parse_arguments()
-    kwargs['comments'] = build_comments(kwargs)
-    kwargs['func'](**kwargs)
-
 if __name__ == '__main__':
-    main()
+    editNode(None)
