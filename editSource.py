@@ -38,59 +38,63 @@ def editSource(arglist=None):
 
     parser = ArgumentRecorder(description='Insert or update source in normalised file.')
 
-    generalgroup = parser.add_argument_group('General')
-    generalgroup.add_argument('-o', '--outfile', type=str, required=True, output=True,
+    generalGroup = parser.add_argument_group('General')
+    generalGroup.add_argument('-o', '--outfile', type=str, required=True, output=True,
                                                  help='Output normalised NVivo (.nvpn) file')
-    generalgroup.add_argument(        'infile',  type = str, nargs = '*', input=True,
-                                                 help = 'Input CSV or source content filename pattern')
-    generalgroup.add_argument('-u', '--user',    type = str,
-                                                 help = 'User name, default is project "modified by".')
+    generalGroup.add_argument(        'infile',  type = str, nargs = '*', input=True,
+                                                 help = 'Source content filename pattern')            
+    generalGroup.add_argument('-u', '--user',    type=str,
+                                                 help='User name, default is project "modified by".')
 
-    singlegroup = parser.add_argument_group('Single source')
-    singlegroup.add_argument('-n', '--name',        type = str)
-    singlegroup.add_argument('-d', '--description', type = str)
-    singlegroup.add_argument('-c', '--category',    type = str)
-    singlegroup.add_argument('-a', '--attributes',  type = str, action='append', help='Attributes in format name:value')
-    singlegroup.add_argument(      '--color',       type = str)
-    singlegroup.add_argument('-t', '--text',        type = str, help = 'Source text')
+    singleGroup = parser.add_argument_group('Single source')
+    singleGroup.add_argument('-n', '--name',        type = str)
+    singleGroup.add_argument('-d', '--description', type = str)
+    singleGroup.add_argument('-c', '--category',    type = str)
+    singleGroup.add_argument('-a', '--attributes',  type = str, action='append', help='Attributes in format name:value')
+    singleGroup.add_argument(      '--color',       type = str)
+    singleGroup.add_argument(      '--text',        type = str, help = 'Source text')
 
-    csvgroup = parser.add_argument_group('CSV file')
-    csvgroup.add_argument('-C', '--columns', type = str, nargs = '*',
-                                             help = 'Columns from input CSV file to include as attributes')
-    csvgroup.add_argument(      '--exclude', type = str, nargs = '*', default = [],
-                                             help = 'Columns from input CSV file to exclude as attributes')
-    csvgroup.add_argument('--textcolumns',   type = str, nargs = '*', default = [],
-                                             help = 'Columns from input CSV file to include as coded text')
+    tableGroup = parser.add_argument_group('Table of sources')
+    tableGroup.add_argument('-t', '--table',   type=str, input=True,
+                                               help='CSV file containing table of sources with their attributes')
+    tableGroup.add_argument('-N', '--namecol', type=str, default='Name',
+                                               help='Column to use for source name.')
+    tableGroup.add_argument('-T', '--textcol', type=str,
+                                               help='Column to use for source content text.')
+    tableGroup.add_argument('-F', '--filenamecol', type=str, default='Filename',
+                                               help='Column to use for source content file name.')
+    tableGroup.add_argument('-D', '--filedir', type=str, default='.',
+                                               help='Directory where source content file is located.')
+    tableGroup.add_argument('-C', '--columns', type = str, nargs = '*',
+                                               help = 'Columns from input CSV file to include as attributes, default is all')
+    tableGroup.add_argument(      '--exclude', type = str, nargs = '*', default = [],
+                                               help = 'Columns from input CSV file to exclude as attributes')
+    tableGroup.add_argument('--textcolumns',   type = str, nargs = '*', default = [],
+                                               help = 'Columns from input CSV file to include as coded text')
 
-    advancedgroup = parser.add_argument_group('Advanced')
-    advancedgroup.add_argument('-e', '--encoding',  type=str,
+    advancedGroup = parser.add_argument_group('Advanced')
+    advancedGroup.add_argument('-e', '--encoding',  type=str,
                                                     help='File encoding; if not specified then we will try to detect.')
-    advancedgroup.add_argument('-v', '--verbosity', type=int, default=1)
-    advancedgroup.add_argument('-l', '--limit',     type=int,
-                                                    help='Limit number of lines from input file')
-    advancedgroup.add_argument('--no-comments',     action='store_true',
-                                                    help='Do not produce a comments logfile')
+    advancedGroup.add_argument('-v', '--verbosity', type=int, default=1, private=True)
+    advancedGroup.add_argument('-l', '--limit',     type=int,
+                                                    help='Limit number of lines from table file')
+    advancedGroup.add_argument('--logfile',         type=str, private=True,
+                                                    help="Logfile, default is <outfile>.log")
+    advancedGroup.add_argument('--no-logfile',      action='store_true', 
+                                                    help='Do not output a logfile')
 
     args = parser.parse_args(arglist)
+    
+    if args.textcol and args.filenamecol:
+        raise RuntimeError("Only one of 'textcol' and 'filenamecol' may be specified")        
 
     if not args.no_logfile:
         logfilename = args.outfile.rsplit('.',1)[0] + '.log'
         incomments = ArgumentHelper.read_comments(logfilename) or ArgumentHelper.separator()
         logfile = open(logfilename, 'w')
         parser.write_comments(args, logfile, incomments=incomments)
-        logfile.close()
 
     try:
-
-        if not no_comments:
-            logfilename = args.outfile.rsplit('.',1)[0] + '.log'
-            if os.path.isfile(logfilename):
-                incomments = open(logfilename, 'r').read()
-            else:
-                incomments = ''
-            logfile = open(logfilename, 'w')
-            logfile.write(comments)
-            logfile.write(incomments)
 
         norm = NVivoNorm(args.outfile)
         norm.begin()
@@ -114,11 +118,11 @@ def editSource(arglist=None):
                         'Name': args.user
                     })
         else:
-            project = norm.con.execute(select([
+            projectRecord = norm.con.execute(select([
                     norm.Project.c.ModifiedBy
                 ])).first()
-            if project:
-                userId = project['ModifiedBy']
+            if projectRecord:
+                userId = projectRecord['ModifiedBy']
             else:
                 userId = uuid.uuid4()
                 norm.con.execute(norm.User.insert(), {
@@ -135,53 +139,60 @@ def editSource(arglist=None):
                 })
 
         sourceRows = []
-        for infilepattern in args.infile:
-            for infilename in glob.glob(infilepattern):
+        for infilePattern in args.infile:
+            for infilename in glob.glob(infilePattern):
                 if args.verbosity >= 2:
                     print("Loading " + infilename, file=sys.stderr)
 
-                infilebasename, infiletype = os.path.splitext(os.path.basename(infilename))
-                infiletype = infiletype[1:].upper()
+                infileBasename, infileType = os.path.splitext(os.path.basename(infilename))
+                infileType = infileType[1:].upper()
 
-                if infiletype == 'CSV':
-                    incomments = ''
-                    csvFile = open(infilename, 'r')
+                sourceRows.append({
+                    'Name':        args.name or infileBasename,
+                    'Description': args.description or u"Created by NVivotools http://barraqda.org/nvivotools/",
+                    'Category':    args.category,
+                    'Color':       args.color,
+                    'ObjectFile':  infilename,
+                })
 
-                    # Skip comments at start of CSV file.
-                    while True:
-                        line = csvFile.readline()
-                        if line[:1] == '#':
-                            incomments += line
-                        else:
-                            csvfieldnames = next(csv.reader([line]))
-                            break
+        if args.table:
+            incomments = ''
+            tableFile = open(args.table, 'r')
 
-                    if not no_comments:
-                        logfile.write(incomments)
-
-                    csvreader=csv.DictReader(csvFile, fieldnames=csvfieldnames)
-                    for row in csvreader:
-                        sourceRow = dict(row)
-                        sourceRow['Name']        = sourceRow.get('Name',        args.name)
-                        sourceRow['Description'] = sourceRow.get('Description', args.description or u"Created by NVivotools http://barraqda.org/nvivotools/")
-                        sourceRow['Category']    = sourceRow.get('Category',    args.category)
-                        sourceRow['Color']       = sourceRow.get('Color',       args.color)
-                        sourceRow['Text']        = sourceRow.get('Text',        args.text)
-                        sourceRows.append(sourceRow)
-
-                        if args.limit and len(sourceRows) == args.limit:
-                            break
-
+            # Skip comments at start of CSV file.
+            while True:
+                line = tableFile.readline()
+                if line[:1] == '#':
+                    incomments += line
                 else:
-                    sourceRows.append({
-                        'Name':        args.name or infilebasename,
-                        'Description': args.description or u"Created by NVivotools http://barraqda.org/nvivotools/",
-                        'Category':    args.category,
-                        'Color':       args.color,
-                        'ObjectFile':  infilename,
-                    })
+                    csvFieldnames = next(csv.reader([line]))
+                    break
 
-        if not args.infile:
+            if not args.no_logfile:
+                logfile.write(incomments)
+            
+            tableFile = open(args.table, 'r')
+            tableFieldnames = next(csv.reader([next(tableFile)]))
+            tableFieldnames = [fieldname if fieldname != args.namecol else 'Name' for fieldname in tableFieldnames]
+            tableReader=csv.DictReader(tableFile, fieldnames=tableFieldnames)
+            for row in tableReader:
+                sourceRow = dict(row)
+                sourceRow['Description'] = sourceRow.get('Description', args.description or u"Created by NVivotools http://barraqda.org/nvivotools/")
+                sourceRow['Category']    = sourceRow.get('Category',    args.category)
+                sourceRow['Color']       = sourceRow.get('Color',       args.color)
+                if args.textcol or args.text:
+                    sourceRow['Text']        = sourceRow.get(args.textcol, args.text)
+                else:
+                    sourceRow['ObjectFile']  = sourceRow.get(args.filenamecol)
+
+                sourceRows.append(sourceRow)
+                
+                if args.limit and len(sourceRows) == args.limit:
+                    break
+
+            colNames = tableFieldnames
+
+        elif not args.infile:
             sourceRows = [{
                 'Name':        args.name,
                 'Description': args.description or u"Created by NVivotools http://barraqda.org/nvivotools/",
@@ -439,20 +450,21 @@ def editSource(arglist=None):
 
             ObjectFile = sourceRow.get('ObjectFile')
             if ObjectFile:
+                ObjectPath = os.path.join(args.filedir, ObjectFile)
                 dummy, ObjectFileExt = os.path.splitext(ObjectFile)
                 ObjectFileExt = ObjectFileExt[1:].upper()
                 normSourceRow['ObjectType'] = ObjectFileExt
                 if ObjectFileExt == 'TXT':
                     # Detect file encoding if not specified
                     if not args.encoding:
-                        raw = open(ObjectFile, 'rb').read(32) # at most 32 bytes are returned
+                        raw = open(ObjectPath, 'rb').read(32) # at most 32 bytes are returned
                         args.encoding = chardet.detect(raw)['encoding']
 
-                    normSourceRow['Content'] = codecs.open(ObjectFile, 'r', encoding=args.encoding).read()
+                    normSourceRow['Content'] = codecs.open(ObjectPath, 'r', encoding=args.encoding).read()
                     if args.encoding != 'utf8':
                         normSourceRow['Content'] = normSourceRow['Content'].encode('utf8')
                 else:
-                    normSourceRow['Object'] = open(ObjectFile, 'rb').read()
+                    normSourceRow['Object'] = open(ObjectPath, 'rb').read()
             else:
                 normSourceRow['ObjectType'] = u'TXT'
                 normSourceRow['Content'] = sourceRow.get('Text') or u''
@@ -523,6 +535,8 @@ def editSource(arglist=None):
 
     finally:
         del norm
+        if not args.no_logfile:
+            logfile.close()
 
 
 if __name__ == '__main__':

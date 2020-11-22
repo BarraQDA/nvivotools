@@ -1943,7 +1943,8 @@ def Denormalise(args):
                 rsrcmgr = PDFResourceManager()
                 retstr = StringIO()
                 laparams = LAParams()
-                device = TextConverter(rsrcmgr, retstr, codec='utf-8', laparams=laparams)
+                #device = TextConverter(rsrcmgr, retstr, codec='utf-8', laparams=laparams)
+                device = TextConverter(rsrcmgr, retstr, laparams=laparams)
                 tmpfileptr = open(tmpfilename, 'rb')
                 interpreter = PDFPageInterpreter(rsrcmgr, device)
                 pagenos = set()
@@ -1992,7 +1993,7 @@ def Denormalise(args):
                     'Item_Id':    source['Item_Id'],
                     'Properties': '<Properties xmlns="http://qsr.com.au/XMLSchema.xsd"><Property Key="PDFChecksum" Value="0"/><Property Key="PDFPassword" Value=""/></Properties>'
                 })
-            elif source['ObjectTypeName'] in {'DOCX', 'DOC', 'ODT', 'TXT'}:
+            elif source['ObjectTypeName'] in {'DOCX', 'DOC', 'ODT', 'TXT', 'RTF'}:
                 if source['SourceType'] is None:
                     source['SourceType'] = NVivo.SourceType.Doc
 
@@ -2042,7 +2043,8 @@ def Denormalise(args):
                         # Use unoconv to convert to text
                         p = subprocess.Popen(massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=subprocess.PIPE)
                         err = p.stderr.read()
-                        if err != '':
+                        if err:
+                            print("Command: ", massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']])
                             raise RuntimeError(err)
 
                         source['PlainText'] = codecs.open(tmpfilename + '.txt', 'r', 'utf-8-sig').read()

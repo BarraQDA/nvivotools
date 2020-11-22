@@ -32,42 +32,41 @@ def editNode(arglist=None):
     
     parser = ArgumentRecorder(description='Insert or update node in normalised file.')
 
-    generalgroup = parser.add_argument_group('General')
-    generalgroup.add_argument('-o', '--outfile', type=str, required=True, output=True,
-                                                 help='Output normalised NVivo (.norm) file')
-    generalgroup.add_argument(        'infile',  type=str, nargs = '?', input=True,
-                                                 help='Input CSV file containing node info')
-    generalgroup.add_argument('-u', '--user',    type=str,
+    generalGroup = parser.add_argument_group('General')
+    generalGroup.add_argument('-o', '--outfile', type=str, required=True, output=True,
+                                                 help='Output normalised NVivo (.nvpn) file')
+    generalGroup.add_argument('-u', '--user',    type=str,
                                                  help='User name, default is project "modified by".')
 
-    singlegroup = parser.add_argument_group('Single node')
-    singlegroup.add_argument('-n', '--name',        type = str)
-    singlegroup.add_argument('-d', '--description', type = str)
-    singlegroup.add_argument('-c', '--category',    type = str)
-    singlegroup.add_argument('-p', '--parent',      type = str)
-    singlegroup.add_argument('-a', '--attributes',  type = str, action='append', help='Attributes in format name:value')
-    singlegroup.add_argument(      '--color',       type = str)
-    singlegroup.add_argument(      '--aggregate',   action = 'store_true')
+    singleGroup = parser.add_argument_group('Single node')
+    singleGroup.add_argument('-n', '--name',        type = str)
+    singleGroup.add_argument('-d', '--description', type = str)
+    singleGroup.add_argument('-c', '--category',    type = str)
+    singleGroup.add_argument('-p', '--parent',      type = str)
+    singleGroup.add_argument('-a', '--attributes',  type = str, action='append', help='Attributes in format name:value')
+    singleGroup.add_argument(      '--color',       type = str)
+    singleGroup.add_argument(      '--aggregate',   action = 'store_true')
 
-    tablegroup = parser.add_argument_group('Table of nodes')
-    tablegroup.add_argument('-t', '--table',        type=str, input=True,
+    tableGroup = parser.add_argument_group('Table of nodes')
+    tableGroup.add_argument('-t', '--table',        type=str, input=True,
                                                     help='CSV file containing table of nodes with their attributes')
-    tablegroup.add_argument('-N', '--namecol',      type=str, default='Name',
+    tableGroup.add_argument('-N', '--namecol',      type=str, default='Name',
                                                     help='Column to use for node name.')
     
-    advancedgroup = parser.add_argument_group('Advanced')
-    advancedgroup.add_argument('-v', '--verbosity', type=int, default=1,
+    advancedGroup = parser.add_argument_group('Advanced')
+    advancedGroup.add_argument('-v', '--verbosity', type=int, default=1,
                                                     private=True)
-    advancedgroup.add_argument('--logfile',          type=str, help="Logfile, default is <outfile>.log",
-                                                     private=True)
-    advancedgroup.add_argument('--no-logfile',       action='store_true', help='Do not output a logfile')
+    advancedGroup.add_argument('--logfile',         type=str, private=True,
+                                                    help="Logfile, default is <outfile>.log")
+    advancedGroup.add_argument('--no-logfile',      action='store_true', 
+                                                    help='Do not output a logfile')
 
     args = parser.parse_args(arglist)
 
     if not args.no_logfile:
-        logfilename = args.outfile.rsplit('.',1)[0] + '.log'
-        incomments = ArgumentHelper.read_comments(logfilename) or ArgumentHelper.separator()
-        logfile = open(logfilename, 'w')
+        logFilename = args.outfile.rsplit('.',1)[0] + '.log'
+        incomments = ArgumentHelper.read_comments(logFilename) or ArgumentHelper.separator()
+        logfile = open(logFilename, 'w')
         parser.write_comments(args, logfile, incomments=incomments)
         logfile.close()
 
@@ -115,38 +114,22 @@ def editNode(arglist=None):
                     'ModifiedDate': datetimeNow
                 })
 
-        if args.infile:
-            infile = open(args.infile, 'r')
-            infieldnames = next(csv.reader([next(infile)]))
-            csvreader=csv.DictReader(infile, fieldnames=infieldnames)
+        if args.table:
+            tableFile = open(args.table, 'r')
+            tableFieldnames = next(csv.reader([next(tableFile)]))
+            tableFieldnames = [fieldname if fieldname != args.namecol else 'Name' for fieldname in tableFieldnames]
+            tableReader=csv.DictReader(tableFile, fieldnames=tableFieldnames)
             nodeRows = []
-            for row in csvreader:
+            for row in tableReader:
                 nodeRow = dict(row)
-                nodeRow['Name']        = nodeRow.get('Name',        args.name)
-                nodeRow['Description'] = nodeRow.get('Description', args.description)
+                nodeRow['Description'] = nodeRow.get('Description', args.description or u"Created by NVivotools http://barraqda.org/nvivotools/")
                 nodeRow['Category']    = nodeRow.get('Category',    args.category)
                 nodeRow['Parent']      = nodeRow.get('Parent',      args.parent)
                 nodeRow['Aggregate']   = nodeRow.get('Aggregate',   args.aggregate)
                 nodeRow['Color']       = nodeRow.get('Color',       args.color)
                 nodeRows.append(nodeRow)
 
-            colNames = csvfieldnames
-        elif args.table:
-            tablefile = open(args.table, 'r')
-            tablefieldnames = next(csv.reader([next(tablefile)]))
-            tablefieldnames = [fieldname if fieldname != args.namecol else 'Name' for fieldname in tablefieldnames]
-            tablereader=csv.DictReader(tablefile, fieldnames=tablefieldnames)
-            nodeRows = []
-            for row in tablereader:
-                nodeRow = dict(row)
-                nodeRow['Description'] = nodeRow.get('Description', args.description)
-                nodeRow['Category']    = nodeRow.get('Category',    args.category)
-                nodeRow['Parent']      = nodeRow.get('Parent',      args.parent)
-                nodeRow['Aggregate']   = nodeRow.get('Aggregate',   args.aggregate)
-                nodeRow['Color']       = nodeRow.get('Color',       args.color)
-                nodeRows.append(nodeRow)
-
-            colNames = tablefieldnames
+            colNames = tableFieldnames
         else:
             nodeRows = [{
                 'Name':        args.name,
@@ -163,20 +146,20 @@ def editNode(arglist=None):
                 if not parseattribute:
                     raise RuntimeError("Incorrect attribute format " + attribute)
 
-                colnames.append(attName)
+                colNames.append(attName)
                 for nodeRow in nodeRows:
                     attName  = attMatch.group('attname')
                     attValue = attMatch.group('attvalue')
                     nodeRow[attName] = nodeRow.get(attName, attValue)
 
-        nodeAttributes = {}
+        nodeAttributeRecords = {}
         for attributeName in colNames:
             # Skip reserved attribute names
             if attributeName in ['Name', 'Description', 'Category', 'Parent', 'Aggregate', 'Color']:
                 continue
 
             # Determine whether attribute is already defined
-            nodeattribute = norm.con.execute(select([
+            nodeAttributeRecord = norm.con.execute(select([
                     norm.NodeAttribute.c.Id,
                     norm.NodeAttribute.c.Type,
                     norm.NodeAttribute.c.Length
@@ -186,11 +169,11 @@ def editNode(arglist=None):
                     'Name': attributeName
                 }).first()
 
-            if nodeattribute:
-                nodeAttributes[attributeName] = {
-                    'Id':     nodeattribute['Id'],
-                    'Type':   nodeattribute['Type'],
-                    'Length': nodeattribute['Length']
+            if nodeAttributeRecord:
+                nodeAttributeRecords[attributeName] = {
+                    'Id':     nodeAttributeRecord['Id'],
+                    'Type':   nodeAttributeRecord['Type'],
+                    'Length': nodeAttributeRecord['Length']
                 }
             else:
                 attributeId = uuid.uuid4()
@@ -251,7 +234,7 @@ def editNode(arglist=None):
                     'ModifiedBy':   userId,
                     'ModifiedDate': datetimeNow
                 })
-                nodeAttributes[attributeName] = {
+                nodeAttributeRecords[attributeName] = {
                     'Id':           attributeId,
                     'Type':         attributeType,
                     'Length':       attributeLength,
@@ -331,7 +314,7 @@ def editNode(arglist=None):
             nodeId = node['Id'] if node else uuid.uuid4()
 
             nodeValues = []
-            for attributeName, attributeNode in nodeAttributes.items():
+            for attributeName, attributeNode in nodeAttributeRecords.items():
                 attributeId     = attributeNode['Id']
                 attributeType   = attributeNode['Type']
                 attributeLength = attributeNode['Length']
