@@ -2041,8 +2041,11 @@ def Denormalise(args):
                         source['PlainText'] = codecs.open(tmpfilename + '.TXT', 'r', 'utf-8-sig').read()
                     else:
                         # Use unoconv to convert to text
-                        p = subprocess.Popen(massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']], stderr=subprocess.PIPE)
-                        err = p.stderr.read()
+                        cmd = massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']]
+                        if args.verbosity > 1:
+                            print("Running: ", cmd)
+                        p = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
+                        err = p.stderr
                         if err:
                             print("Command: ", massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']])
                             raise RuntimeError(err)
@@ -2063,9 +2066,12 @@ def Denormalise(args):
                 source['Object'] = ''
                 if source['ObjectTypeName'] != ('ODT' if args.mac else 'DOC'):
                     destformat = 'odt' if args.mac else 'doc'
-                    p = subprocess.Popen(massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']], stderr=subprocess.PIPE)
-                    err = p.stderr.read().decode('utf-8')
-                    if err != '':
+                    cmd = massagesource.unoconvcmd + ['--format=' + destformat, tmpfilename + '.' + source['ObjectTypeName']]
+                    if args.verbosity > 1:
+                        print("Running: ", cmd)
+                    p = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
+                    err = p.stderr
+                    if err:
                         err = "unoconv invocation error: " + str(massagesource.unoconvcmd) + "\n" + err
                         raise RuntimeError(err)
 
