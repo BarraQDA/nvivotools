@@ -165,14 +165,12 @@ def editSource(arglist=None):
                 if line[:1] == '#':
                     incomments += line
                 else:
-                    csvFieldnames = next(csv.reader([line]))
+                    tableFieldnames = next(csv.reader([line]))
                     break
 
             if not args.no_logfile:
                 logfile.write(incomments)
             
-            tableFile = open(args.table, 'r')
-            tableFieldnames = next(csv.reader([next(tableFile)]))
             tableFieldnames = [fieldname if fieldname != args.namecol else 'Name' for fieldname in tableFieldnames]
             tableReader=csv.DictReader(tableFile, fieldnames=tableFieldnames)
             for row in tableReader:
