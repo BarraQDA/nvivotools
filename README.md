@@ -24,7 +24,7 @@ If you want to access NVivo for Mac files (and this may be sufficient for you ev
 
 If you have NVivo installed, then NVivotools will automatically use the instance of SQL Anywhere that is bundled with it.  Otherwise, read the following section for instructions on installing SQL Anywhere.
 
-### NVivo for Mac or other operating systems
+### NVivo for Mac on other operating systems
 
 Since NVivo for Mac (`.nvpx`) files are actually SQL Anywhere databases, they can be accessed on any computer on which SQL Anywhere can be installed. This includes Linux (for x86, x64 and ARM), Mac and Windows, plus Solaris SPARC and x64, HP-UX Itanium and IBM AIX.  The [Developer Edition](https://learn.sapdigital.com/SQLA-Trial-Registration-Page.html) is available free of charge (subject to licence conditions, which it is your responsibility to comply with). Simply download and install it, and you are ready for the next step.
 
@@ -79,10 +79,6 @@ Then enter the following commands:
 
 Another piece of Microsoft brilliance - you can't request that the server simply read a new network configuration - you have to restart the whole thing. Back at the SQL Server Configuration Manager window, click on 'SQL Server Services' in the left frame, then right-click on the relevant server instance name and select `Restart`.
 
-#### 5. (Optional) Punch a hole in the Windows firewall
-
-If you want to use NVivotools from a different computer than the one running SQL Server (I do this so that I can keep as far away from Windows as possible, but you may find other reasons to do so) you'll need to tell the firewall to allow incoming network connections to SQL Server. You'll need to find the SQL Server executable (something like `C:\Program Files\Microsoft SQL Server\MSSQL10_50.QSRNVIVO10\MSSQL\Binn\sqlservr.exe`) and configure the Microsoft Firewall to allow connections to that program.  Alternatively, you can simply open the relevant port number(s) (from the Microsoft SQL Server TCP/IP configuration above) and allow connections on those ports.
-
 #### More Information
 
 Here are a few links that describe other ways of configuring the SQL Server authentication.
@@ -90,21 +86,33 @@ Here are a few links that describe other ways of configuring the SQL Server auth
 - [https://blogs.technet.microsoft.com/sqlman/2011/06/14/tips-tricks-you-have-lost-access-to-sql-server-now-what/](https://blogs.technet.microsoft.com/sqlman/2011/06/14/tips-tricks-you-have-lost-access-to-sql-server-now-what/)
 - [https://www.mssqltips.com/sqlservertip/2538/enabling-dedicated-administrator-connection-in-sql-server-2008-express-edition/](https://www.mssqltips.com/sqlservertip/2538/enabling-dedicated-administrator-connection-in-sql-server-2008-express-edition/)
 
+### NVivo for Windows on other operating systems
+
+Since the only part of accessing NVivo for Windows project files that requires Windows is Microsoft SQL Server, and the server is in any case accessed using the TCP/IP network protocol, it is relatively (everything is relative) simple to run the rest of NVivotools on a different computer running a different (read: better) operating system like Linux or MacOS. To do this, you need to install and configure Microsoft SQL Server as described above, the follow a few more steps to allow remote access:
+
+#### 1. Punch a hole in the Windows firewall
+
+If you want to use NVivotools from a different computer than the one running SQL Server (I do this so that I can keep as far away from Windows as possible, but you may find other reasons to do so) you'll need to tell the firewall to allow incoming network connections to SQL Server. You'll need to find the SQL Server executable (something like `C:\Program Files\Microsoft SQL Server\MSSQL10_50.QSRNVIVO10\MSSQL\Binn\sqlservr.exe`) and configure the Microsoft Firewall to allow connections to that program.  Alternatively, you can simply open the relevant port number(s) (from the Microsoft SQL Server TCP/IP configuration above) and allow connections on those ports.
+
+#### 2. Allow SSH access to the host computer
+
+Since NVivotools also needs to copy files and run certain commands on the host computer (the one running Microsoft SQL Server), it needs to be able to gain access using the Secure Shell (SSH) protocol. Moreover, NVivotools needs to be able to connect to the host without prompting for a password. This requires that the server be set up to allow key-based authentication by creating an `authorized_keys` file. Once again Microsoft makes this process mind-bogglingly fragile but I have found the instructions [here](https://stackoverflow.com/a/50502015) to be useful.
+
 ## Install Python
 
-Although I have done my best to make NVivotools work with both Python versions 2 and 3, one of the libraries on which it depends [PDFMiner](https://github.com/euske/pdfminer) currently only supports Python version 2. So for now you will need to install Python 2.
+With the deprecation of Python 2 and the migration of all the required libraries to Python 3, NVivotools now requires Python 3.
 
 ### Windows
 
-Install a recent version of Python 2 from [Python Releases for Windows](https://www.python.org/downloads/windows/). During the installation process you will be asked whether to add Python to the path - say 'Yes' to keep things simple.
+Install a recent version of Python 3 from [Python Releases for Windows](https://www.python.org/downloads/windows/). During the installation process you will be asked whether to add Python to the path - say 'Yes' to keep things simple.
 
 ### Linux
 
-Use your usual package manager to install Python 2.7.
+Use your usual package manager to install Python 3.
 
 ### Mac
 
-Install a recent version of Python 2 from [Python Releases for Mac OS X](https://www.python.org/downloads/mac-osx/).
+Install a recent version of Python 3 from [Python Releases for Mac OS X](https://www.python.org/downloads/mac-osx/).
 
 Sidenote: Although OSX ships with a version of Python, this version seems to be unable to work correctly with the SQLAlchemy package on which NVivotools depends (more precisely - if anyone knows enough about this stuff to figure it out - it fails to load the `dbcapi`). There is some suspicion that this problem may be related to OSX's System Integrity Protection (SIP), which was only introduced with El Capitan. It is therefore possible that the following section may not be required on earlier versions of OSX (or if you disable SIP, which we do not recommend).
 

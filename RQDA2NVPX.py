@@ -27,7 +27,7 @@ helperpath = os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'helper
 
 # Set environment variables for SQL Anywhere server
 if not os.environ.get('_sqlanywhere'):
-    envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
+    envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh', text=True).splitlines()
     for envline in envlines:
         env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.+)(?P=quote)", envline).groupdict()
         os.environ[env['name']] = env['value']
@@ -125,7 +125,7 @@ freeport = str(s.getsockname()[1])
 s.close()
 
 DEVNULL = open(os.devnull, 'wb')
-dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga', '-xd',  tmpoutfilename, '-n', 'NVivo'+freeport],
+dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga', '-xd',  tmpoutfilename, '-n', 'NVivo'+freeport], text=True,
                           stdout=subprocess.PIPE, stdin=DEVNULL)
 
 # Wait until SQL Anywhere engine starts...

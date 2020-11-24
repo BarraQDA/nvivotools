@@ -85,9 +85,9 @@ if os.name != 'nt':
     if not os.environ.get('_restart'):
         if args.sqlanywhere:
             os.environ['sqlanywhere'] = args.sqlanywhere
-        envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
+        envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh', text=True).splitlines()
         for envline in envlines:
-            env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.*)(?P=quote)", envline.decode('utf-8'), re.MULTILINE | re.DOTALL).groupdict()
+            env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.*)(?P=quote)", envline, re.MULTILINE | re.DOTALL).groupdict()
             os.environ[env['name']] = env['value']
 
         os.environ['_restart'] = 'TRUE'
@@ -176,10 +176,10 @@ s.close()
 DEVNULL = open(os.devnull, 'wb')
 
 if os.name != 'nt':
-    dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpoutfilename, '-n', 'NVivo'+freeport], stdout=subprocess.PIPE, stdin=DEVNULL)
+    dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpoutfilename, '-n', 'NVivo'+freeport], text=True, stdout=subprocess.PIPE, stdin=DEVNULL)
     # Wait until SQL Anywhere engine starts...
     while dbproc.poll() is None:
-        line = dbproc.stdout.readline().decode('utf-8')
+        line = dbproc.stdout.readline()
         if line == 'Now accepting requests\n':
             break
 else:
@@ -192,7 +192,7 @@ else:
     else:
         raise RuntimeError("Could not find SQL Anywhere executable")
 
-    dbproc = subprocess.Popen(['dbspawn', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  tmpoutfilename, '-n', 'NVivo'+freeport], stdout=subprocess.PIPE, stdin=DEVNULL)
+    dbproc = subprocess.Popen(['dbspawn', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  tmpoutfilename, '-n', 'NVivo'+freeport], text=True, stdout=subprocess.PIPE, stdin=DEVNULL)
     # Wait until SQL Anywhere engine starts...
     while dbproc.poll() is None:
         line = dbproc.stdout.readline()

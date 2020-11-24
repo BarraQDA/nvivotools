@@ -100,7 +100,7 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
         if os.name != 'nt':
             # Set environment variables for SQL Anywhere server
             if not os.environ.get('_sqlanywhere'):
-                envlines = subprocess.check_output(NVivo.helperpath + 'sqlanyenv.sh').splitlines()
+                envlines = subprocess.check_output(NVivo.helperpath + 'sqlanyenv.sh', text=True).splitlines()
                 for envline in envlines:
                     env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.+)(?P=quote)", envline).groupdict()
                     os.environ[env['name']] = env['value']
@@ -120,7 +120,7 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
         DEVNULL = open(os.devnull, 'wb')
 
         if os.name != 'nt':
-            dbproc = subprocess.Popen(['sh', NVivo.helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname],
+            dbproc = subprocess.Popen(['sh', NVivo.helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], text=True,
                                       stdout=subprocess.PIPE, stdin=DEVNULL)
             # Wait until SQL Anywhere engine starts...
             while dbproc.poll() is None:
@@ -137,7 +137,7 @@ def mount(filename, dbname=None, server=None, port=None, instance=None, nvivover
             else:
                 raise RuntimeError("Could not find SQL Anywhere executable")
 
-            dbproc = subprocess.Popen(['dbspawn', '-f', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname],
+            dbproc = subprocess.Popen(['dbspawn', '-f', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  filename, '-n', dbname], text=True,
                                       stdout=subprocess.PIPE, stdin=DEVNULL)
             # Wait until SQL Anywhere engine starts...
             while dbproc.poll() is None:
@@ -1962,7 +1962,7 @@ def Denormalise(args):
                     pageelement.setAttribute("PageHeight", str(int(mediabox[3] - mediabox[1])))
 
                     pagestr = str(retstr.getvalue())
-                    pagestr = re.sub('(?<!\n)\n(?!\n)', ' ', pagestr).replace('\n\n', '\n')
+                    pagestr = re.sub('(?<!\n)\n(?!\n)', ' ', pagestr).replace('\n\n', '\n').replace('\x00','')
                     retstr.truncate(0)
                     pdfstr += pagestr
                     pageoffset += len(pagestr)

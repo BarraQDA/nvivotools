@@ -78,10 +78,10 @@ def DenormaliseNVP(arglist):
     # Function to execute a command either locally or remotely
     def executecommand(command):
         if not args.server:     # ie server is on same machine as this script
-            return subprocess.check_output(command).strip()
+            return subprocess.check_output(command, text=True).strip()
         else:
             # This quoting of arguments is a bit of a hack but seems to work
-            return subprocess.check_output(['ssh', args.server] + [('"' + word + '"') if ' ' in word else word for word in command]).strip()
+            return subprocess.check_output(['ssh', args.server] + [('"' + word + '"') if ' ' in word else word for word in command], text=True).strip()
 
     # Fill in extra arguments that NVivo module expects
     args.mac       = False

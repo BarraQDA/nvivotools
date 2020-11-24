@@ -29,18 +29,18 @@ class mssqlAPI(object):
     # Function to execute a command either locally or remotely
     def executecommand(self, command):
         if not self.server:     # ie server is on same machine as this script
-            return subprocess.check_output(command).strip()
+            return subprocess.check_output(command, text=True).strip()
         else:
             # This quoting of arguments is a bit of a hack but seems to work
-            return subprocess.check_output(['ssh', self.server] + [('"' + word + '"') if ' ' in word else word for word in command]).strip()
+            return subprocess.check_output(['ssh', self.server] + [('"' + word + '"') if ' ' in word else word for word in command], text=True).strip()
 
     # Function to execute a helper script either locally or remotely
     def executescript(self, script, arglist=None):
         if not self.server:     # ie server is on same machine as this script
-            return subprocess.check_output([self.helperpath + script] + (arglist or [])).strip()
+            return subprocess.check_output([self.helperpath + script] + (arglist or []), text=True).strip()
         else:
             subprocess.call(['scp', '-q', self.helperpath + script, self.server + ':' + self.tmpdir])
-            return subprocess.check_output(['ssh', self.server, self.tmpdir + '\\' + script] + (arglist or [])).strip()
+            return subprocess.check_output(['ssh', self.server, self.tmpdir + '\\' + script] + (arglist or []), text=True).strip()
 
     def __init__(self, server, port=None, instance=None, version=None, verbosity=1):
         self.server    = server
@@ -54,7 +54,7 @@ class mssqlAPI(object):
             if os.name != 'nt':
                 raise RuntimeError("This does not appear to be a Windows machine so --server must be specified.")
         else:
-            self.tmpdir = subprocess.check_output(['ssh', self.server, r'echo %tmp%']).strip()
+            self.tmpdir = subprocess.check_output(['ssh', self.server, r'echo %tmp%'], text=True).strip()
 
 
         if self.instance is None:
@@ -63,7 +63,7 @@ class mssqlAPI(object):
                 regquerydata = regqueryline.split()
                 instancename = regquerydata[0]
                 instanceversion = regquerydata[2].split('.')[0]
-                if self.verbosity >= 2:
+                if self.verbosity > 1:
                     print("Found SQL server instance " + instancename + "  version " + instanceversion, file=sys.stderr)
                 if (not version or instanceversion == version):
                     self.instance = instancename
@@ -71,14 +71,14 @@ class mssqlAPI(object):
             else:
                 raise RuntimeError('No suitable SQL self.server self.instance found')
 
-        if self.verbosity >= 1:
+        if self.verbosity > 1:
             print("Using MSSQL instance: " + self.instance, file=sys.stderr)
 
         if self.port is None:
             regquery = self.executecommand(['reg', 'query', 'HKLM\\SOFTWARE\\Microsoft\\Microsoft SQL Server\\' + self.instance + '\\MSSQLServer\\SuperSocketNetLib\\Tcp']).splitlines()
             self.port = int(regquery[1].split()[2])
 
-        if self.verbosity >= 1:
+        if self.verbosity > 1:
             print("Using port: " + str(self.port), file=sys.stderr)
 
     def attach(self, filename, dbname):
@@ -91,12 +91,12 @@ class mssqlAPI(object):
             subprocess.call(['scp', '-q', filename, self.server + ':' + mdbFilename])
 
         self.executescript('mssqlAttach.bat', [mdbFilename, dbname, self.instance])
-        if self.verbosity >= 1:
+        if self.verbosity > 1:
             print("Attached database " + dbname, file=sys.stderr)
 
     def create(self, dbname):
         self.executescript('mssqlCreate.bat', [dbname, self.instance])
-        if self.verbosity >= 1:
+        if self.verbosity > 1:
             print("Created database " + dbname, file=sys.stderr)
 
     def detach(self, dbname):
@@ -115,7 +115,7 @@ class mssqlAPI(object):
         else:
             mdbFilename = self.tmpdir + r'\mssqltools' + str(random.randint(0,99999)).zfill(5)
             self.executescript('mssqlSave.bat', [mdbFilename, dbname, self.instance])
-            subprocess.call(['scp', '-q', self.server + ':' + mdbFilename, filename])
+            subprocess.call(['scp', '-qT', self.server + ':' + mdbFilename, filename])
 
     def list(self):
         serverinstance = 'localhost\\' + self.instance

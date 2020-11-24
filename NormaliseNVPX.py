@@ -79,7 +79,7 @@ if os.name != 'nt':
     if not os.environ.get('_restart'):
         if args.sqlanywhere:
             os.environ['sqlanywhere'] = args.sqlanywhere
-        envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh').splitlines()
+        envlines = subprocess.check_output(helperpath + 'sqlanyenv.sh', text=True).splitlines()
         for envline in envlines:
             env = re.match(r"(?P<name>\w+)=(?P<quote>['\"]?)(?P<value>.*)(?P=quote)", envline, re.MULTILINE | re.DOTALL).groupdict()
             os.environ[env['name']] = env['value']
@@ -131,7 +131,7 @@ s.close()
 DEVNULL = open(os.devnull, 'wb')
 
 if os.name != 'nt':
-    dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport],
+    dbproc = subprocess.Popen(['sh', helperpath + 'sqlanysrv.sh', '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport], text=True,
                               stdout=subprocess.PIPE, stdin=DEVNULL)
     # Wait until SQL Anywhere engine starts...
     while dbproc.poll() is None:
@@ -139,7 +139,7 @@ if os.name != 'nt':
         if line == 'Now accepting requests\n':
             break
 else:
-    dbproc = subprocess.Popen(['dbspawn', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport],
+    dbproc = subprocess.Popen(['dbspawn', dbengfile, '-x TCPIP(port='+freeport+')', '-ga',  tmpinfilename, '-n', 'NVivo'+freeport], text=True,
                               stdout=subprocess.PIPE, stdin=DEVNULL)
     # Wait until SQL Anywhere engine starts...
     while dbproc.poll() is None:
