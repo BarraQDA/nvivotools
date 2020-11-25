@@ -2047,7 +2047,7 @@ def Denormalise(args):
                         p = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
                         err = p.stderr
                         if err:
-                            print("Command: ", massagesource.unoconvcmd + ['--format=text', tmpfilename + '.' + source['ObjectTypeName']])
+                            print("Command: ", cmd)
                             raise RuntimeError(err)
 
                         source['PlainText'] = codecs.open(tmpfilename + '.txt', 'r', 'utf-8-sig').read()
