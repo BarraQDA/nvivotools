@@ -30,7 +30,13 @@ from distutils import util
 import uuid
 import chardet
 import codecs
+import subprocess
 import tempfile
+from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
+from pdfminer.converter import TextConverter
+from pdfminer.layout import LAParams
+from pdfminer.pdfpage import PDFPage
+from io import StringIO
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
@@ -42,7 +48,7 @@ def editSource(arglist=None):
     generalGroup.add_argument('-o', '--outfile', type=str, required=True, output=True,
                                                  help='Output normalised NVivo (.nvpn) file')
     generalGroup.add_argument(        'infile',  type = str, nargs = '*', input=True,
-                                                 help = 'Source content filename pattern')            
+                                                 help = 'Source content filename pattern')
     generalGroup.add_argument('-u', '--user',    type=str,
                                                  help='User name, default is project "modified by".')
 
@@ -80,13 +86,13 @@ def editSource(arglist=None):
                                                     help='Limit number of lines from table file')
     advancedGroup.add_argument('--logfile',         type=str, private=True,
                                                     help="Logfile, default is <outfile>.log")
-    advancedGroup.add_argument('--no-logfile',      action='store_true', 
+    advancedGroup.add_argument('--no-logfile',      action='store_true',
                                                     help='Do not output a logfile')
 
     args = parser.parse_args(arglist)
-    
+
     if args.textcol and args.filenamecol:
-        raise RuntimeError("Only one of 'textcol' and 'filenamecol' may be specified")        
+        raise RuntimeError("Only one of 'textcol' and 'filenamecol' may be specified")
 
     if not args.no_logfile:
         logfilename = args.outfile.rsplit('.',1)[0] + '.log'
@@ -170,7 +176,7 @@ def editSource(arglist=None):
 
             if not args.no_logfile:
                 logfile.write(incomments)
-            
+
             tableFieldnames = [fieldname if fieldname != args.namecol else 'Name' for fieldname in tableFieldnames]
             tableReader=csv.DictReader(tableFile, fieldnames=tableFieldnames)
             for row in tableReader:
@@ -184,7 +190,7 @@ def editSource(arglist=None):
                     sourceRow['ObjectFile']  = sourceRow.get(args.filenamecol)
 
                 sourceRows.append(sourceRow)
-                
+
                 if args.limit and len(sourceRows) == args.limit:
                     break
 
@@ -358,6 +364,7 @@ def editSource(arglist=None):
         sourcesToInsert      = []
         sourceValuesToInsert = []
         digits = len(str(len(sourceRows)))
+        unoconvcmd = None
         for sourceRow in sourceRows:
             rowNum += 1
 
@@ -463,6 +470,82 @@ def editSource(arglist=None):
                         normSourceRow['Content'] = normSourceRow['Content'].encode('utf8')
                 else:
                     normSourceRow['Object'] = open(ObjectPath, 'rb').read()
+
+                    if ObjectFileExt in {'DOCX', 'DOC', 'ODT', 'TXT', 'RTF'}:
+
+                        # Hack to remove hidden characters from RTF
+                        if ObjectFileExt == 'RTF':
+                            rtfFile = open(ObjectPath, 'r')
+                            tempFilename = tempfile.mktemp() + '.rtf'
+                            tempFile = open(tempFilename, 'w')
+                            hiddenPattern = re.compile(r'{[^}].*\\v\\[^}]+}')
+                            for rtfLine in rtfFile.readlines():
+                                tempFile.write(hiddenPattern.sub('', rtfLine))
+
+                            tempFile.close()
+                            ObjectPath = tempFilename
+
+                        # Look for unoconvcmd just once
+                        if unoconvcmd is None:
+                            if args.verbosity > 1:
+                                print("Searching for unoconv executable.", file=sys.stderr)
+                            # Look first on path for OS installed version, otherwise use our copy
+                            for path in os.environ["PATH"].split(os.pathsep):
+                                unoconvpath = os.path.join(path, 'unoconv')
+                                if os.path.exists(unoconvpath):
+                                    if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
+                                        unoconvcmd = [unoconvpath]
+                                    else:
+                                        unoconvcmd = ['python', unoconvpath]
+                                    break
+                            if unoconvcmd is None:
+                                unoconvpath = os.path.join(NVivo.helperpath + 'unoconv')
+                                if os.path.exists(unoconvpath):
+                                    if os.access(unoconvpath, os.X_OK) and '' in os.environ.get("PATHEXT", "").split(os.pathsep):
+                                        unoconvcmd = [unoconvpath]
+                                    else:
+                                        unoconvcmd = ['python', unoconvpath]
+                            if unoconvcmd is None:
+                                raise RuntimeError("Can't find unoconv on path. Please refer to the NVivotools README file.")
+
+                        tmptextfilename = tempfile.mktemp() + '.txt'
+                        cmd = unoconvcmd + ['--format=text', '--output=' + tmptextfilename, ObjectPath]
+                        if args.verbosity > 1:
+                            print("Running: ", cmd)
+                        p = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
+                        err = p.stderr
+                        if err:
+                            print("Command: ", cmd)
+                            raise RuntimeError(err)
+
+                        normSourceRow['Content'] = codecs.open(tmptextfilename, 'r', 'utf-8-sig').read()
+                        os.remove(tmptextfilename)
+
+                        if ObjectFileExt == 'RTF':
+                            os.remove(ObjectPath)
+
+                    elif ObjectFileExt == 'PDF':
+
+                        rsrcmgr = PDFResourceManager()
+                        retstr = StringIO()
+                        laparams = LAParams()
+                        device = TextConverter(rsrcmgr, retstr, laparams=laparams)
+
+                        pdffileptr = open(ObjectPath, 'rb')
+                        interpreter = PDFPageInterpreter(rsrcmgr, device)
+                        pagenos = set()
+                        pdfpages = PDFPage.get_pages(pdffileptr, password='', check_extractable=True)
+                        pdfstr = ''
+                        for pdfpage in pdfpages:
+                            interpreter.process_page(pdfpage)
+                            pagestr = str(retstr.getvalue())
+                            pagestr = re.sub('(?<!\n)\n(?!\n)', ' ', pagestr).replace('\n\n', '\n').replace('\x00','')
+                            retstr.truncate(0)
+                            pdfstr += pagestr
+
+                        normSourceRow['Content'] = pdfstr
+                        pdffileptr.close()
+
             else:
                 normSourceRow['ObjectType'] = u'TXT'
                 normSourceRow['Content'] = sourceRow.get('Text') or u''
