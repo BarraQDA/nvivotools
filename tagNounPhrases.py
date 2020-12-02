@@ -21,15 +21,15 @@ import os
 import sys
 from NVivoNorm import NVivoNorm
 from sqlalchemy import *
-from datetime import datetime
-import re
+from textblob import TextBlob
 import uuid
+from datetime import datetime
 
 exec(open(os.path.dirname(os.path.realpath(__file__)) + os.path.sep + 'DataTypes.py').read())
 
-def tagSpeakers(arglist=None):
+def tagNounPhrases(arglist=None):
 
-    parser = ArgumentRecorder(description='Insert or update source in normalised file.')
+    parser = ArgumentRecorder(description='Analyse source text.')
 
     parser.add_argument(        'file',    type = str, input=True, output=True,
                                            help = 'Normalised NVivo (.nvpn) project file')            
@@ -38,19 +38,19 @@ def tagSpeakers(arglist=None):
 
     parser.add_argument('-sc', '--source-category', type=str,
                                                     help='Category of sources to process')
-    parser.add_argument('-nc', '--node-category',   type=str,
-                                                    help='Category of nodes to process')
+    parser.add_argument('-t', '--threshold',        type=int, default=0,
+                                                    help="Miniumum number of occurrences for inclusion")
 
     parser.add_argument('-v', '--verbosity', type=int, default=1, private=True)
-    parser.add_argument('-l', '--limit',     type=int,
-                                             help='Limit number of lines from table file')
+    parser.add_argument('-l', '--limit',     type=int, default=0,
+                                             help="Limit number of sources to process")
     parser.add_argument('--logfile',         type=str, private=True,
                                              help="Logfile, default is <file>.log")
     parser.add_argument('--no-logfile',      action='store_true', 
                                              help='Do not output a logfile')
 
     args = parser.parse_args(arglist)
-    
+
     if not args.no_logfile:
         logfilename = args.file.rsplit('.',1)[0] + '.log'
         incomments = ArgumentHelper.read_comments(logfilename) or ArgumentHelper.separator()
@@ -59,12 +59,11 @@ def tagSpeakers(arglist=None):
         logfile.close()
 
     try:
-
         norm = NVivoNorm(args.file)
         norm.begin()
 
         datetimeNow = datetime.utcnow()
-
+        
         if args.user:
             userRecord = norm.con.execute(select([
                     norm.User.c.Id
@@ -101,25 +100,7 @@ def tagSpeakers(arglist=None):
                     'ModifiedBy':   userId,
                     'ModifiedDate': datetimeNow
                 })
-
-        nodeSelect = select([
-                            norm.Node.c.Name,
-                            norm.Node.c.Id
-                         ])
-        if args.node_category:
-            nodeCategoryId = norm.con.execute(
-                            select([norm.NodeCategory.c.Id]).
-                            where(norm.NodeCategory.c.Name == bindparam('Category')),
-                            { 'Category':  args.node_category }).first()['Id']
-            
-            nodeSelect = nodeSelect.where(
-                norm.Node.c.Category == bindparam('Category')
-            )
-        else:
-            nodeCategoryId = None
-            
-        speakers = { row['Name']: row['Id'] for row in norm.con.execute(nodeSelect, { 'Category':  nodeCategoryId }) }
-
+        
         sourceSelect = select([
                             norm.Source.c.Name,
                             norm.Source.c.Content,
@@ -144,33 +125,82 @@ def tagSpeakers(arglist=None):
         if args.limit:
             sourceSelect = sourceSelect.limit(args.limit)
 
-        speakerPattern = re.compile(r'^(.+?):\s*(.*?)$', re.MULTILINE)
-        taggingRows = []
+        lemmaFrequency = {}
         for sourceRow in norm.con.execute(sourceSelect, { 'Category':  sourceCategoryId }):
             if args.verbosity > 1:
                 print("Source: ", sourceRow['Name'])
-            speakerMatches = speakerPattern.finditer(sourceRow['Content'])
-            for speakerMatch in speakerMatches:
-                speakerName = speakerMatch.group(1)
-                speakerId = speakers.get(speakerName, None)
-                if speakerId:
-                    fragment = str(speakerMatch.start(2)) + ':' + str(speakerMatch.end(2))
-                    taggingRows.append({
-                            'Id':           uuid.uuid4(),
-                            'Source':       sourceRow['Id'],
-                            'Node':         speakerId,
-                            'Fragment':     fragment,
-                            'CreatedBy':    userId,
-                            'CreatedDate':  datetimeNow,
-                            'ModifiedBy':   userId,
-                            'ModifiedDate': datetimeNow
-                        })
-                    
-        if taggingRows:
-            norm.con.execute(norm.Tagging.insert(), taggingRows)
+            if sourceRow['Content']:
+                content = TextBlob(sourceRow['Content'])
+                nounPhrases = content.lower().noun_phrases
+                lemmas = nounPhrases.lemmatize()
+                for lemma in lemmas:
+                    lemmaFrequency[lemma] = lemmaFrequency.get(lemma, 0) + 1
 
-        if args.verbosity > 1:
-            print("Inserted", len(taggingRows), "taggings.", file=sys.stderr)
+        lemmaNode = {}
+        
+        nounPhraseNodeCategory = norm.con.execute(select([
+                norm.NodeCategory.c.Id
+            ]).where(
+                norm.NodeCategory.c.Name == 'Noun Phrases'
+            )).first()
+        if nounPhraseNodeCategory is not None:
+            nounPhraseNodeCategoryId = nounPhraseNodeCategory['Id']
+            if args.verbosity > 1:
+                print("Found Noun Phrases node category ID ", nounPhraseNodeCategoryId)
+
+            for node in norm.con.execute(select([norm.Node.c.Id, norm.Node.c.Name]).
+                                        where(norm.Node.c.Category == nounPhraseNodeCategoryId)):
+                lemmaNode[node['Name']] = node['Id']
+        else:
+            if args.verbosity > 1:
+                print("Creating Noun Phrases node category")
+            nounPhraseNodeCategoryId = uuid.uuid4()
+            norm.con.execute(norm.NodeCategory.insert().values({
+                    'Id': nounPhraseNodeCategoryId,
+                    'Name': 'Noun Phrases',
+                    'CreatedBy': userId,
+                    'CreatedDate': datetimeNow,
+                    'ModifiedBy': userId,
+                    'ModifiedDate': datetimeNow
+                }))
+
+        for lemma in lemmaFrequency.keys():
+            if (args.threshold == 0 or lemmaFrequency[lemma] >= args.threshold) and not lemmaNode.get(lemma):
+                if args.verbosity > 1:
+                    print("Creating node: " + lemma)
+                lemmaNode[lemma] = uuid.uuid4()
+                norm.con.execute(norm.Node.insert().values({
+                        'Id': lemmaNode[lemma],
+                        'Category': nounPhraseNodeCategoryId,
+                        'Name': lemma,
+                        'Aggregate': False,
+                        'CreatedBy': userId,
+                        'CreatedDate': datetimeNow,
+                        'ModifiedBy': userId,
+                        'ModifiedDate': datetimeNow
+                    }))
+
+        for sourceRow in norm.con.execute(sourceSelect, { 'Category':  sourceCategoryId }):
+            if args.verbosity > 1:
+                print("Processing source: " + sourceRow['Name'])
+            if sourceRow['Content']:
+                content = TextBlob(sourceRow['Content'])
+                for sentence in content.lower().sentences:
+                    lemmas = sentence.noun_phrases.lemmatize()
+                    for lemma in lemmas:
+                        if lemma in lemmaFrequency.keys() and (args.threshold == 0 or lemmaFrequency[lemma] >= args.threshold):
+                            if args.verbosity > 2:
+                                print("    Inserting tagging: " + str(sentence.start) + ':' + str(sentence.end - 1))
+                            norm.con.execute(norm.Tagging.insert().values({
+                                    'Id':           uuid.uuid4(),
+                                    'Source':       sourceRow['Id'],
+                                    'Node':         lemmaNode[lemma],
+                                    'Fragment':     str(sentence.start) + ':' + str(sentence.end - 1),
+                                    'CreatedBy':    userId,
+                                    'CreatedDate':  datetimeNow,
+                                    'ModifiedBy':   userId,
+                                    'ModifiedDate': datetimeNow
+                                }))
 
         norm.commit()
 
@@ -182,4 +212,4 @@ def tagSpeakers(arglist=None):
         del norm
 
 if __name__ == '__main__':
-    tagSpeakers(None)
+    tagNounPhrases(None)

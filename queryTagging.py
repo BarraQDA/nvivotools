@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from argrecord import ArgumentHelper, ArgumentRecorder
 import os
 import sys
 import argparse
@@ -25,62 +26,31 @@ import re
 import csv
 import shutil
 
-def add_arguments(parser):
-    parser.description = "Query taggings in a normalised file."
+def queryTagging(arglist=None):
+
+    parser = ArgumentRecorder(description="Query taggings in a normalised file.")
 
     generalgroup = parser.add_argument_group('General')
-    generalgroup.add_argument(      'infile',   type=str,
-                                                help='Input normalised NVivo (.nvpn) file')
+    generalgroup.add_argument(      'file',      type=str,
+                                                 help='Normalised NVivo (.nvpn) file')
     generalgroup.add_argument('-o', '--outfile', type=str,
-                                                 help='Output file')
+                                                 help='Output CSV file')
     generalgroup.add_argument('-s',  '--source',          type=str)
     generalgroup.add_argument('-sc', '--source-category', type=str)
     generalgroup.add_argument('-n',  '--node', nargs='*', type=str)
     generalgroup.add_argument('-nc', '--node-category',   type=str)
 
     advancedgroup = parser.add_argument_group('Advanced')
-    advancedgroup.add_argument('-v', '--verbosity',  type=int, default=1)
-    advancedgroup.add_argument('--no-comments', action='store_true', help='Do not produce a comments logfile')
+    advancedgroup.add_argument('-v', '--verbosity', type=int, default=1, private=True)
+    advancedgroup.add_argument('-l', '--limit',     type=int, default=0,
+                                                    help="Limit number of sources to process")
+    advancedgroup.add_argument('--no-comments',     action='store_true', 
+                                                    help='Do not output comments in header of output file')
 
-    parser.set_defaults(func=queryTagging)
-    parser.set_defaults(build_comments=build_comments)
-    parser.set_defaults(hiddenargs=['hiddenargs', 'verbosity', 'no_comments'])
-
-
-def parse_arguments():
-    parser = argparse.ArgumentParser()
-    add_arguments(parser)
-    return vars(parser.parse_args())
-
-def build_comments(kwargs):
-    comments = ((' ' + kwargs['outfile'] + ' ') if kwargs['outfile'] else '').center(80, '#') + '\n'
-    comments += '# ' + os.path.basename(__file__) + '\n'
-    hiddenargs = kwargs['hiddenargs'] + ['hiddenargs', 'func', 'build_comments']
-    for argname, argval in kwargs.items():
-        if argname not in hiddenargs:
-            if type(argval) == str:
-                comments += '#     --' + argname + '="' + argval + '"\n'
-            elif type(argval) == bool:
-                if argval:
-                    comments += '#     --' + argname + '\n'
-            elif type(argval) == list:
-                for valitem in argval:
-                    if type(valitem) == str:
-                        comments += '#     --' + argname + '="' + valitem + '"\n'
-                    else:
-                        comments += '#     --' + argname + '=' + str(valitem) + '\n'
-            elif argval is not None:
-                comments += '#     --' + argname + '=' + str(argval) + '\n'
-
-    return comments
-
-def queryTagging(infile, outfile,
-                 source, source_category, node, node_category,
-                 verbosity, no_comments,
-                 comments, **dummy):
-
+    args = parser.parse_args(arglist)
+    
     try:
-        norm = NVivoNorm(infile)
+        norm = NVivoNorm(args.file)
         norm.begin()
 
         sourcesel = select([
@@ -98,38 +68,38 @@ def queryTagging(infile, outfile,
             )
         params = {}
 
-        if source:
+        if args.source:
             sourcesel = sourcesel.where(
                 norm.Source.c.Name == bindparam('Source')
             )
-            params.update({'Source': source})
+            params.update({'Source': args.source})
 
-        if source_category:
+        if args.source_category:
             sourcesel = sourcesel.where(and_(
                 norm.Source.c.Category == norm.SourceCategory.c.Id,
                 norm.SourceCategory.c.Name == bindparam('SourceCategory')
             ))
-            params.update({'SourceCategory': source_category})
+            params.update({'SourceCategory': args.source_category})
 
         tagginglist = []
-        if node_category:
+        if args.node_category:
             sourceselnodecat = sourcesel.where(and_(
                 norm.Node.c.Category == norm.NodeCategory.c.Id,
                 norm.NodeCategory.c.Name == bindparam('NodeCategory')
             ))
-            params.update({'NodeCategory': node_category})
+            params.update({'NodeCategory': args.node_category})
             tagginglist.append([dict(row) for row in norm.con.execute(sourceselnodecat, params)])
 
-        if node:
+        if args.node:
             sourceselnode = sourcesel.where(and_(
                 norm.Tagging.c.Node == norm.Node.c.Id,
                 norm.Node.c.Name == bindparam('Node')
             ))
-            for nodeiter in node:
+            for nodeiter in args.node:
                 params.update({'Node': nodeiter})
 
                 tagginglist.append([dict(row) for row in norm.con.execute(sourceselnode, params)])
-        elif not node_category:
+        elif not args.node_category:
             tagginglist = [[dict(row) for row in norm.con.execute(sourcesel, params)]]
 
         fragmentregex = re.compile(r'(?P<start>[0-9]+):(?P<end>[0-9]+)')
@@ -177,23 +147,22 @@ def queryTagging(infile, outfile,
             intersection = newintersection
             sortandmergetagginglist(intersection)
 
-        if outfile:
-            if os.path.exists(outfile):
-                shutil.move(outfile, outfile + '.bak')
+        if args.outfile:
+            if os.path.exists(args.outfile):
+                shutil.move(args.outfile, args.outfile + '.bak')
 
-            csvfile = open(outfile, 'w')
+            csvfile = open(args.outfile, 'w')
         else:
             csvfile = sys.stdout
 
-        if not no_comments:
-            csvfile.write(comments)
-            csvfile.write('#' * 80 + '\n')
+        if not args.no_comments:
+            parser.write_comments(args, csvfile, incomments=ArgumentHelper.separator())
 
         csvwriter = csv.DictWriter(csvfile,
-                                          fieldnames=['Source', 'Node', 'Memo', 'Text', 'Fragment'],
-                                          extrasaction='ignore',
-                                          lineterminator=os.linesep,
-                                          quoting=csv.QUOTE_NONNUMERIC)
+                                   fieldnames=['Source', 'Node', 'Memo', 'Text', 'Fragment'],
+                                   extrasaction='ignore',
+                                   lineterminator=os.linesep,
+                                   quoting=csv.QUOTE_NONNUMERIC)
 
         csvwriter.writeheader()
 
@@ -211,10 +180,5 @@ def queryTagging(infile, outfile,
     finally:
         del norm
 
-def main():
-    kwargs = parse_arguments()
-    kwargs['comments'] = build_comments(kwargs)
-    kwargs['func'](**kwargs)
-
 if __name__ == '__main__':
-    main()
+    queryTagging(None)
