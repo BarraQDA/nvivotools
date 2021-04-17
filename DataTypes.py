@@ -24,7 +24,7 @@ except:
 from sqlalchemy.databases import mssql, sqlite
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.dialects.mssql import UNIQUEIDENTIFIER
-from sqlalchemy import TypeDecorator, Binary, TEXT, String
+from sqlalchemy import TypeDecorator, BINARY, TEXT, String
 import uuid
 
 class UUID(TypeDecorator):
@@ -36,7 +36,7 @@ class UUID(TypeDecorator):
     """
     #impl = CHAR
     #http://stackoverflow.com/questions/5849389/storing-uuids-in-sqlite-using-pylons-and-sqlalchemy
-    impl = Binary
+    impl = BINARY
 
     def load_dialect_impl(self, dialect):
         if dialect.name == 'postgresql':
