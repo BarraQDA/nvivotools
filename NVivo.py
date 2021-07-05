@@ -881,7 +881,7 @@ def Normalise(args):
                     #nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
                     nvivoItem.c.Id == nvivoNodeReference.c.Node_Item_Id,
                     nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node),
-                    nvivoNodeReference.c.StartZ.is_(None)
+                    #nvivoNodeReference.c.StartZ.is_(None)
                 )))]
             for tagging in taggings:
                 build_tagging_or_annotation(tagging)
@@ -903,13 +903,13 @@ def Normalise(args):
                     nvivoAnnotation.c.CreatedDate,
                     nvivoAnnotation.c.ModifiedBy,
                     nvivoAnnotation.c.ModifiedDate
-                ] + [
+                ] + ([
                     nvivoAnnotation.c.StartText,
                     nvivoAnnotation.c.LengthText
                 ] if args.mac else [
                     nvivoAnnotation.c.StartX,
                     nvivoAnnotation.c.LengthX
-                ]))]
+                ])))]
 
             for annotation in annotations:
                 annotation['Node'] = None
