@@ -40,6 +40,8 @@ def NormaliseNVP(arglist):
                         help="Port of Microsoft SQL Server")
     parser.add_argument('-i', '--instance', type=str,
                         help="Microsoft SQL Server instance")
+    parser.add_argument('-d', '--drop', choices=["keep", "drop"], default="drop",
+                        help='Drop attached NVivo SQL Server Database')
 
     parser.add_argument('-u', '--users', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                         help='User action.')
@@ -127,7 +129,7 @@ def NormaliseNVP(arglist):
                         verbosity = args.verbosity)
 
     # Get reasonably distinct yet recognisable DB name
-    dbname = 'nvivo' + str(os.getpid())
+    dbname = 'nvivo' + str(os.getpid()) + '_' + args.infile.rsplit('\\', 1)[-1].rsplit('/', 1)[-1].rsplit('.', 1)[0].strip()
 
     mssqlapi.attach(args.infile, dbname)
     try:
@@ -142,7 +144,11 @@ def NormaliseNVP(arglist):
         raise
 
     finally:
-        mssqlapi.drop(dbname)
+        if args.drop == 'drop':
+            mssqlapi.drop(dbname)
+            print(f"Drop database {dbname}")
+        else:
+            print(f"Keep database {dbname}")
 
 if __name__ == '__main__':
     NormaliseNVP(None)
