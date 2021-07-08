@@ -847,7 +847,7 @@ def Normalise(args):
             if item['StartX'] is not None and item['LengthX'] is not None:
                 item['Fragment'] += str(item['StartX']+1) + ':' + str(item['StartX'] + item['LengthX']);
             if item['StartY'] is not None:
-                item['Fragment'] += ',' + str(item['StartY']+1)
+                item['Fragment'] += ',' + str(item['StartY'])
                 if item['LengthY'] > 0:
                     item['Fragment'] += ':' + str(item['StartY'] + item['LengthY'])
 
