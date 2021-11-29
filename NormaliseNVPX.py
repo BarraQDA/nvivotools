@@ -174,5 +174,5 @@ if os.path.exists(args.outfile):
 
 shutil.move(tmpoutfile, args.outfile)
 # Need to change file mode so that delete works under Windows
-os.chmod(tmpinfilename, 0777)
+os.chmod(tmpinfilename, 0o777)
 os.remove(tmpinfilename)
