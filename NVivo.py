@@ -661,8 +661,10 @@ def Normalise(args):
                     nvivoBlobStorage.c.Object if nvivoBlobStorage is not None else nvivoSource.c.Object,
                     nvivoSource.c.PlainText,
                     nvivoSource.c.MetaData,
-                    nvivoSource.c.ThumbnailLocation if args.nvivoversion == '12' else nvivoSource.c.Thumbnail,
-                    nvivoSource.c.WaveformLocation if args.nvivoversion == '12' else nvivoSource.c.Waveform,
+                    # nvivoSource.c.ThumbnailLocation if args.nvivoversion in '12' else nvivoSource.c.Thumbnail,
+                    nvivoSource.c.Thumbnail,
+                    # nvivoSource.c.WaveformLocation if args.nvivoversion == '12' else nvivoSource.c.Waveform,
+                    nvivoSource.c.Waveform,
                     nvivoItem.c.TypeId.label('SourceType'),
                     nvivoItem.c.CreatedBy,
                     nvivoItem.c.CreatedDate,
@@ -845,7 +847,7 @@ def Normalise(args):
             if item['StartX'] is not None and item['LengthX'] is not None:
                 item['Fragment'] += str(item['StartX']+1) + ':' + str(item['StartX'] + item['LengthX']);
             if item['StartY'] is not None:
-                item['Fragment'] += ',' + str(item['StartY']+1)
+                item['Fragment'] += ',' + str(item['StartY'])
                 if item['LengthY'] > 0:
                     item['Fragment'] += ':' + str(item['StartY'] + item['LengthY'])
 
@@ -879,7 +881,7 @@ def Normalise(args):
                     #nvivoNodeReference.c.ReferenceTypeId == literal_column('0'),
                     nvivoItem.c.Id == nvivoNodeReference.c.Node_Item_Id,
                     nvivoItem.c.TypeId == literal_column(NVivo.ItemType.Node),
-                    nvivoNodeReference.c.StartZ.is_(None)
+                    #nvivoNodeReference.c.StartZ.is_(None)
                 )))]
             for tagging in taggings:
                 build_tagging_or_annotation(tagging)
@@ -901,13 +903,13 @@ def Normalise(args):
                     nvivoAnnotation.c.CreatedDate,
                     nvivoAnnotation.c.ModifiedBy,
                     nvivoAnnotation.c.ModifiedDate
-                ] + [
+                ] + ([
                     nvivoAnnotation.c.StartText,
                     nvivoAnnotation.c.LengthText
                 ] if args.mac else [
                     nvivoAnnotation.c.StartX,
                     nvivoAnnotation.c.LengthX
-                ]))]
+                ])))]
 
             for annotation in annotations:
                 annotation['Node'] = None

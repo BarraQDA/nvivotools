@@ -31,8 +31,8 @@ def NormaliseNVP(arglist):
 
     parser.add_argument('-v', '--verbosity', type=int, default=1)
 
-    parser.add_argument('-nv', '--nvivoversion', choices=["10", "11"], default="10",
-                        help='NVivo version (10 or 11)')
+    parser.add_argument('-nv', '--nvivoversion', choices=["10", "11", "12"], default="10",
+                        help='NVivo version (10 or 11 or 12)')
 
     parser.add_argument('-S', '--server', type=str,
                         help="IP address/name of Microsoft SQL Server")
@@ -40,6 +40,8 @@ def NormaliseNVP(arglist):
                         help="Port of Microsoft SQL Server")
     parser.add_argument('-i', '--instance', type=str,
                         help="Microsoft SQL Server instance")
+    parser.add_argument('-d', '--drop', choices=["keep", "drop"], default="drop",
+                        help='Drop attached NVivo SQL Server Database')
 
     parser.add_argument('-u', '--users', choices=["skip", "merge", "overwrite", "replace"], default="merge",
                         help='User action.')
@@ -98,7 +100,7 @@ def NormaliseNVP(arglist):
             instanceversion = regquerydata[2].split('.')[0]
             if args.verbosity >= 2:
                 print("Found SQL server instance " + instancename + "  version " + instanceversion, file=sys.stderr)
-            if (args.nvivoversion == '10' and instanceversion == 'MSSQL10_50') or (args.nvivoversion == '11' and instanceversion == 'MSSQL12'):
+            if (args.nvivoversion == '10' and instanceversion == 'MSSQL10_50') or (args.nvivoversion == '11' and instanceversion == 'MSSQL12') or (args.nvivoversion == '12' and instanceversion == 'MSSQL14'):
                 args.instance = instancename
                 break
         else:
@@ -114,14 +116,20 @@ def NormaliseNVP(arglist):
     if args.verbosity > 0:
         print("Using port: " + str(args.port), file=sys.stderr)
 
+    if args.nvivoversion == '11':
+        version = 'MSSQL12'
+    elif args.nvivoversion == '12':
+        version = 'MSSQL14'
+    else:
+        version = 'MSQL10_50'
     mssqlapi = mssqlAPI(args.server,
                         args.port,
                         args.instance,
-                        version = ('MSSQL12' if args.nvivoversion == '11' else 'MSSQL10_50'),
+                        version = version,
                         verbosity = args.verbosity)
 
     # Get reasonably distinct yet recognisable DB name
-    dbname = 'nvivo' + str(os.getpid())
+    dbname = 'nvivo' + str(os.getpid()) + '_' + args.infile.rsplit('\\', 1)[-1].rsplit('/', 1)[-1].rsplit('.', 1)[0].strip()
 
     mssqlapi.attach(args.infile, dbname)
     try:
@@ -136,7 +144,11 @@ def NormaliseNVP(arglist):
         raise
 
     finally:
-        mssqlapi.drop(dbname)
+        if args.drop == 'drop':
+            mssqlapi.drop(dbname)
+            print(f"Drop database {dbname}")
+        else:
+            print(f"Keep database {dbname}")
 
 if __name__ == '__main__':
     NormaliseNVP(None)
